@@ -1,0 +1,54 @@
+# ── Web framework ──────────────────────────────────────────────────────────────
+fastapi>=0.115.5
+uvicorn[standard]>=0.32.1
+python-multipart>=0.0.12
+
+# ── Database ───────────────────────────────────────────────────────────────────
+sqlalchemy[asyncio]>=2.0.36
+aiosqlite>=0.20.0
+asyncpg>=0.31.0
+alembic>=1.14.0
+
+# ── Configuration & environment ────────────────────────────────────────────────
+pydantic>=2.10.1
+pydantic-settings>=2.6.1
+pydantic[email]>=2.10.1
+python-dotenv>=1.0.1
+
+# ── Auth & security ────────────────────────────────────────────────────────────
+PyJWT>=2.10.0
+passlib[bcrypt]>=1.7.4
+cryptography>=43.0.3
+
+# ── HTTP client ────────────────────────────────────────────────────────────────
+httpx>=0.28.0
+aiofiles>=24.1.0
+
+# ── Caching / background tasks ─────────────────────────────────────────────────
+redis>=5.2.1
+celery>=5.4.0
+
+# ── Email ──────────────────────────────────────────────────────────────────────
+email-validator>=2.2.0
+aiosmtplib>=3.0.2
+jinja2>=3.1.4
+
+# ── File storage / uploads ─────────────────────────────────────────────────────
+boto3>=1.35.81
+pillow>=11.0.0
+
+# ── PDF generation (certificates) ─────────────────────────────────────────────
+reportlab>=4.2.5
+
+# ── Observability ──────────────────────────────────────────────────────────────
+structlog>=24.4.0
+sentry-sdk[fastapi]>=2.19.1
+
+# ── Utilities ──────────────────────────────────────────────────────────────────
+python-slugify>=8.0.4
+shortuuid>=1.0.13
+orjson>=3.12.0
+
+# ── Testing ────────────────────────────────────────────────────────────────────
+pytest>=8.3.4
+pytest-asyncio>=0.24.0

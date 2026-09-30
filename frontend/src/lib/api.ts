@@ -1,0 +1,157 @@
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
+
+export class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem('lms_access_token')
+  const headers = new Headers(options.headers)
+  if (!(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json')
+  }
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+
+  const baseUrl = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL
+  const response = await fetch(`${baseUrl}${path}`, { ...options, headers })
+  const body = await response.json().catch(() => null)
+  if (!response.ok) {
+    if (response.status === 401) localStorage.removeItem('lms_access_token')
+    throw new ApiError(response.status, body?.detail ?? 'The request could not be completed.')
+  }
+  return body as T
+}
+
+// Data Types
+export type User = { id: string; email: string; phone_number: string | null; display_name: string; role: 'admin' | 'teacher' | 'student'; status: string; avatar_url?: string }
+export type Organization = { id: string; name: string; slug: string; status: string }
+export type OrgMember = { id: string; user_id: string; role: string; user?: User }
+export type Course = { 
+  id: string; 
+  organization_id: string; 
+  title: string; 
+  slug: string; 
+  description?: string;
+  level?: string;
+  status: string; 
+  current_version: number;
+  thumbnail_url?: string;
+  rating_avg?: number;
+  rating_count?: number;
+}
+export type CourseListResponse = { items: Course[]; total: number; page: number; page_size: number; pages: number }
+export type DashboardSummary = { role: User['role']; user: User; stats: Record<string, number> }
+export type AdminUser = User & { created_at: string }
+export type Notification = { id: string; notification_type: string; title: string; body: string; read_at: string | null; created_at: string }
+
+export type AssessmentQuestion = { id: string; question_text: string; question_type: string; options?: any; points: number }
+export type Assessment = { id: string; course_id: string; title: string; description?: string; passing_score: number; questions: AssessmentQuestion[] }
+export type AssessmentAttempt = { id: string; assessment_id: string; score: number; passed: boolean; created_at: string }
+
+export type AssignmentSubmission = { id: string; assignment_id: string; student_id: string; content: string; file_url?: string; grade?: number; feedback?: string; created_at: string }
+export type Assignment = { id: string; course_id: string; title: string; description: string; due_date?: string; max_score: number; submissions?: AssignmentSubmission[] }
+
+export type Certificate = { id: string; user_id: string; course_id: string; certificate_number: string; issued_at: string; pdf_url?: string }
+export type Enrollment = { id: string; user_id: string; course_id: string; status: string; enrolled_at: string; course?: Course }
+export type CodingExercise = { id: string; title: string; prompt: string; starter_code: string; language: string }
+export type CodingSubmission = { id: string; exercise_id: string; code: string; status: string; output?: string; passed?: boolean }
+export type ClassroomSession = { id: string; course_id: string; title: string; start_time: string; end_time: string; meeting_url?: string }
+export type Announcement = { id: string; course_id?: string; title: string; content: string; created_at: string }
+export type Review = { id: string; course_id: string; user_id: string; rating: number; comment?: string; created_at: string }
+
+// Identity & Auth
+export const register = (payload: { email: string; phone_number: string; display_name: string; password: string; role: 'student' | 'teacher' }) =>
+  request<User>('/api/v1/identity/register', { method: 'POST', body: JSON.stringify(payload) })
+
+export const login = (payload: { email: string; password: string }) =>
+  request<{ access_token: string; token_type: string; user: User }>('/api/v1/identity/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+export const getCurrentUser = () => request<User>('/api/v1/identity/me')
+
+// Organizations / Tenancy
+export const getOrganizations = () => request<Organization[]>('/api/v1/tenants')
+export const createOrganization = (payload: { name: string; slug: string }) =>
+  request<Organization>('/api/v1/tenants', { method: 'POST', body: JSON.stringify(payload) })
+export const getOrgMembers = (orgId: string) => request<OrgMember[]>(`/api/v1/tenants/${orgId}/members`)
+export const inviteOrgMember = (orgId: string, email: string, role: string) =>
+  request<{ id: string; email: string }>(`/api/v1/tenants/${orgId}/invitations`, { method: 'POST', body: JSON.stringify({ email, role }) })
+
+// Courses
+export const getCourses = (params?: { search?: string; status?: string; level?: string }) => {
+  const query = new URLSearchParams()
+  if (params?.search) query.set('search', params.search)
+  if (params?.status) query.set('status', params.status)
+  if (params?.level) query.set('level', params.level)
+  const qStr = query.toString()
+  return request<CourseListResponse>(`/api/v1/courses${qStr ? `?${qStr}` : ''}`)
+}
+export const getCourseDetail = (courseId: string) => request<Course>(`/api/v1/courses/${courseId}`)
+export const createCourse = (payload: { organization_id: string; slug: string; title: string; description?: string }) =>
+  request<Course>('/api/v1/courses', { method: 'POST', body: JSON.stringify(payload) })
+export const publishCourse = (courseId: string) =>
+  request<Course>(`/api/v1/courses/${courseId}/publish`, { method: 'POST' })
+export const getCourseReviews = (courseId: string) => request<Review[]>(`/api/v1/courses/${courseId}/reviews`)
+export const addCourseReview = (courseId: string, payload: { rating: number; comment?: string }) =>
+  request<Review>(`/api/v1/courses/${courseId}/reviews`, { method: 'POST', body: JSON.stringify(payload) })
+
+// Enrollments
+export const enrollInCourse = (courseId: string) =>
+  request<Enrollment>(`/api/v1/enrollments/${courseId}`, { method: 'POST' })
+export const getMyEnrollments = () => request<Enrollment[]>('/api/v1/enrollments/me')
+
+// Assessments
+export const createAssessment = (courseId: string, payload: { title: string; description?: string; passing_score: number }) =>
+  request<Assessment>(`/api/v1/assessment/courses/${courseId}`, { method: 'POST', body: JSON.stringify(payload) })
+export const addQuestion = (assessmentId: string, payload: { question_text: string; question_type: string; options?: any; points: number }) =>
+  request<AssessmentQuestion>(`/api/v1/assessment/${assessmentId}/questions`, { method: 'POST', body: JSON.stringify(payload) })
+export const submitAssessmentAttempt = (assessmentId: string, payload: { answers: Record<string, any> }) =>
+  request<AssessmentAttempt>(`/api/v1/assessment/${assessmentId}/attempts`, { method: 'POST', body: JSON.stringify(payload) })
+
+// Assignments
+export const createAssignment = (courseId: string, payload: { title: string; description: string; due_date?: string; max_score: number }) =>
+  request<Assignment>(`/api/v1/assignments/courses/${courseId}`, { method: 'POST', body: JSON.stringify(payload) })
+export const submitAssignment = (assignmentId: string, payload: { content: string; file_url?: string }) =>
+  request<AssignmentSubmission>(`/api/v1/assignments/${assignmentId}/submissions`, { method: 'POST', body: JSON.stringify(payload) })
+export const gradeSubmission = (submissionId: string, payload: { grade: number; feedback?: string }) =>
+  request<AssignmentSubmission>(`/api/v1/assignments/submissions/${submissionId}/grade`, { method: 'POST', body: JSON.stringify(payload) })
+
+// Certificates
+export const issueCertificate = (courseId: string) =>
+  request<Certificate>(`/api/v1/certificates/courses/${courseId}`, { method: 'POST' })
+export const verifyCertificate = (certificateNumber: string) =>
+  request<Certificate>(`/api/v1/certificates/verify/${certificateNumber}`)
+
+// Coding Exercises
+export const createCodingExercise = (courseId: string, payload: { title: string; prompt: string; starter_code: string; language: string }) =>
+  request<CodingExercise>(`/api/v1/coding/courses/${courseId}/exercises`, { method: 'POST', body: JSON.stringify(payload) })
+export const getCodingExercises = (courseId: string) => request<CodingExercise[]>(`/api/v1/coding/courses/${courseId}/exercises`)
+export const submitCodingSolution = (exerciseId: string, payload: { code: string }) =>
+  request<CodingSubmission>(`/api/v1/coding/exercises/${exerciseId}/submissions`, { method: 'POST', body: JSON.stringify(payload) })
+
+// Classroom & Communication
+export const createClassroomSession = (courseId: string, payload: { title: string; start_time: string; end_time: string }) =>
+  request<ClassroomSession>(`/api/v1/classroom/courses/${courseId}/classes`, { method: 'POST', body: JSON.stringify(payload) })
+export const getClassroomSessions = () => request<ClassroomSession[]>('/api/v1/classroom/schedule')
+export const getAnnouncements = () => request<Announcement[]>('/api/v1/communication/announcements')
+export const createAnnouncement = (orgId: string, payload: { title: string; body: string; audience_role?: string }) =>
+  request<Announcement>(`/api/v1/communication/organizations/${orgId}/announcements`, { method: 'POST', body: JSON.stringify(payload) })
+
+// Dashboard & Admin & Notifications
+export const getDashboardSummary = () => request<DashboardSummary>('/api/v1/dashboard/summary')
+export const getAdminUsers = () => request<AdminUser[]>('/api/v1/admin/users')
+export const approveUser = (userId: string, role: 'student' | 'teacher') =>
+  request<{ id: string; role: string; status: string }>(`/api/v1/admin/users/${userId}/approve`, {
+    method: 'POST', body: JSON.stringify({ role }),
+  })
+export const rejectUser = (userId: string) =>
+  request<{ id: string; status: string }>(`/api/v1/admin/users/${userId}/reject`, { method: 'POST' })
+export const getNotifications = () => request<Notification[]>('/api/v1/notifications')
+

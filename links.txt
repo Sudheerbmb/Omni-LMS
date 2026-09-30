@@ -1,0 +1,13 @@
+LMS Zoom Integration Links
+
+Public ngrok URL:
+https://curtsy-jurist-equivocal.ngrok-free.dev
+
+Zoom webhook URL:
+https://curtsy-jurist-equivocal.ngrok-free.dev/api/zoom/webhook
+
+Local application URL:
+http://127.0.0.1:8000
+
+ngrok inspector:
+http://127.0.0.1:4040
