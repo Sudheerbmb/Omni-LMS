@@ -1,28 +1,26 @@
-from pydantic import BaseModel
-import cloudinary
-import cloudinary.uploader
-from fastapi import File, UploadFile
-from app.classroom.service import attach_class_recording
-from app.platform.config import settings
-
-cloudinary.config(
-    cloud_name=settings.cloudinary_cloud_name or "zy4qhemm",
-    api_key=settings.cloudinary_api_key or "348774342517364",
-    api_secret=settings.cloudinary_api_secret or "iUM25wdg_Mzbi8dWq1oUMD8GTls",
-    secure=True
-)
-
+import asyncio
+import io
+import json
+import os
+import urllib.error
 import urllib.parse
+import urllib.request
 from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+import cloudinary
+import cloudinary.uploader
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.classroom.models import LiveClass
 from app.classroom.schemas import LiveClassCreate, LiveClassRead, TeacherTimetableSlotRead
 from app.classroom.service import (
     ClassroomAccessError,
     ScheduleConflictError,
+    attach_class_recording,
     get_school_live_classes,
     get_teacher_timetable_slots_for_scheduling,
     schedule_school_live_class,
@@ -30,8 +28,15 @@ from app.classroom.service import (
 )
 from app.identity.auth import get_current_user
 from app.identity.models import User
+from app.platform.config import settings
 from app.platform.database import get_session
 
+cloudinary.config(
+    cloud_name=settings.cloudinary_cloud_name or "zy4qhemm",
+    api_key=settings.cloudinary_api_key or "348774342517364",
+    api_secret=settings.cloudinary_api_secret or "iUM25wdg_Mzbi8dWq1oUMD8GTls",
+    secure=True
+)
 
 router = APIRouter(prefix="/api/v1/classroom", tags=["classroom"])
 
