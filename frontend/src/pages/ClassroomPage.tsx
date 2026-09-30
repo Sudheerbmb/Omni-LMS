@@ -21,7 +21,11 @@ import {
   Radio,
   CheckCircle2,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  UserX,
+  VolumeX,
+  X,
+  Check
 } from 'lucide-react'
 import {
   getSchoolLiveClasses,
@@ -61,6 +65,7 @@ interface PollData {
   options: PollOption[]
   totalVotes: number
   isActive: boolean
+  creatorName?: string
 }
 
 interface ClassroomPageProps {
@@ -211,6 +216,10 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const [isHandRaised, setIsHandRaised] = useState(false)
   const [mediaPermissionDenied, setMediaPermissionDenied] = useState(false)
 
+  // Modal Dialogs: End Meeting Confirmation & Kicked Alert
+  const [showEndMeetingModal, setShowEndMeetingModal] = useState(false)
+  const [alertMessage, setAlertMessage] = useState<string | null>(null)
+
   // Classroom Views: 'gallery' | 'spotlight' | 'whiteboard'
   const [callView, setCallView] = useState<'gallery' | 'spotlight' | 'whiteboard'>('gallery')
   const [activeSideDrawer, setActiveSideDrawer] = useState<'chat' | 'participants' | 'polls' | null>(null)
@@ -262,7 +271,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const [newChatText, setNewChatText] = useState('')
   const chatBottomRef = useRef<HTMLDivElement | null>(null)
 
-  // Live Poll State
+  // Live Poll State & Teacher Poll Creator State
   const [activePoll, setActivePoll] = useState<PollData>({
     id: 'poll-1',
     question: 'How clear is the concept presented in this session?',
@@ -272,9 +281,13 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       { text: 'Need a brief recap / clarification', votes: 0 }
     ],
     totalVotes: 3,
-    isActive: true
+    isActive: true,
+    creatorName: 'Instructor'
   })
   const [hasVoted, setHasVoted] = useState(false)
+  const [showPollCreator, setShowPollCreator] = useState(false)
+  const [pollQuestionInput, setPollQuestionInput] = useState('')
+  const [pollOptionsInput, setPollOptionsInput] = useState(['Yes, completely clear', 'Needs slight explanation', 'Did not understand'])
 
   // Meeting duration timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -282,6 +295,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
   const isTeacher = user.role === 'teacher'
   const isAdmin = user.role === 'admin'
+  const isHost = isTeacher || isAdmin
 
   // Helper to send WebSocket message safely
   const sendWsMessage = useCallback((msg: any) => {
@@ -307,7 +321,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       const liveData = await getSchoolLiveClasses(gradeQuery !== undefined ? { grade_number: gradeQuery } : undefined)
       setClasses(liveData)
 
-      if (isTeacher || isAdmin) {
+      if (isHost) {
         try {
           const slots = await getTeacherTimetableSlots()
           setTeacherSlots(slots)
@@ -336,7 +350,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   }, [activeCallRoom])
 
   // Camera and Microphone Local Media Handling
-  const startCameraStream = async () => {
+  const startCameraStream = async (): Promise<MediaStream | null> => {
     let stream: MediaStream | null = null
     setMediaPermissionDenied(false)
 
@@ -384,8 +398,8 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       setIsCameraOn(hasVideo)
       setIsMicOn(hasAudio)
 
-      // Add local tracks to any active peer connections
-      Object.entries(peerConnectionsRef.current).forEach(([, pc]) => {
+      // Add local tracks to all existing peer connections and renegotiate
+      Object.entries(peerConnectionsRef.current).forEach(([targetPeerId, pc]) => {
         stream!.getTracks().forEach(track => {
           const senders = pc.getSenders()
           const exists = senders.some(s => s.track && s.track.kind === track.kind)
@@ -393,11 +407,14 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             pc.addTrack(track, stream!)
           }
         })
+        // Trigger renegotiation offer so remote peer receives new tracks immediately
+        createPeerOffer(targetPeerId, pc)
       })
     } else {
       setIsCameraOn(false)
       setIsMicOn(false)
     }
+    return stream
   }
 
   const stopCameraStream = () => {
@@ -459,7 +476,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     peerConnectionsRef.current[targetPeerId] = pc
     iceQueueRef.current[targetPeerId] = []
 
-    // Attach local camera & mic tracks
+    // Attach local camera & mic tracks if already available
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
         pc.addTrack(track, localStreamRef.current!)
@@ -473,7 +490,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       })
     }
 
-    // Capture incoming remote tracks
+    // Capture incoming remote tracks (audio & video)
     pc.ontrack = (event) => {
       console.log(`[WebRTC] Received remote track (${event.track.kind}) from:`, targetPeerId)
       let remoteStream = remoteStreamsRef.current[targetPeerId]
@@ -639,7 +656,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
         switch (data.type) {
           // Initial Room State (Existing Attendees Roster)
-          // RULE: As the newcomer, we initiate WebRTC offers to all existing peers in the room!
           case 'room_state': {
             console.log('[Classroom WS] Received room_state with existing peers:', data.peers)
             const peerMap: Record<string, PeerUser> = {}
@@ -657,7 +673,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
           }
 
           // Peer Joined
-          // RULE: Existing peer waits for the newcomer to send their offer (prevents glare collisions)
           case 'peer_join': {
             if (data.peerId && data.peerId !== myPeerId && data.user) {
               setConnectedPeers(prev => ({
@@ -729,13 +744,58 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
+          // MEETING ENDED FOR ALL (Broadcast from Teacher)
+          case 'meeting_ended': {
+            stopCameraStream()
+            setActiveCallRoom(null)
+            setAlertMessage(data.reason || 'The instructor has ended this live class session for all attendees.')
+            loadClassroomData()
+            break
+          }
+
+          // REMOVE / KICK STUDENT FROM CLASS
+          case 'kick_peer': {
+            if (data.targetPeerId === myPeerId) {
+              stopCameraStream()
+              setActiveCallRoom(null)
+              setAlertMessage('You have been removed from this live class by the instructor.')
+              loadClassroomData()
+            }
+            break
+          }
+
+          // TEACHER MUTED ALL STUDENTS
+          case 'mute_all': {
+            if (!isHost) {
+              setIsMicOn(false)
+              if (localStreamRef.current) {
+                localStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false })
+              }
+              sendWsMessage({
+                type: 'media_state_change',
+                peerId: myPeerIdRef.current,
+                isMicOn: false,
+                isCameraOn
+              })
+              // Temporary visual notification
+              const id = Date.now() + Math.random()
+              setChatMessages(prev => [...prev, {
+                id: `sys_${id}`,
+                sender: 'System',
+                role: 'system',
+                text: 'The instructor has muted all participant microphones.',
+                timestamp: 'Now'
+              }])
+            }
+            break
+          }
+
           // WebRTC Signaling: Incoming Offer
           case 'webrtc_offer': {
             if (data.targetPeerId === myPeerId && data.offer) {
               const pc = getOrCreatePeerConnection(data.senderPeerId)
 
               // Polite Peer Glare Prevention:
-              // If we already have a local offer in flight and incoming offer collides:
               if (pc.signalingState !== 'stable') {
                 const isPolite = myPeerId < data.senderPeerId
                 if (isPolite) {
@@ -781,7 +841,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               const pc = peerConnectionsRef.current[data.senderPeerId]
               if (pc) {
                 if (!pc.remoteDescription || !pc.remoteDescription.type) {
-                  // Buffer candidate until remote description is set
                   if (!iceQueueRef.current[data.senderPeerId]) {
                     iceQueueRef.current[data.senderPeerId] = []
                   }
@@ -889,10 +948,29 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
+          // NEW CUSTOM POLL CREATED BY TEACHER
+          case 'poll_create': {
+            if (data.poll) {
+              setActivePoll(data.poll)
+              setHasVoted(false)
+              setActiveSideDrawer('polls')
+              // Notify via system message in chat
+              setChatMessages(prev => [...prev, {
+                id: `poll_notify_${Date.now()}`,
+                sender: 'System',
+                role: 'system',
+                text: `New live poll launched by ${data.poll.creatorName || 'Instructor'}: "${data.poll.question}"`,
+                timestamp: 'Now'
+              }])
+            }
+            break
+          }
+
           // Poll Voting
           case 'poll_vote': {
             if (typeof data.optionIndex === 'number') {
               setActivePoll(prev => {
+                if (data.pollId && prev.id !== data.pollId) return prev
                 const next = { ...prev }
                 if (next.options[data.optionIndex]) {
                   next.options[data.optionIndex].votes += 1
@@ -1069,6 +1147,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     })
   }
 
+  // Poll Vote Handler (Now emits real emoji '👍' instead of literal text 'thumbs_up')
   const handleVote = (optionIndex: number) => {
     if (hasVoted) return
     setActivePoll(prev => {
@@ -1078,8 +1157,83 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       return updated
     })
     setHasVoted(true)
-    triggerReaction('thumbs_up')
-    sendWsMessage({ type: 'poll_vote', optionIndex })
+    triggerReaction('👍')
+    sendWsMessage({
+      type: 'poll_vote',
+      pollId: activePoll.id,
+      optionIndex
+    })
+  }
+
+  // Teacher Custom Poll Creation Handler
+  const handleCreatePoll = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!pollQuestionInput.trim()) return
+
+    const validOptions = pollOptionsInput.filter(opt => opt.trim().length > 0)
+    if (validOptions.length < 2) {
+      alert('Please provide at least 2 poll options.')
+      return
+    }
+
+    const newPoll: PollData = {
+      id: `poll_${Date.now()}`,
+      question: pollQuestionInput.trim(),
+      options: validOptions.map(text => ({ text: text.trim(), votes: 0 })),
+      totalVotes: 0,
+      isActive: true,
+      creatorName: user.display_name || 'Instructor'
+    }
+
+    setActivePoll(newPoll)
+    setHasVoted(false)
+    setShowPollCreator(false)
+    setPollQuestionInput('')
+    setPollOptionsInput(['Yes, completely clear', 'Needs slight explanation', 'Did not understand'])
+
+    // Broadcast new poll to all attendees
+    sendWsMessage({
+      type: 'poll_create',
+      poll: newPoll
+    })
+  }
+
+  // Teacher "Mute All" Action
+  const handleMuteAll = () => {
+    if (!isHost) return
+    sendWsMessage({ type: 'mute_all' })
+    // Mute all remote peers locally in state
+    setConnectedPeers(prev => {
+      const updated: Record<string, PeerUser> = {}
+      Object.entries(prev).forEach(([id, p]) => {
+        updated[id] = { ...p, isMicOn: false }
+      })
+      return updated
+    })
+  }
+
+  // Teacher "Remove / Kick Student" Action
+  const handleKickStudent = (targetPeerId: string, studentName: string) => {
+    if (!isHost) return
+    const confirmed = window.confirm(`Are you sure you want to remove ${studentName} from this class?`)
+    if (!confirmed) return
+
+    sendWsMessage({
+      type: 'kick_peer',
+      targetPeerId,
+      studentName
+    })
+
+    // Remove from local peers roster
+    setConnectedPeers(prev => {
+      const next = { ...prev }
+      delete next[targetPeerId]
+      return next
+    })
+    if (peerConnectionsRef.current[targetPeerId]) {
+      peerConnectionsRef.current[targetPeerId].close()
+      delete peerConnectionsRef.current[targetPeerId]
+    }
   }
 
   // Collaborative Whiteboard Drawing
@@ -1165,11 +1319,13 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     return `${mins}:${secs}`
   }
 
-  // Enter and Leave Meeting Handlers
+  // Enter Meeting Handler: AWAITS LOCAL MEDIA FIRST to guarantee tracks are ready before WebRTC handshake!
   const handleJoinClass = async (liveClass: SchoolLiveClass) => {
-    setActiveCallRoom(liveClass)
+    // 1. Acquire media FIRST so tracks are ready when connection opens
     await startCameraStream()
-    if (liveClass.status === 'scheduled' && (isTeacher || isAdmin)) {
+    // 2. Open active room state
+    setActiveCallRoom(liveClass)
+    if (liveClass.status === 'scheduled' && isHost) {
       try {
         await updateLiveClassStatus(liveClass.id, 'live')
         setClasses(prev => prev.map(c => c.id === liveClass.id ? { ...c, status: 'live' } : c))
@@ -1179,17 +1335,42 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     }
   }
 
-  const handleLeaveClass = async () => {
-    stopCameraStream()
-    if (activeCallRoom && (isTeacher || isAdmin)) {
-      try {
-        await updateLiveClassStatus(activeCallRoom.id, 'ended')
-      } catch (err) {
-        console.warn('Status update error:', err)
-      }
+  // Teacher End Meeting for All
+  const handleEndMeetingForAll = async () => {
+    if (!activeCallRoom) return
+    try {
+      // 1. Send WebSocket broadcast to kick all students out
+      sendWsMessage({
+        type: 'meeting_ended',
+        reason: 'The instructor has ended the live session for all participants.'
+      })
+      // 2. Update status in DB
+      await updateLiveClassStatus(activeCallRoom.id, 'ended')
+    } catch (err) {
+      console.warn('End class error:', err)
+    } finally {
+      stopCameraStream()
+      setActiveCallRoom(null)
+      setShowEndMeetingModal(false)
+      loadClassroomData()
     }
+  }
+
+  // Individual Participant Leaves Meeting
+  const handleLeaveMeetingOnly = () => {
+    stopCameraStream()
     setActiveCallRoom(null)
+    setShowEndMeetingModal(false)
     loadClassroomData()
+  }
+
+  // Top Bar Leave/End button click handler
+  const handleEndSessionClick = () => {
+    if (isHost) {
+      setShowEndMeetingModal(true)
+    } else {
+      handleLeaveMeetingOnly()
+    }
   }
 
   // Schedule New Class Modal Form Handler
@@ -1331,11 +1512,11 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
             {/* Leave / End Call Button */}
             <button
-              onClick={handleLeaveClass}
+              onClick={handleEndSessionClick}
               className="px-3 sm:px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-600/30 transition-all hover:scale-105 active:scale-95"
             >
               <PhoneOff className="w-3.5 h-3.5" />
-              <span>{isTeacher ? 'End Session' : 'Leave'}</span>
+              <span>{isHost ? 'End Session' : 'Leave'}</span>
             </button>
           </div>
         </header>
@@ -1595,7 +1776,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   {activeSideDrawer === 'polls' && (
                     <>
                       <BarChart2 className="w-4 h-4 text-cyan-400" />
-                      Live Comprehension Poll
+                      Live Comprehension Polls
                     </>
                   )}
                 </h3>
@@ -1603,12 +1784,13 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   onClick={() => setActiveSideDrawer(null)}
                   className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
                 >
-                  &times;
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* DRAWER CONTENT */}
               <div className="flex-1 overflow-y-auto p-4 flex flex-col">
+                {/* 1. CHAT DRAWER */}
                 {activeSideDrawer === 'chat' && (
                   <div className="flex-1 flex flex-col justify-between h-full">
                     <div className="flex-1 overflow-y-auto space-y-3 pr-1">
@@ -1624,7 +1806,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                           }`}
                         >
                           {msg.role === 'system' ? (
-                            <span className="text-[11px] text-slate-500 bg-slate-950/60 px-2.5 py-1 rounded-full border border-slate-800 my-1">
+                            <span className="text-[11px] text-slate-400 bg-slate-950/80 px-3 py-1 rounded-full border border-slate-800 my-1 text-center max-w-[90%]">
                               {msg.text}
                             </span>
                           ) : (
@@ -1635,7 +1817,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                               <div
                                 className={`px-3.5 py-2 rounded-2xl text-xs max-w-[85%] ${
                                   msg.sender === (user.display_name || user.email)
-                                    ? 'bg-cyan-600 text-white rounded-br-none'
+                                    ? 'bg-cyan-600 text-white rounded-br-none shadow-md shadow-cyan-600/20'
                                     : 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700'
                                 }`}
                               >
@@ -1666,8 +1848,24 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   </div>
                 )}
 
+                {/* 2. PARTICIPANTS DRAWER (WITH MUTE ALL & REMOVE STUDENT ACTIONS) */}
                 {activeSideDrawer === 'participants' && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
+                    {/* Host Actions: Mute All Students */}
+                    {isHost && (
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <span className="text-xs text-slate-400 font-medium">Instructor Controls:</span>
+                        <button
+                          onClick={handleMuteAll}
+                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-red-400 border border-slate-700 text-[11px] font-bold flex items-center gap-1.5 transition-colors"
+                          title="Mute all student microphones"
+                        >
+                          <VolumeX className="w-3.5 h-3.5" />
+                          Mute All Students
+                        </button>
+                      </div>
+                    )}
+
                     {/* Local User */}
                     <div className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800 flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
@@ -1677,7 +1875,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                         <div>
                           <p className="text-xs font-bold text-white flex items-center gap-1.5">
                             {user.display_name || user.email}
-                            <span className="text-[9px] px-1 rounded bg-slate-800 text-cyan-400">You</span>
+                            <span className="text-[9px] px-1 rounded bg-slate-800 text-cyan-400 font-semibold">You</span>
                           </p>
                           <p className="text-[10px] text-slate-400 capitalize">{user.role || 'Participant'}</p>
                         </div>
@@ -1690,7 +1888,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
                     {/* Remote Attendees */}
                     {Object.entries(connectedPeers).map(([pId, peer]) => (
-                      <div key={pId} className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800 flex items-center justify-between">
+                      <div key={pId} className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800 flex items-center justify-between hover:border-slate-700 transition-colors">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs text-white">
                             {peer.avatar || peer.display_name.charAt(0).toUpperCase()}
@@ -1700,21 +1898,121 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                             <p className="text-[10px] text-slate-400 capitalize">{peer.role}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-slate-400">
-                          {peer.isMicOn ? <Mic className="w-3.5 h-3.5 text-emerald-400" /> : <MicOff className="w-3.5 h-3.5 text-red-400" />}
-                          {peer.isCameraOn ? <Video className="w-3.5 h-3.5 text-emerald-400" /> : <VideoOff className="w-3.5 h-3.5 text-red-400" />}
-                          {peer.isHandRaised && <Hand className="w-3.5 h-3.5 text-amber-400" />}
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 text-slate-400">
+                            {peer.isMicOn ? <Mic className="w-3.5 h-3.5 text-emerald-400" /> : <MicOff className="w-3.5 h-3.5 text-red-400" />}
+                            {peer.isCameraOn ? <Video className="w-3.5 h-3.5 text-emerald-400" /> : <VideoOff className="w-3.5 h-3.5 text-red-400" />}
+                            {peer.isHandRaised && <Hand className="w-3.5 h-3.5 text-amber-400" />}
+                          </div>
+
+                          {/* Host Action: Kick/Remove this Student */}
+                          {isHost && peer.role !== 'teacher' && peer.role !== 'admin' && (
+                            <button
+                              onClick={() => handleKickStudent(pId, peer.display_name)}
+                              className="p-1.5 rounded-lg bg-red-600/10 hover:bg-red-600/30 text-red-400 border border-red-500/20 transition-colors ml-1"
+                              title={`Remove ${peer.display_name} from class`}
+                            >
+                              <UserX className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
 
+                {/* 3. POLLS DRAWER (WITH CUSTOM TEACHER POLL CREATOR) */}
                 {activeSideDrawer === 'polls' && (
                   <div className="space-y-4">
+                    {/* Teacher Action: Toggle Custom Poll Creator */}
+                    {isHost && (
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <span className="text-xs text-slate-400 font-medium">Poll Management:</span>
+                        <button
+                          onClick={() => setShowPollCreator(prev => !prev)}
+                          className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          {showPollCreator ? 'Cancel' : 'Create New Poll'}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Teacher Custom Poll Creation Form */}
+                    {showPollCreator && isHost && (
+                      <form onSubmit={handleCreatePoll} className="p-3.5 rounded-2xl bg-slate-950 border border-cyan-500/40 shadow-xl space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                        <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                          Launch New Live Poll
+                        </h4>
+                        <div>
+                          <label className="block text-[11px] text-slate-400 mb-1">Question:</label>
+                          <input
+                            type="text"
+                            value={pollQuestionInput}
+                            onChange={e => setPollQuestionInput(e.target.value)}
+                            placeholder="e.g. Do you understand Newton's third law?"
+                            className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] text-slate-400 mb-1">Options (minimum 2):</label>
+                          <div className="space-y-1.5">
+                            {pollOptionsInput.map((opt, idx) => (
+                              <div key={idx} className="flex gap-1.5">
+                                <input
+                                  type="text"
+                                  value={opt}
+                                  onChange={e => {
+                                    const next = [...pollOptionsInput]
+                                    next[idx] = e.target.value
+                                    setPollOptionsInput(next)
+                                  }}
+                                  placeholder={`Option ${idx + 1}`}
+                                  className="flex-1 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                                />
+                                {pollOptionsInput.length > 2 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPollOptionsInput(prev => prev.filter((_, i) => i !== idx))}
+                                    className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-900"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+
+                          {pollOptionsInput.length < 5 && (
+                            <button
+                              type="button"
+                              onClick={() => setPollOptionsInput(prev => [...prev, ''])}
+                              className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold mt-2 flex items-center gap-1"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Add Another Option
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="w-full py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 transition-all"
+                        >
+                          Broadcast Poll to Class
+                        </button>
+                      </form>
+                    )}
+
+                    {/* Active Live Poll Display */}
                     <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Live Quick Poll</span>
+                        <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
+                          Live Poll {activePoll.creatorName ? `• by ${activePoll.creatorName}` : ''}
+                        </span>
                         <span className="text-[10px] text-slate-400">{activePoll.totalVotes} votes</span>
                       </div>
                       <h4 className="text-xs font-bold text-white mb-3">{activePoll.question}</h4>
@@ -1730,7 +2028,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                               className={`w-full text-left p-2.5 rounded-xl border transition-all relative overflow-hidden ${
                                 hasVoted
                                   ? 'border-slate-800 bg-slate-900/60 cursor-default'
-                                  : 'border-slate-700 bg-slate-900 hover:border-cyan-500 hover:bg-slate-800/80'
+                                  : 'border-slate-700 bg-slate-900 hover:border-cyan-500 hover:bg-slate-800/80 active:scale-[0.99]'
                               }`}
                             >
                               <div
@@ -1745,6 +2043,13 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                           )
                         })}
                       </div>
+
+                      {hasVoted && (
+                        <p className="text-[11px] text-emerald-400 font-medium mt-3 flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5" />
+                          Your vote has been submitted. Real-time results update live!
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1810,9 +2115,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               <span className="hidden sm:inline">{isHandRaised ? 'Hand Raised' : 'Raise Hand'}</span>
             </button>
 
-            {/* Quick Reactions Bar */}
+            {/* Quick Reactions Bar (Emits real emojis!) */}
             <div className="hidden sm:flex items-center gap-1 bg-slate-950/60 p-1 rounded-2xl border border-slate-800">
-              {['👏', '👍', '❤️', '💡', '🎉'].map(emoji => (
+              {['👏', '👍', '❤️', '💡', '🎉', '🚀'].map(emoji => (
                 <button
                   key={emoji}
                   onClick={() => triggerReaction(emoji)}
@@ -1867,6 +2172,42 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             </button>
           </div>
         </footer>
+
+        {/* MODAL: End Session Confirmation for Host */}
+        {showEndMeetingModal && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 space-y-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <PhoneOff className="w-5 h-5 text-red-500" />
+                End Live Classroom Session
+              </h3>
+              <p className="text-xs text-slate-400">
+                Would you like to end the session for all enrolled students, or just leave the session temporarily?
+              </p>
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  onClick={handleEndMeetingForAll}
+                  className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg shadow-red-600/30 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <PhoneOff className="w-4 h-4" />
+                  End Session for Everyone
+                </button>
+                <button
+                  onClick={handleLeaveMeetingOnly}
+                  className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors"
+                >
+                  Just Leave Session
+                </button>
+                <button
+                  onClick={() => setShowEndMeetingModal(false)}
+                  className="w-full py-2 rounded-xl text-slate-500 hover:text-white text-xs font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -1874,6 +2215,22 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   // RENDER 2: SCHEDULE ROSTER & LAUNCHPAD DASHBOARD
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
+      {/* Alert Banner if kicked or meeting ended */}
+      {alertMessage && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-amber-200 text-xs">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{alertMessage}</span>
+          </div>
+          <button
+            onClick={() => setAlertMessage(null)}
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Top Banner Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 border border-slate-800 shadow-xl">
         <div>
@@ -1889,7 +2246,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
         </div>
 
         <div className="flex items-center gap-3">
-          {(isTeacher || isAdmin) && (
+          {isHost && (
             <button
               onClick={() => setShowScheduleModal(true)}
               className="px-5 py-2.5 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
@@ -1940,7 +2297,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             <Calendar className="w-12 h-12 mx-auto text-slate-600 mb-3" />
             <h3 className="text-base font-bold text-slate-300">No Live Classes Scheduled</h3>
             <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              {(isTeacher || isAdmin)
+              {isHost
                 ? 'Click "Schedule / Launch Class" above to create an instant session from your assigned timetable periods.'
                 : 'Check back when your teachers launch their scheduled timetable sessions.'}
             </p>
@@ -2008,7 +2365,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                     }`}
                   >
                     <Play className="w-4 h-4" />
-                    <span>{isLive ? 'Join Live Session' : (isTeacher ? 'Start Session Now' : 'Enter Classroom')}</span>
+                    <span>{isLive ? 'Join Live Session' : (isHost ? 'Start Session Now' : 'Enter Classroom')}</span>
                   </button>
                 </div>
               </div>
