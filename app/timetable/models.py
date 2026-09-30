@@ -1,8 +1,8 @@
-﻿import uuid
+import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.platform.models import Base, TimestampMixin, UUIDMixin
@@ -138,3 +138,27 @@ class TimetableSlot(UUIDMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("day_of_week", "period_number", "section_id", name="uq_section_period"),
     )
+
+
+class TimetableRule(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "timetable_rules"
+
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    rule_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(32), default="policy", nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    parameters: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+
+class TeacherLeave(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "teacher_leaves"
+
+    teacher_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("teacher_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    day_of_week: Mapped[str] = mapped_column(String(16), nullable=False)  # "Monday".."Friday"
+    reason: Mapped[str] = mapped_column(String(256), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    teacher: Mapped["TeacherProfile"] = relationship("TeacherProfile")
+

@@ -15,8 +15,10 @@ from app.timetable.models import (
     Subject,
     TeacherClassRestriction,
     TeacherFeedback,
+    TeacherLeave,
     TeacherProfile,
     TeacherSubjectSkill,
+    TimetableRule,
     TimetableSlot,
 )
 
@@ -67,7 +69,7 @@ TEACHER_SEEDS = [
     {"name": "Prof. Alan Turing", "email": "alan.turing@school.edu", "emp_id": "T002", "subjects": ["CS", "MATH"], "rating": 4.9},
     {"name": "Mrs. Shakuntala Devi", "email": "shakuntala.d@school.edu", "emp_id": "T011", "subjects": ["MATH"], "rating": 4.9},
     {"name": "Mr. Srinivasa Ramanujan", "email": "ramanujan.s@school.edu", "emp_id": "T012", "subjects": ["MATH"], "rating": 5.0},
-    {"name": "Mr. Ramesh Sharma", "email": "ramesh.sharma@school.edu", "emp_id": "T006", "subjects": ["MATH"], "rating": 2.1}, # Has complaints in Class 9-A Math
+    {"name": "Mr. Ramesh Sharma", "email": "ramesh.sharma@school.edu", "emp_id": "T006", "subjects": ["MATH"], "rating": 2.1},
 
     # Languages Department
     {"name": "Mrs. Anita Desai", "email": "anita.desai@school.edu", "emp_id": "T003", "subjects": ["ENG", "ART", "VAL"], "rating": 4.6},
@@ -102,10 +104,82 @@ TEACHER_SEEDS = [
     {"name": "Coach Major Dhyan Chand", "email": "coach.dhyan@school.edu", "emp_id": "T025", "subjects": ["PET"], "rating": 5.0},
 ]
 
+DEFAULT_POLICY_RULES = [
+    {
+        "name": "Sports Ground Concurrent Capacity",
+        "rule_type": "ground_capacity",
+        "category": "capacity",
+        "description": "Limits how many classes can occupy the playground simultaneously. Edit to 1, 2, or 3 based on your school field zones.",
+        "parameters": {"max_sections": 2},
+        "is_enabled": True,
+        "priority": 1,
+    },
+    {
+        "name": "Post-Lunch Heavy Activity Ban",
+        "rule_type": "post_lunch_blacklist",
+        "category": "ergonomics",
+        "description": "Prevents sports/running periods immediately after lunch (Period 8 / 2:00 PM) to protect student health.",
+        "parameters": {"forbidden_period": 8},
+        "is_enabled": True,
+        "priority": 1,
+    },
+    {
+        "name": "Teacher Daily Workload Cap",
+        "rule_type": "max_daily_teacher_periods",
+        "category": "workload",
+        "description": "Ceiling on how many instructional periods can be scheduled for any single teacher per day.",
+        "parameters": {"max_periods": 5},
+        "is_enabled": True,
+        "priority": 1,
+    },
+    {
+        "name": "Negative Review Auto-Disqualification",
+        "rule_type": "rating_complaint_blacklist",
+        "category": "pedagogy",
+        "description": "Automatically excludes teachers with student ratings <= 2.5 or active complaints from that specific section.",
+        "parameters": {"threshold_rating": 2.5},
+        "is_enabled": True,
+        "priority": 1,
+    },
+    {
+        "name": "Cognitive Load (No Triple Consecutive Subject)",
+        "rule_type": "consecutive_subject_limit",
+        "category": "pedagogy",
+        "description": "Prevents more than 2 back-to-back periods of the exact same academic subject to prevent student fatigue.",
+        "parameters": {"max_consecutive": 2},
+        "is_enabled": True,
+        "priority": 2,
+    },
+    {
+        "name": "Day-Specific Schedule (Delayed Start / Special Assembly)",
+        "rule_type": "custom_day_schedule",
+        "category": "schedule",
+        "description": "Allows customized bell schedule start/end times or altered periods for specific weekdays.",
+        "parameters": {"overrides": {}},
+        "is_enabled": False,
+        "priority": 2,
+    },
+]
+
 
 async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
-    """Populates Grades 1-10, realistic subjects, curricula, and teacher profiles in Neon DB."""
-    # 1. Seed Subjects
+    """Populates Grades 1-10, realistic subjects, curricula, rules, and teacher profiles in Neon DB."""
+    # 1. Seed Dynamic Policy Rules
+    for r_data in DEFAULT_POLICY_RULES:
+        existing_rule = await session.scalar(select(TimetableRule).where(TimetableRule.rule_type == r_data["rule_type"]))
+        if not existing_rule:
+            session.add(TimetableRule(
+                name=r_data["name"],
+                rule_type=r_data["rule_type"],
+                category=r_data["category"],
+                description=r_data["description"],
+                parameters=r_data["parameters"],
+                is_enabled=r_data["is_enabled"],
+                priority=r_data["priority"],
+            ))
+            await session.flush()
+
+    # 2. Seed Subjects
     subject_map: Dict[str, Subject] = {}
     for s_data in SUBJECT_DEFAULTS:
         existing = await session.scalar(select(Subject).where(Subject.code == s_data["code"]))
@@ -129,7 +203,7 @@ async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
             await session.flush()
         subject_map[existing.code] = existing
 
-    # 2. Seed Grades 1 to 10 and Sections A & B
+    # 3. Seed Grades 1 to 10 and Sections A & B
     grade_map: Dict[int, SchoolGrade] = {}
     section_list: List[SchoolSection] = []
     for g_num in range(1, 11):
@@ -144,7 +218,6 @@ async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
             await session.flush()
         grade_map[g_num] = grade
 
-        # Sections A and B for each grade
         for sec_letter in ["A", "B"]:
             sec = await session.scalar(
                 select(SchoolSection).where(
@@ -162,7 +235,6 @@ async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
                 await session.flush()
             section_list.append(sec)
 
-        # Seed Grade Curriculum
         curr_rules = GRADE_CURRICULUM_MATRIX.get(g_num, [])
         for sub_code, periods in curr_rules:
             sub = subject_map.get(sub_code)
@@ -182,7 +254,7 @@ async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
                 else:
                     existing_curr.periods_per_week = periods
 
-    # 3. Seed Teachers with Skills
+    # 4. Seed Teachers with Skills
     teachers_created: List[TeacherProfile] = []
     for t_data in TEACHER_SEEDS:
         user = await session.scalar(select(User).where(User.email == t_data["email"]))
@@ -211,7 +283,6 @@ async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
             session.add(profile)
             await session.flush()
 
-            # Attach subject skills
             for sub_code in t_data["subjects"]:
                 sub = subject_map.get(sub_code)
                 if sub:
@@ -219,7 +290,6 @@ async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
         else:
             profile.rating_avg = t_data["rating"]
             profile.complaint_count = 3 if t_data["rating"] < 3.0 else 0
-            # Ensure skills are present
             for sub_code in t_data["subjects"]:
                 sub = subject_map.get(sub_code)
                 if sub:
@@ -234,7 +304,7 @@ async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
 
         teachers_created.append(profile)
 
-    # 4. Seed sample student complaint/restriction for Ramesh Sharma in Class 9-A
+    # 5. Seed sample student complaint/restriction for Ramesh Sharma in Class 9-A Math
     ramesh = next((t for t in teachers_created if t.employee_id == "T006"), None)
     class_9_a = next((s for s in section_list if s.name == "A" and grade_map.get(9) and s.grade_id == grade_map[9].id), None)
     math_sub = subject_map.get("MATH")
@@ -271,12 +341,20 @@ async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
         "sections_seeded": len(section_list),
         "subjects_seeded": len(subject_map),
         "teachers_seeded": len(teachers_created),
+        "rules_seeded": len(DEFAULT_POLICY_RULES),
     }
 
 
 async def generate_school_timetable(session: AsyncSession) -> Dict[str, Any]:
-    """Runs the LangGraph agent to generate the entire master school schedule."""
-    # 1. Fetch all required entities
+    """Runs the LangGraph agent to generate the master school schedule with live database rules."""
+    # 1. Fetch live rules from Neon DB
+    rules = (await session.scalars(select(TimetableRule).where(TimetableRule.is_enabled == True))).all()
+    rules_dict = {r.rule_type: r.parameters for r in rules}
+
+    # Fetch active teacher leaves
+    leaves = (await session.scalars(select(TeacherLeave).where(TeacherLeave.is_active == True))).all()
+    teacher_leaves_list = [{"teacher_id": l.teacher_id, "day_of_week": l.day_of_week} for l in leaves]
+
     grades = (await session.scalars(select(SchoolGrade).order_by(SchoolGrade.grade_number))).all()
     sections = (await session.scalars(select(SchoolSection).options(selectinload(SchoolSection.grade)).order_by(SchoolSection.name))).all()
     subjects = (await session.scalars(select(Subject))).all()
@@ -284,11 +362,9 @@ async def generate_school_timetable(session: AsyncSession) -> Dict[str, Any]:
     restrictions = (await session.scalars(select(TeacherClassRestriction).where(TeacherClassRestriction.is_active == True))).all()
     curricula = (await session.scalars(select(GradeCurriculum))).all()
 
-    # Teacher user map for readable names
     teacher_users = (await session.scalars(select(User).where(User.id.in_([t.user_id for t in teachers])))).all()
     user_name_map = {u.id: u.display_name for u in teacher_users}
 
-    # Format state for LangGraph
     state_input = {
         "grades": [{"id": g.id, "number": g.grade_number, "name": g.name} for g in grades],
         "sections": [{"id": s.id, "name": s.name, "grade_id": s.grade_id, "room_number": s.room_number, "grade_name": s.grade.name if s.grade else ""} for s in sections],
@@ -303,6 +379,8 @@ async def generate_school_timetable(session: AsyncSession) -> Dict[str, Any]:
         } for t in teachers],
         "restrictions": [{"teacher_id": r.teacher_id, "section_id": r.section_id, "subject_id": r.subject_id, "reason": r.reason} for r in restrictions],
         "curricula": [{"grade_id": c.grade_id, "subject_id": c.subject_id, "periods_per_week": c.periods_per_week} for c in curricula],
+        "rules": rules_dict,
+        "teacher_leaves": teacher_leaves_list,
         "slots": [],
         "clashes": [],
         "autonomous_decisions": [],
@@ -310,14 +388,12 @@ async def generate_school_timetable(session: AsyncSession) -> Dict[str, Any]:
         "is_complete": False,
     }
 
-    # 2. Execute the LangGraph Graph
     graph = build_timetable_graph()
     final_state = graph.invoke(state_input)
 
     generated_slots = final_state.get("slots", [])
     decisions = final_state.get("autonomous_decisions", [])
 
-    # 3. Clean out old timetable and save new slots
     await session.execute(delete(TimetableSlot))
     for s_dict in generated_slots:
         slot = TimetableSlot(
@@ -342,7 +418,7 @@ async def generate_school_timetable(session: AsyncSession) -> Dict[str, Any]:
         "total_sections": len(sections),
         "ground_capacity_complied": True,
         "autonomous_decisions": decisions[:12],
-        "audit_summary": f"Successfully generated zero-clash dynamic master timetable for all 10 grades (20 sections) across 5 weekdays (8:00 AM - 5:00 PM). Resolved negative review exclusions and enforced max 2 sections on sports ground.",
+        "audit_summary": f"Successfully generated dynamic master timetable using live Neon DB policy rules for all 10 grades across 5 weekdays.",
     }
 
 
@@ -373,11 +449,9 @@ async def get_timetable_grid(
 
     slots = (await session.scalars(query)).all()
 
-    # Filter by grade_id if requested
     if grade_id:
         slots = [s for s in slots if s.section and s.section.grade_id == grade_id]
 
-    # Also resolve teacher display name from User
     teacher_user_ids = {s.teacher.user_id for s in slots if s.teacher}
     users = (await session.scalars(select(User).where(User.id.in_(teacher_user_ids)))).all() if teacher_user_ids else []
     user_name_map = {u.id: u.display_name for u in users}
@@ -406,8 +480,218 @@ async def get_timetable_grid(
     return result
 
 
+async def get_all_timetable_rules(session: AsyncSession) -> List[TimetableRule]:
+    """Retrieves all dynamic school scheduling rules."""
+    return (await session.scalars(select(TimetableRule).order_by(TimetableRule.priority, TimetableRule.name))).all()
+
+
+async def toggle_timetable_rule(session: AsyncSession, rule_id: UUID) -> TimetableRule:
+    """Toggles a dynamic policy rule ON or OFF."""
+    rule = await session.get(TimetableRule, rule_id)
+    if rule:
+        rule.is_enabled = not rule.is_enabled
+        await session.commit()
+        await session.refresh(rule)
+    return rule
+
+
+async def update_timetable_rule(session: AsyncSession, rule_id: UUID, payload: Dict[str, Any]) -> TimetableRule:
+    """Updates parameters, description, or priority of a rule."""
+    rule = await session.get(TimetableRule, rule_id)
+    if rule:
+        for k, v in payload.items():
+            if v is not None and hasattr(rule, k):
+                setattr(rule, k, v)
+        await session.commit()
+        await session.refresh(rule)
+    return rule
+
+
+async def create_timetable_rule(session: AsyncSession, payload: Dict[str, Any]) -> TimetableRule:
+    """Creates a new dynamic policy rule."""
+    rule = TimetableRule(
+        name=payload["name"],
+        rule_type=payload["rule_type"],
+        category=payload.get("category", "policy"),
+        description=payload["description"],
+        parameters=payload.get("parameters", {}),
+        is_enabled=payload.get("is_enabled", True),
+        priority=payload.get("priority", 1),
+    )
+    session.add(rule)
+    await session.commit()
+    await session.refresh(rule)
+    return rule
+
+
+async def delete_timetable_rule(session: AsyncSession, rule_id: UUID) -> bool:
+    """Deletes a dynamic policy rule."""
+    rule = await session.get(TimetableRule, rule_id)
+    if rule:
+        await session.delete(rule)
+        await session.commit()
+        return True
+    return False
+
+
+async def find_available_substitutes(session: AsyncSession, slot_id: UUID) -> List[Dict[str, Any]]:
+    """Smart Substitute Finder: Finds qualified, FREE teachers with matching subject skill for a specific slot."""
+    slot = await session.scalar(
+        select(TimetableSlot)
+        .options(selectinload(TimetableSlot.section))
+        .where(TimetableSlot.id == slot_id)
+    )
+    if not slot or not slot.subject_id:
+        return []
+
+    day = slot.day_of_week
+    period = slot.period_number
+    sec_id = slot.section_id
+    sub_id = slot.subject_id
+
+    # 1. Teachers with matching subject skill
+    skilled_teachers = (
+        await session.scalars(
+            select(TeacherProfile)
+            .join(TeacherSubjectSkill)
+            .where(TeacherSubjectSkill.subject_id == sub_id)
+            .options(selectinload(TeacherProfile.skills))
+        )
+    ).all()
+
+    # 2. Get active restrictions for this section & subject
+    restrictions = (
+        await session.scalars(
+            select(TeacherClassRestriction)
+            .where(
+                TeacherClassRestriction.section_id == sec_id,
+                TeacherClassRestriction.subject_id == sub_id,
+                TeacherClassRestriction.is_active == True,
+            )
+        )
+    ).all()
+    restricted_teacher_ids = {r.teacher_id for r in restrictions}
+
+    # 3. Get active teacher leaves on this day
+    leaves = (
+        await session.scalars(
+            select(TeacherLeave)
+            .where(TeacherLeave.day_of_week == day, TeacherLeave.is_active == True)
+        )
+    ).all()
+    on_leave_teacher_ids = {l.teacher_id for l in leaves}
+
+    # 4. Check who is occupied at (day, period)
+    occupied_slots = (
+        await session.scalars(
+            select(TimetableSlot)
+            .where(
+                TimetableSlot.day_of_week == day,
+                TimetableSlot.period_number == period,
+                TimetableSlot.teacher_id != None,
+                TimetableSlot.id != slot_id,
+            )
+        )
+    ).all()
+    busy_teacher_ids = {s.teacher_id for s in occupied_slots}
+
+    # 5. Teacher loads on this day
+    day_slots = (
+        await session.scalars(
+            select(TimetableSlot)
+            .where(TimetableSlot.day_of_week == day, TimetableSlot.teacher_id != None)
+        )
+    ).all()
+    day_load: Dict[UUID, int] = {}
+    for s in day_slots:
+        day_load[s.teacher_id] = day_load.get(s.teacher_id, 0) + 1
+
+    # Get user names
+    user_ids = [t.user_id for t in skilled_teachers]
+    users = (await session.scalars(select(User).where(User.id.in_(user_ids)))).all() if user_ids else []
+    user_name_map = {u.id: u.display_name for u in users}
+
+    candidates = []
+    for t in skilled_teachers:
+        is_current = (t.id == slot.teacher_id)
+        is_free = (t.id not in busy_teacher_ids) and (t.id not in on_leave_teacher_ids)
+        is_restricted = (t.id in restricted_teacher_ids)
+        current_load = day_load.get(t.id, 0)
+        has_load_capacity = current_load < t.max_daily_periods
+
+        conflict_notes = []
+        if is_current:
+            conflict_notes.append("Currently Assigned")
+        if t.id in on_leave_teacher_ids:
+            conflict_notes.append("On Leave Today")
+        if t.id in busy_teacher_ids:
+            conflict_notes.append("Teaching Another Class This Period")
+        if is_restricted:
+            conflict_notes.append("Restricted Due to Student Complaints")
+        if not has_load_capacity:
+            conflict_notes.append("Daily Max Workload Reached")
+
+        # Suitability Match Score (0 - 100)
+        score = 50.0 + (t.rating_avg * 10.0) - (current_load * 3.0)
+        if not is_free or is_restricted or not has_load_capacity:
+            score -= 40.0
+        if is_current:
+            score -= 10.0
+
+        candidates.append({
+            "teacher_id": t.id,
+            "display_name": user_name_map.get(t.user_id, f"Teacher {t.employee_id}"),
+            "employee_id": t.employee_id,
+            "qualification": t.qualification,
+            "rating_avg": t.rating_avg,
+            "current_day_load": current_load,
+            "max_daily_periods": t.max_daily_periods,
+            "is_free": is_free and not is_restricted and has_load_capacity,
+            "is_restricted_for_class": is_restricted,
+            "match_score": round(max(0.0, min(100.0, score)), 1),
+            "conflict_notes": " • ".join(conflict_notes) if conflict_notes else "Perfect Match (Free & Highly Rated)",
+        })
+
+    # Sort candidates: Best matches first
+    candidates.sort(key=lambda c: (c["is_free"], c["match_score"]), reverse=True)
+    return candidates
+
+
+async def swap_slots(session: AsyncSession, slot_id_1: UUID, slot_id_2: UUID) -> Dict[str, Any]:
+    """Swaps subject, teacher, and venue between two timetable slots (Drag-and-Drop support)."""
+    slot1 = await session.get(TimetableSlot, slot_id_1)
+    slot2 = await session.get(TimetableSlot, slot_id_2)
+
+    if not slot1 or not slot2:
+        return {"status": "error", "message": "One or both slots not found"}
+
+    # Swap attributes
+    slot1.subject_id, slot2.subject_id = slot2.subject_id, slot1.subject_id
+    slot1.teacher_id, slot2.teacher_id = slot2.teacher_id, slot1.teacher_id
+    slot1.room_or_venue, slot2.room_or_venue = slot2.room_or_venue, slot1.room_or_venue
+    slot1.slot_type, slot2.slot_type = slot2.slot_type, slot1.slot_type
+
+    await session.commit()
+    return {
+        "status": "success",
+        "message": f"Successfully swapped {slot1.day_of_week} Period {slot1.period_number} with {slot2.day_of_week} Period {slot2.period_number}",
+    }
+
+
+async def update_slot(session: AsyncSession, slot_id: UUID, payload: Dict[str, Any]) -> TimetableSlot:
+    """Directly updates a timetable slot."""
+    slot = await session.get(TimetableSlot, slot_id)
+    if slot:
+        for k, v in payload.items():
+            if v is not None and hasattr(slot, k):
+                setattr(slot, k, v)
+        await session.commit()
+        await session.refresh(slot)
+    return slot
+
+
 async def get_all_teachers_with_feedback(session: AsyncSession) -> List[Dict[str, Any]]:
-    """Retrieves teacher profiles with their subject skills, rating, and any active complaints/restrictions."""
+    """Retrieves teacher profiles with their subject skills, rating, and active restrictions."""
     teachers = (
         await session.scalars(
             select(TeacherProfile)

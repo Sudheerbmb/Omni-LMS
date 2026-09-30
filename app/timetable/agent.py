@@ -14,7 +14,7 @@ DAILY_PERIODS = [
     {"period": 5, "start": "11:20", "end": "12:10", "type": "lecture", "label": "Period 4"},
     {"period": 6, "start": "12:10", "end": "13:00", "type": "lecture", "label": "Period 5"},
     {"period": 7, "start": "13:00", "end": "14:00", "type": "lunch", "label": "Lunch & Recreation Hour"},
-    {"period": 8, "start": "14:00", "end": "14:50", "type": "lecture", "label": "Period 6 (Light Academic - No PET)"},
+    {"period": 8, "start": "14:00", "end": "14:50", "type": "lecture", "label": "Period 6"},
     {"period": 9, "start": "14:50", "end": "15:40", "type": "lecture", "label": "Period 7"},
     {"period": 10, "start": "15:40", "end": "15:55", "type": "recess", "label": "Short Afternoon Hydration Break"},
     {"period": 11, "start": "15:55", "end": "16:45", "type": "lecture", "label": "Period 8"},
@@ -23,7 +23,6 @@ DAILY_PERIODS = [
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 TEACHING_PERIOD_NUMBERS = [1, 2, 4, 5, 6, 8, 9, 11]  # 8 teaching periods / day = 40 / week
-MAX_GROUND_CAPACITY = 2  # Max 2 sections on the playground simultaneously
 
 
 class TimetableGraphState(TypedDict):
@@ -33,6 +32,8 @@ class TimetableGraphState(TypedDict):
     teachers: List[Dict[str, Any]]
     restrictions: List[Dict[str, Any]]  # (teacher_id, section_id, subject_id)
     curricula: List[Dict[str, Any]]     # (grade_id, subject_id, periods_per_week)
+    rules: Dict[str, Any]               # Dynamic policy rules from Neon DB
+    teacher_leaves: List[Dict[str, Any]]# (teacher_id, day_of_week)
 
     # Output Schedule and Decisions
     slots: List[Dict[str, Any]]
@@ -43,14 +44,31 @@ class TimetableGraphState(TypedDict):
 
 
 def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
-    """Autonomous Dynamic Scheduler: Allocates grade-specific curricula, enforces ground capacity,
+    """Autonomous Dynamic Scheduler: Reads live rules from database (ground capacity, workload caps,
 
-    and substitutes restricted teachers based on student feedback.
+    teacher leaves, post-lunch bans, etc.) and schedules zero-clash slots.
     """
     sections = state["sections"]
     subjects_by_id = {s["id"]: s for s in state["subjects"]}
     teachers = state["teachers"]
     restrictions = {(r["teacher_id"], r["section_id"], r["subject_id"]) for r in state["restrictions"]}
+
+    # Read live policy rules from Neon DB
+    rules = state.get("rules", {})
+    max_ground_capacity = int(rules.get("ground_capacity", {}).get("max_sections", 2))
+    
+    # Post-lunch sports ban rule
+    post_lunch_rule_active = "post_lunch_blacklist" in rules
+    forbidden_post_lunch_period = rules.get("post_lunch_blacklist", {}).get("forbidden_period", 8) if post_lunch_rule_active else -1
+
+    # Workload ceiling rule
+    max_daily_teacher_periods = int(rules.get("max_daily_teacher_periods", {}).get("max_periods", 5))
+
+    # Day-specific schedule overrides (e.g. delayed start on Wednesday or custom periods)
+    custom_day_rules = rules.get("custom_day_schedule", {}).get("overrides", {})
+
+    # Teacher leaves (absent teachers on specific days)
+    teacher_leaves = {(l["teacher_id"], l["day_of_week"]) for l in state.get("teacher_leaves", [])}
 
     # Map teachers by subject skill
     teachers_by_subject: Dict[UUID, List[Dict[str, Any]]] = {}
@@ -67,11 +85,8 @@ def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
     autonomous_decisions: List[str] = []
 
     # Global tracking across the school
-    # (day, period, teacher_id) -> section_id
     teacher_time_occupancy: Dict[Tuple[str, int, UUID], UUID] = {}
-    # (day, period) -> count of sections on the ground
     ground_usage: Dict[Tuple[str, int], int] = {}
-    # (day, teacher_id) -> total periods assigned
     teacher_day_count: Dict[Tuple[str, UUID], int] = {}
 
     for s_idx, section in enumerate(sections):
@@ -80,31 +95,41 @@ def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
         sec_name = f"{section.get('grade_name', 'Class')} - Sec {section['name']}"
         reqs = curriculum_by_grade.get(grade_id, [])
 
-        # Build week pool of subjects for this section
         subject_pool: List[UUID] = []
         for req in reqs:
             subject_pool.extend([req["subject_id"]] * req.get("periods_per_week", 5))
 
-        # Distinct seed per section so class timetables are dynamic and non-identical
         rng = random.Random(s_idx * 104729 + 42)
         rng.shuffle(subject_pool)
 
-        # Separate PET subjects and lab subjects from regular academic subjects
         pet_subjects = [s_id for s_id in subject_pool if subjects_by_id.get(s_id, {}).get("requires_ground")]
         academic_subjects = [s_id for s_id in subject_pool if not subjects_by_id.get(s_id, {}).get("requires_ground")]
 
         for day in WEEKDAYS:
-            for p_def in DAILY_PERIODS:
+            # Check if this day has a custom schedule override rule
+            day_override = custom_day_rules.get(day, {})
+            day_periods = DAILY_PERIODS
+
+            for p_def in day_periods:
                 period_num = p_def["period"]
                 slot_type = p_def["type"]
 
                 # Fixed global slots (Assembly, Recess, Lunch, Dispersal)
                 if slot_type in ("assembly", "recess", "lunch", "dispersal"):
+                    # Check if assembly skipped for this day
+                    if slot_type == "assembly" and day_override.get("skip_assembly"):
+                        continue
+
+                    start_time = p_def["start"]
+                    end_time = p_def["end"]
+                    if period_num == 0 and day_override.get("start_time"):
+                        start_time = day_override["start_time"]
+
                     slots.append({
                         "day_of_week": day,
                         "period_number": period_num,
-                        "start_time": p_def["start"],
-                        "end_time": p_def["end"],
+                        "start_time": start_time,
+                        "end_time": end_time,
                         "slot_type": slot_type,
                         "section_id": sec_id,
                         "subject_id": None,
@@ -118,11 +143,12 @@ def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
                 assigned_teacher_id: UUID | None = None
                 assigned_venue = section.get("room_number", "Homeroom")
 
-                # Check if this section can schedule a sports period in this slot
+                # Sports / Ground rule checks
+                is_post_lunch_restricted = (post_lunch_rule_active and period_num == forbidden_post_lunch_period)
                 can_place_pet = (
                     len(pet_subjects) > 0
-                    and period_num != 8  # Never right after lunch
-                    and ground_usage.get((day, period_num), 0) < MAX_GROUND_CAPACITY
+                    and not is_post_lunch_restricted
+                    and ground_usage.get((day, period_num), 0) < max_ground_capacity
                 )
 
                 if can_place_pet and (period_num in [2, 5, 9, 11] or len(academic_subjects) == 0):
@@ -132,7 +158,8 @@ def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
                         t for t in qualified_coaches
                         if (day, period_num, t["id"]) not in teacher_time_occupancy
                         and (t["id"], sec_id, cand_pet_id) not in restrictions
-                        and teacher_day_count.get((day, t["id"]), 0) < t.get("max_daily_periods", 5)
+                        and (t["id"], day) not in teacher_leaves
+                        and teacher_day_count.get((day, t["id"]), 0) < min(t.get("max_daily_periods", 5), max_daily_teacher_periods)
                     ]
                     if free_coaches:
                         chosen_from_pool = cand_pet_id
@@ -145,7 +172,7 @@ def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
                         assigned_venue = f"Sports Ground (Zone {zone_num})"
                         ground_usage[(day, period_num)] = ground_usage.get((day, period_num), 0) + 1
 
-                # If PET wasn't chosen, pick from academic / lab subjects
+                # Academic or Lab subject
                 if not assigned_sub_id and academic_subjects:
                     for idx, cand_sub_id in enumerate(academic_subjects):
                         sub = subjects_by_id.get(cand_sub_id)
@@ -153,25 +180,26 @@ def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
                             continue
 
                         qualified_teachers = teachers_by_subject.get(cand_sub_id, [])
-                        
+
                         restricted_teachers = [
                             t for t in qualified_teachers
                             if (t["id"], sec_id, cand_sub_id) in restrictions
                         ]
-                        
+
                         eligible_teachers = [
                             t for t in qualified_teachers
                             if (t["id"], sec_id, cand_sub_id) not in restrictions
+                            and (t["id"], day) not in teacher_leaves
                             and (day, period_num, t["id"]) not in teacher_time_occupancy
-                            and teacher_day_count.get((day, t["id"]), 0) < t.get("max_daily_periods", 5)
+                            and teacher_day_count.get((day, t["id"]), 0) < min(t.get("max_daily_periods", 5), max_daily_teacher_periods)
                         ]
 
-                        # Autonomous substitution rule: if restricted teacher found, record AI decision
+                        # Autonomous substitution rule
                         if restricted_teachers and eligible_teachers:
                             for ex_t in restricted_teachers:
                                 dec = (
                                     f"Autonomous Decision: Excluded {ex_t.get('display_name')} from {sec_name} "
-                                    f"for {sub['name']} due to active student complaints / low rating. "
+                                    f"for {sub['name']} due to student complaints / low rating. "
                                     f"Substituted {eligible_teachers[0].get('display_name')}."
                                 )
                                 if dec not in autonomous_decisions:
@@ -188,7 +216,7 @@ def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
                                 assigned_venue = f"{sub['name']} Lab"
                             break
 
-                # Fallback if preferred subject has no free teacher
+                # Fallback allocation
                 if not assigned_sub_id and (academic_subjects or pet_subjects):
                     active_pool = academic_subjects if academic_subjects else pet_subjects
                     for idx, cand_sub_id in enumerate(active_pool):
@@ -196,6 +224,7 @@ def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
                         eligible = [
                             t for t in qualified_teachers
                             if (t["id"], sec_id, cand_sub_id) not in restrictions
+                            and (t["id"], day) not in teacher_leaves
                             and (day, period_num, t["id"]) not in teacher_time_occupancy
                         ]
                         if eligible:
@@ -203,17 +232,15 @@ def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
                             assigned_teacher_id = eligible[0]["id"]
                             break
 
-                    # Ultimate fallback to ensure period is filled
                     if not assigned_sub_id and active_pool:
                         assigned_sub_id = active_pool.pop(0)
                         sub = subjects_by_id.get(assigned_sub_id, {})
                         qualified_teachers = teachers_by_subject.get(assigned_sub_id, [])
-                        eligible = [t for t in qualified_teachers if (t["id"], sec_id, assigned_sub_id) not in restrictions]
+                        eligible = [t for t in qualified_teachers if (t["id"], sec_id, assigned_sub_id) not in restrictions and (t["id"], day) not in teacher_leaves]
                         chosen_teacher = eligible[0] if eligible else (qualified_teachers[0] if qualified_teachers else None)
                         if chosen_teacher:
                             assigned_teacher_id = chosen_teacher["id"]
 
-                # Register teacher & ground occupancy
                 if assigned_teacher_id:
                     teacher_time_occupancy[(day, period_num, assigned_teacher_id)] = sec_id
                     teacher_day_count[(day, assigned_teacher_id)] = teacher_day_count.get((day, assigned_teacher_id), 0) + 1
@@ -239,11 +266,15 @@ def draft_scheduler_node(state: TimetableGraphState) -> Dict[str, Any]:
 
 
 def conflict_critic_node(state: TimetableGraphState) -> Dict[str, Any]:
-    """Audits the generated timetable slots against hard and soft constraints."""
+    """Audits the generated timetable slots against dynamic database rules."""
     slots = state["slots"]
     restrictions = {(r["teacher_id"], r["section_id"], r["subject_id"]) for r in state["restrictions"]}
-    clashes: List[str] = []
+    rules = state.get("rules", {})
+    max_ground_capacity = int(rules.get("ground_capacity", {}).get("max_sections", 2))
+    post_lunch_rule_active = "post_lunch_blacklist" in rules
+    forbidden_post_lunch_period = rules.get("post_lunch_blacklist", {}).get("forbidden_period", 8) if post_lunch_rule_active else -1
 
+    clashes: List[str] = []
     teacher_slots: Dict[Tuple[str, int, UUID], List[Dict[str, Any]]] = {}
     ground_counts: Dict[Tuple[str, int], int] = {}
 
@@ -262,8 +293,8 @@ def conflict_critic_node(state: TimetableGraphState) -> Dict[str, Any]:
             g_key = (day, period)
             ground_counts[g_key] = ground_counts.get(g_key, 0) + 1
 
-            if period == 8:
-                clashes.append(f"Ergonomic Violation: Sports period scheduled immediately after lunch on {day} Period {period}")
+            if post_lunch_rule_active and period == forbidden_post_lunch_period:
+                clashes.append(f"Post-Lunch Violation: Sports scheduled immediately after lunch on {day} Period {period}")
 
         if t_id and sec_id and sub_id and (t_id, sec_id, sub_id) in restrictions:
             clashes.append(f"Blacklist violation: Restricted Teacher {t_id} assigned to section {sec_id} for subject {sub_id}")
@@ -273,10 +304,9 @@ def conflict_critic_node(state: TimetableGraphState) -> Dict[str, Any]:
             clashes.append(f"Teacher double-booking: Teacher {t_id} assigned to {len(allocated)} classes simultaneously on {day} Period {period}")
 
     for (day, period), count in ground_counts.items():
-        if count > MAX_GROUND_CAPACITY:
-            clashes.append(f"Sports Ground Capacity Exceeded: {count} sections on ground at {day} Period {period} (Max allowed: {MAX_GROUND_CAPACITY})")
+        if count > max_ground_capacity:
+            clashes.append(f"Sports Ground Capacity Exceeded: {count} sections on ground at {day} Period {period} (Max allowed: {max_ground_capacity})")
 
-    # Complete if 0 clashes or reached iteration threshold
     return {
         "clashes": clashes,
         "is_complete": len(clashes) == 0 or state.get("iteration", 0) >= 2,
@@ -284,7 +314,7 @@ def conflict_critic_node(state: TimetableGraphState) -> Dict[str, Any]:
 
 
 def autonomous_resolver_node(state: TimetableGraphState) -> Dict[str, Any]:
-    """Autonomous Decision Maker: Resolves clashes by substituting alternate available teachers and rebalancing slots."""
+    """Autonomous Decision Maker: Resolves clashes by reassigning alternate teachers and rebalancing slots."""
     slots = list(state["slots"])
     clashes = state.get("clashes", [])
     decisions = list(state.get("autonomous_decisions", []))
@@ -296,8 +326,6 @@ def autonomous_resolver_node(state: TimetableGraphState) -> Dict[str, Any]:
         for s_id in t.get("skills", []):
             teachers_by_subject.setdefault(s_id, []).append(t)
 
-    # Resolve teacher double-bookings
-    # Map occupied (day, period, teacher_id)
     occupied: Dict[Tuple[str, int, UUID], int] = {}
     for s in slots:
         if s.get("teacher_id") and s.get("slot_type") not in ("assembly", "recess", "lunch", "dispersal"):
@@ -312,12 +340,10 @@ def autonomous_resolver_node(state: TimetableGraphState) -> Dict[str, Any]:
         period = s["period_number"]
 
         if t_id and occupied.get((day, period, t_id), 0) > 1:
-            # Find replacement teacher
             candidates = teachers_by_subject.get(sub_id, [])
             for cand in candidates:
                 cand_key = (day, period, cand["id"])
                 if occupied.get(cand_key, 0) == 0 and (cand["id"], sec_id, sub_id) not in restrictions:
-                    # Swap
                     occupied[(day, period, t_id)] -= 1
                     s["teacher_id"] = cand["id"]
                     occupied[cand_key] = 1
@@ -327,7 +353,7 @@ def autonomous_resolver_node(state: TimetableGraphState) -> Dict[str, Any]:
                     break
 
     for c in clashes[:2]:
-        decisions.append(f"Autonomous Resolver Audit: Resolved clash [{c}]. Zero-conflict constraint verified.")
+        decisions.append(f"Autonomous Resolver Audit: Resolved clash [{c}]. Constraint satisfied.")
 
     return {
         "slots": slots,

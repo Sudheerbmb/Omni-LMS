@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
@@ -110,3 +110,78 @@ class TimetableGenerationResult(BaseModel):
     ground_capacity_complied: bool
     autonomous_decisions: list[str]
     audit_summary: str
+
+
+class TimetableRuleBase(BaseModel):
+    name: str
+    rule_type: str
+    category: str = "policy"
+    description: str
+    parameters: dict = {}
+    is_enabled: bool = True
+    priority: int = 1
+
+
+class TimetableRuleCreate(TimetableRuleBase):
+    pass
+
+
+class TimetableRuleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    parameters: Optional[dict] = None
+    is_enabled: Optional[bool] = None
+    priority: Optional[int] = None
+
+
+class TimetableRuleRead(TimetableRuleBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    created_at: datetime
+
+
+class SlotSwapRequest(BaseModel):
+    slot_id_1: UUID
+    slot_id_2: UUID
+
+
+class SlotUpdateRequest(BaseModel):
+    subject_id: Optional[UUID] = None
+    teacher_id: Optional[UUID] = None
+    room_or_venue: Optional[str] = None
+    slot_type: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+
+
+class SubstituteTeacherRead(BaseModel):
+    teacher_id: UUID
+    display_name: str
+    employee_id: str
+    qualification: str
+    rating_avg: float
+    current_day_load: int
+    max_daily_periods: int
+    is_free: bool
+    is_restricted_for_class: bool
+    match_score: float
+    conflict_notes: Optional[str] = None
+
+
+class TeacherLeaveCreate(BaseModel):
+    teacher_id: UUID
+    day_of_week: str
+    reason: str
+
+
+class TeacherLeaveRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    teacher_id: UUID
+    teacher_name: Optional[str] = None
+    day_of_week: str
+    reason: str
+    is_active: bool
+

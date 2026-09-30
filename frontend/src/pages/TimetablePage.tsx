@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import {
   Calendar,
-  Clock,
   Sparkles,
   RefreshCw,
   ShieldAlert,
@@ -11,7 +10,15 @@ import {
   Star,
   Activity,
   ChevronRight,
-  Database
+  Database,
+  Sliders,
+  ArrowLeftRight,
+  UserCheck,
+  UserX,
+  PlusCircle,
+  Trash2,
+  Settings2,
+  Edit3
 } from 'lucide-react'
 import {
   getGrades,
@@ -21,10 +28,21 @@ import {
   getTeachersWithFeedback,
   submitTeacherFeedback,
   toggleTeacherRestriction,
+  getTimetableRules,
+  toggleTimetableRule,
+  updateTimetableRule,
+  createTimetableRule,
+  deleteTimetableRule,
+  getSlotSubstitutes,
+  swapSlots,
+  updateSlot,
+  recordTeacherLeave,
   type SchoolGrade,
   type TimetableSlot,
   type TeacherProfile,
   type TimetableGenerationResult,
+  type TimetableRule,
+  type SubstituteTeacher,
   type User
 } from '../lib/api'
 
@@ -34,10 +52,11 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
   const [grades, setGrades] = useState<SchoolGrade[]>([])
   const [selectedGradeId, setSelectedGradeId] = useState<string>('')
   const [selectedSectionId, setSelectedSectionId] = useState<string>('')
-  const [activeTab, setActiveTab] = useState<'grid' | 'teachers' | 'audit' | 'ground'>('grid')
+  const [activeTab, setActiveTab] = useState<'grid' | 'rules' | 'teachers' | 'audit'>('grid')
   
   const [slots, setSlots] = useState<TimetableSlot[]>([])
   const [teachers, setTeachers] = useState<TeacherProfile[]>([])
+  const [rules, setRules] = useState<TimetableRule[]>([])
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [seeding, setSeeding] = useState(false)
@@ -45,12 +64,36 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
   const [lastGenResult, setLastGenResult] = useState<TimetableGenerationResult | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   
+  // Quick Swap / Drag State
+  const [swapMode, setSwapMode] = useState(false)
+  const [selectedSlotForSwap, setSelectedSlotForSwap] = useState<TimetableSlot | null>(null)
+
+  // Slot Detail & Substitution Modal
+  const [activeSlotModal, setActiveSlotModal] = useState<TimetableSlot | null>(null)
+  const [substitutes, setSubstitutes] = useState<SubstituteTeacher[]>([])
+  const [loadingSubstitutes, setLoadingSubstitutes] = useState(false)
+  const [editingRoom, setEditingRoom] = useState('')
+
+  // Rule Creation Modal
+  const [showAddRuleModal, setShowAddRuleModal] = useState(false)
+  const [newRuleName, setNewRuleName] = useState('')
+  const [newRuleType, setNewRuleType] = useState('ground_capacity')
+  const [newRuleDesc, setNewRuleDesc] = useState('')
+  const [newRuleParamVal, setNewRuleParamVal] = useState('3')
+
   // Feedback submission form modal
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [feedbackTeacherId, setFeedbackTeacherId] = useState('')
   const [feedbackRating, setFeedbackRating] = useState(1)
   const [feedbackComments, setFeedbackComments] = useState('')
   const [submittingFeedback, setSubmittingFeedback] = useState(false)
+
+  // Leave Simulation Modal
+  const [showLeaveModal, setShowLeaveModal] = useState(false)
+  const [leaveTeacherId, setLeaveTeacherId] = useState('')
+  const [leaveDay, setLeaveDay] = useState('Wednesday')
+  const [leaveReason, setLeaveReason] = useState('Medical Leave')
+  const [submittingLeave, setSubmittingLeave] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -80,6 +123,9 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
 
       const teachersData = await getTeachersWithFeedback()
       setTeachers(teachersData || [])
+
+      const rulesData = await getTimetableRules()
+      setRules(rulesData || [])
     } catch (err: any) {
       console.error(err)
       setStatusMessage('Error loading timetable data: ' + (err.message || 'Unknown error'))
@@ -106,7 +152,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
       setStatusMessage(null)
       const result = await generateTimetable()
       setLastGenResult(result)
-      setStatusMessage(`AI Generated ${result.total_slots_scheduled} zero-clash slots across ${result.total_sections} sections!`)
+      setStatusMessage(`AI Generated ${result.total_slots_scheduled} slots across ${result.total_sections} sections adhering to live DB policy rules!`)
       if (selectedSectionId) {
         await loadGrid(selectedSectionId)
       }
@@ -125,7 +171,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
       setSeeding(true)
       setStatusMessage(null)
       await seedTimetableDefaults()
-      setStatusMessage('Successfully initialized Grades 1-10, subjects, faculty roster, and sample reviews!')
+      setStatusMessage('Successfully initialized Grades 1-10, subjects, faculty roster, and dynamic rules!')
       await loadData()
     } catch (err: any) {
       console.error(err)
@@ -135,12 +181,165 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
     }
   }
 
+  // ── Slot Interaction: Click to Edit & Substitute Finder ───────────────────
+  const handleSlotClick = async (slot: TimetableSlot) => {
+    if (swapMode) {
+      if (!selectedSlotForSwap) {
+        setSelectedSlotForSwap(slot)
+        setStatusMessage(`Selected ${slot.day_of_week} Period ${slot.period_number}. Now click the second slot to swap!`)
+      } else {
+        if (selectedSlotForSwap.id === slot.id) {
+          setSelectedSlotForSwap(null)
+          return
+        }
+        try {
+          setLoading(true)
+          await swapSlots(selectedSlotForSwap.id, slot.id)
+          setStatusMessage(`Swapped ${selectedSlotForSwap.day_of_week} Period ${selectedSlotForSwap.period_number} with ${slot.day_of_week} Period ${slot.period_number}!`)
+          setSelectedSlotForSwap(null)
+          setSwapMode(false)
+          if (selectedSectionId) await loadGrid(selectedSectionId)
+        } catch (err: any) {
+          alert('Swap failed: ' + err.message)
+        } finally {
+          setLoading(false)
+        }
+      }
+      return
+    }
+
+    // Ignore global assembly/break rows for substitution
+    if (slot.slot_type in ['assembly', 'recess', 'lunch', 'dispersal']) return
+
+    setActiveSlotModal(slot)
+    setEditingRoom(slot.room_or_venue)
+    try {
+      setLoadingSubstitutes(true)
+      const subs = await getSlotSubstitutes(slot.id)
+      setSubstitutes(subs || [])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingSubstitutes(false)
+    }
+  }
+
+  const handleAssignSubstitute = async (teacherId: string) => {
+    if (!activeSlotModal) return
+    try {
+      setLoading(true)
+      await updateSlot(activeSlotModal.id, { teacher_id: teacherId })
+      setStatusMessage(`Assigned substitute teacher to ${activeSlotModal.day_of_week} Period ${activeSlotModal.period_number}!`)
+      setActiveSlotModal(null)
+      if (selectedSectionId) await loadGrid(selectedSectionId)
+    } catch (err: any) {
+      alert('Failed to assign substitute: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSaveSlotEdits = async () => {
+    if (!activeSlotModal) return
+    try {
+      setLoading(true)
+      await updateSlot(activeSlotModal.id, { room_or_venue: editingRoom })
+      setStatusMessage('Slot venue details updated!')
+      setActiveSlotModal(null)
+      if (selectedSectionId) await loadGrid(selectedSectionId)
+    } catch (err: any) {
+      alert('Update failed: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Dynamic Policy Rules Handlers ─────────────────────────────────────────
+  const handleToggleRule = async (ruleId: string) => {
+    try {
+      const updated = await toggleTimetableRule(ruleId)
+      setRules(prev => prev.map(r => r.id === ruleId ? updated : r))
+      setStatusMessage(`Rule "${updated.name}" is now ${updated.is_enabled ? 'ENABLED' : 'DISABLED'}.`)
+    } catch (err: any) {
+      alert('Toggle failed: ' + err.message)
+    }
+  }
+
+  const handleUpdateRuleParam = async (ruleId: string, paramKey: string, newVal: any) => {
+    try {
+      const rule = rules.find(r => r.id === ruleId)
+      if (!rule) return
+      const newParams = { ...rule.parameters, [paramKey]: newVal }
+      const updated = await updateTimetableRule(ruleId, { parameters: newParams })
+      setRules(prev => prev.map(r => r.id === ruleId ? updated : r))
+      setStatusMessage(`Updated rule "${rule.name}" parameter: ${paramKey} = ${newVal}`)
+    } catch (err: any) {
+      alert('Failed to update rule parameter: ' + err.message)
+    }
+  }
+
+  const handleCreateRule = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      let params: any = {}
+      if (newRuleType === 'ground_capacity') params = { max_sections: parseInt(newRuleParamVal) || 3 }
+      else if (newRuleType === 'max_daily_teacher_periods') params = { max_periods: parseInt(newRuleParamVal) || 5 }
+      else if (newRuleType === 'custom_day_schedule') params = { overrides: { [newRuleParamVal]: { start_time: "09:00" } } }
+
+      const created = await createTimetableRule({
+        name: newRuleName,
+        rule_type: newRuleType,
+        description: newRuleDesc || 'Custom school timetable scheduling policy',
+        parameters: params,
+        is_enabled: true,
+        priority: 2
+      })
+      setRules(prev => [...prev, created])
+      setShowAddRuleModal(false)
+      setNewRuleName('')
+      setNewRuleDesc('')
+      setStatusMessage(`Created custom rule: "${created.name}"!`)
+    } catch (err: any) {
+      alert('Create rule failed: ' + err.message)
+    }
+  }
+
+  const handleDeleteRule = async (ruleId: string) => {
+    if (!confirm('Are you sure you want to remove this rule?')) return
+    try {
+      await deleteTimetableRule(ruleId)
+      setRules(prev => prev.filter(r => r.id !== ruleId))
+      setStatusMessage('Rule deleted from Neon DB.')
+    } catch (err: any) {
+      alert('Delete failed: ' + err.message)
+    }
+  }
+
+  // ── Leave Simulation Handler ──────────────────────────────────────────────
+  const handleLeaveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!leaveTeacherId) return
+    try {
+      setSubmittingLeave(true)
+      await recordTeacherLeave({
+        teacher_id: leaveTeacherId,
+        day_of_week: leaveDay,
+        reason: leaveReason
+      })
+      setShowLeaveModal(false)
+      setStatusMessage(`Recorded leave for ${leaveDay}. Run "Generate AI Timetable" to trigger automatic substitute re-allocations!`)
+    } catch (err: any) {
+      alert('Failed to record leave: ' + err.message)
+    } finally {
+      setSubmittingLeave(false)
+    }
+  }
+
   const handleFeedbackSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!feedbackTeacherId || !selectedSectionId) return
     try {
       setSubmittingFeedback(true)
-      // Pick any subject from section
       const activeSlot = slots.find(s => s.teacher_id === feedbackTeacherId)
       const subjectId = activeSlot?.subject_id || slots[0]?.subject_id || '00000000-0000-0000-0000-000000000000'
       
@@ -177,11 +376,8 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
 
   const currentGrade = grades.find(g => g.id === selectedGradeId)
   const currentSection = currentGrade?.sections.find(s => s.id === selectedSectionId)
-
-  // Group slots by period number
   const periodNumbers = Array.from(new Set(slots.map(s => s.period_number))).sort((a, b) => a - b)
 
-  // Helper for period labels & time
   const getPeriodMeta = (pNum: number) => {
     switch (pNum) {
       case 0: return { label: 'Morning Assembly & Prayer', time: '08:00 - 08:30', isBreak: true, bg: 'bg-emerald-950/40 border-emerald-800/40 text-emerald-400' }
@@ -201,8 +397,8 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
     }
   }
 
-  // Count active restrictions
   const totalRestrictions = teachers.reduce((acc, t) => acc + (t.active_restrictions?.length || 0), 0)
+  const activeGroundCapacity = rules.find(r => r.rule_type === 'ground_capacity')?.parameters?.max_sections || 2
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
@@ -212,27 +408,38 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
         <div className="space-y-2 relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
-            LangGraph Autonomous Agent Active
+            Dynamic LangGraph Rules Engine Active
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
-            Autonomous Master Timetable Scheduler
+            Autonomous Timetable & Policy Engine
           </h1>
           <p className="text-slate-400 text-sm max-w-2xl">
-            Realistic full-day bell schedule (8:00 AM – 5:00 PM) for Classes 1 to 10. Autonomous conflict critic enforces 
-            sports ground capacity limits (&le; 2 classes simultaneously) and replaces teachers with negative student reviews.
+            Live database-driven rules, interactive drag-and-drop swapping, instant teacher substitution finder, 
+            and customized weekday bell schedules for Classes 1 to 10.
           </p>
         </div>
 
-        {/* Global Action Buttons */}
+        {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-3 relative z-10">
+          <button
+            onClick={() => {
+              if (teachers.length > 0) setLeaveTeacherId(teachers[0].id)
+              setShowLeaveModal(true)
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold transition-all"
+            title="Simulate a teacher absence to test auto-substitution"
+          >
+            <UserX className="w-4 h-4 text-amber-400" />
+            Log Faculty Leave
+          </button>
+
           <button
             onClick={handleSeed}
             disabled={seeding}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800/60 hover:bg-slate-800 text-slate-300 text-xs font-medium transition-all shadow-sm disabled:opacity-50"
-            title="Seeds Classes 1-10, CBSE Curricula, 25+ Teachers & Complaints in Neon DB"
           >
             <Database className={`w-4 h-4 ${seeding ? 'animate-spin text-cyan-400' : ''}`} />
-            {seeding ? 'Seeding Neon...' : 'Reset & Seed Defaults'}
+            {seeding ? 'Seeding Neon...' : 'Reset Defaults'}
           </button>
 
           <button
@@ -241,7 +448,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 text-xs font-bold transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
-            {generating ? 'Agent Scheduling Master Matrix...' : 'Generate AI Timetable'}
+            {generating ? 'LangGraph Processing Live Rules...' : 'Run AI Agent'}
           </button>
         </div>
       </div>
@@ -253,7 +460,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
             <CheckCircle2 className="w-5 h-5 text-cyan-400 shrink-0" />
             <span>{statusMessage}</span>
           </div>
-          <button onClick={() => setStatusMessage(null)} className="text-cyan-400 hover:text-cyan-200 text-xs">Dismiss</button>
+          <button onClick={() => setStatusMessage(null)} className="text-cyan-400 hover:text-cyan-200 text-xs font-bold">Dismiss</button>
         </div>
       )}
 
@@ -261,38 +468,38 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
-            <span>School Grades</span>
+            <span>School Grades & Sections</span>
             <Building className="w-4 h-4 text-cyan-400" />
           </div>
-          <div className="text-2xl font-black text-white">{grades.length || 10} Grades</div>
-          <div className="text-xs text-slate-500">20 Total Sections (A & B)</div>
+          <div className="text-2xl font-black text-white">{grades.length || 10} Grades &bull; 20 Secs</div>
+          <div className="text-xs text-slate-500">Class 1 to 10 (A & B)</div>
         </div>
 
         <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
-            <span>Daily Schedule</span>
-            <Clock className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-2xl font-black text-white">8:00 &ndash; 5:00 PM</div>
-          <div className="text-xs text-emerald-400/80 font-medium">8 Lectures &bull; 4 Breaks &bull; 1 Dispersal</div>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
-            <span>Ground Capacity Limit</span>
+            <span>Dynamic Ground Limit</span>
             <Activity className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-2xl font-black text-amber-400">&le; 2 Classes Max</div>
-          <div className="text-xs text-slate-500">Zero sports post-lunch (Period 8)</div>
+          <div className="text-2xl font-black text-amber-400">{activeGroundCapacity} Classes Max</div>
+          <div className="text-xs text-slate-500">Configurable in Policy Rules tab</div>
         </div>
 
         <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
-            <span>Complaint Disqualifications</span>
+            <span>Active Policy Rules</span>
+            <Sliders className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div className="text-2xl font-black text-indigo-400">{rules.filter(r => r.is_enabled).length} Enabled</div>
+          <div className="text-xs text-slate-500">{rules.length} total defined in Neon DB</div>
+        </div>
+
+        <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
+            <span>Active Complaints / Blacklists</span>
             <ShieldAlert className="w-4 h-4 text-rose-400" />
           </div>
-          <div className="text-2xl font-black text-rose-400">{totalRestrictions} Blacklists</div>
-          <div className="text-xs text-slate-500">Ramesh Sharma (9-A Math) bypassed</div>
+          <div className="text-2xl font-black text-rose-400">{totalRestrictions} Exclusions</div>
+          <div className="text-xs text-slate-500">Auto-bypassed during scheduling</div>
         </div>
       </div>
 
@@ -300,12 +507,29 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
       <div className="flex border-b border-slate-800 gap-6">
         <button
           onClick={() => setActiveTab('grid')}
-          className={`pb-3 text-sm font-semibold transition-colors relative ${
+          className={`pb-3 text-sm font-semibold transition-colors relative flex items-center gap-2 ${
             activeTab === 'grid' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          Class Master Timetable
+          <Calendar className="w-4 h-4" />
+          Master Timetable Grid
           {activeTab === 'grid' && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400 rounded-full" />
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('rules')}
+          className={`pb-3 text-sm font-semibold transition-colors relative flex items-center gap-2 ${
+            activeTab === 'rules' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Settings2 className="w-4 h-4" />
+          School Policy Rules Engine
+          <span className="px-2 py-0.5 rounded-full bg-slate-800 text-xs text-slate-300 font-mono">
+            {rules.length}
+          </span>
+          {activeTab === 'rules' && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400 rounded-full" />
           )}
         </button>
@@ -331,7 +555,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
             activeTab === 'audit' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          AI Conflict Decisions Log
+          Agent Resolutions Log
           {lastGenResult?.autonomous_decisions && (
             <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold">
               {lastGenResult.autonomous_decisions.length}
@@ -346,12 +570,12 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
       {/* TAB 1: Master Timetable Grid */}
       {activeTab === 'grid' && (
         <div className="space-y-6">
-          {/* Controls: Grade and Section Selector */}
+          {/* Controls: Grade, Section Selector & Swap Mode */}
           <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-slate-900 border border-slate-800">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                  Select Grade
+                  Grade Level
                 </label>
                 <select
                   value={selectedGradeId}
@@ -394,13 +618,44 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
               </div>
             </div>
 
-            <div className="text-right">
-              <div className="text-xs text-slate-400">Class In-Charge Schedule</div>
-              <div className="text-sm font-bold text-slate-200">
-                {currentGrade?.name} &bull; Section {currentSection?.name}
+            {/* Quick Swap / Edit Mode Toggle */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setSwapMode(!swapMode)
+                  setSelectedSlotForSwap(null)
+                }}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                  swapMode
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/20'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
+                }`}
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                {swapMode ? 'Exit Swap Mode' : 'Quick Swap Mode'}
+              </button>
+
+              <div className="text-right pl-3 border-l border-slate-800">
+                <div className="text-[11px] text-slate-400">Viewing Schedule</div>
+                <div className="text-sm font-bold text-slate-200">
+                  {currentGrade?.name} &bull; Section {currentSection?.name}
+                </div>
               </div>
             </div>
           </div>
+
+          {swapMode && (
+            <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between">
+              <span>
+                <strong>Swap Mode Active:</strong> Click any slot to select it, then click another slot to swap them instantly!
+              </span>
+              {selectedSlotForSwap && (
+                <span className="font-mono bg-amber-500/20 px-2 py-0.5 rounded">
+                  Selected: {selectedSlotForSwap.day_of_week} Period {selectedSlotForSwap.period_number}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Timetable Weekly Matrix */}
           {loading ? (
@@ -436,7 +691,6 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
                   {periodNumbers.map((pNum) => {
                     const meta = getPeriodMeta(pNum)
 
-                    // If it is a global break / assembly row
                     if (meta.isBreak) {
                       return (
                         <tr key={pNum} className={meta.bg || 'bg-slate-900/40'}>
@@ -451,7 +705,6 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
                       )
                     }
 
-                    // Instruction lecture periods
                     return (
                       <tr key={pNum} className="hover:bg-slate-900/30 transition-colors">
                         <td className="p-4 border-r border-slate-800 font-mono text-xs text-slate-400 bg-slate-900/30">
@@ -470,21 +723,25 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
                             )
                           }
 
+                          const isSelectedForSwap = selectedSlotForSwap?.id === slot.id
                           const isSports = slot.slot_type === 'sports' || slot.room_or_venue.includes('Sports Ground')
                           const isLab = slot.slot_type === 'lab' || slot.room_or_venue.includes('Lab')
 
                           return (
                             <td
                               key={day}
-                              className="p-3 border-r border-slate-800/60 last:border-r-0 align-top"
+                              onClick={() => handleSlotClick(slot)}
+                              className="p-3 border-r border-slate-800/60 last:border-r-0 align-top cursor-pointer group"
                             >
                               <div
-                                className={`p-3 rounded-xl border transition-all h-full flex flex-col justify-between ${
-                                  isSports
-                                    ? 'bg-amber-950/20 border-amber-500/30 text-amber-200'
+                                className={`p-3 rounded-xl border transition-all h-full flex flex-col justify-between relative ${
+                                  isSelectedForSwap
+                                    ? 'ring-2 ring-amber-400 bg-amber-950/40 border-amber-400 scale-[1.02]'
+                                    : isSports
+                                    ? 'bg-amber-950/20 border-amber-500/30 text-amber-200 group-hover:border-amber-400'
                                     : isLab
-                                    ? 'bg-indigo-950/20 border-indigo-500/30 text-indigo-200'
-                                    : 'bg-slate-900/80 border-slate-800 text-slate-200 hover:border-slate-700'
+                                    ? 'bg-indigo-950/20 border-indigo-500/30 text-indigo-200 group-hover:border-indigo-400'
+                                    : 'bg-slate-900/80 border-slate-800 text-slate-200 group-hover:border-cyan-500/60 group-hover:bg-slate-850'
                                 }`}
                               >
                                 <div>
@@ -510,8 +767,9 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
                                 </div>
 
                                 <div className="mt-2 pt-2 border-t border-slate-800/60 text-[11px] space-y-0.5 text-slate-400">
-                                  <div className="truncate font-medium text-slate-300">
-                                    {slot.teacher_name || 'Assigned Faculty'}
+                                  <div className="truncate font-medium text-slate-300 flex items-center justify-between">
+                                    <span className="truncate">{slot.teacher_name || 'Assigned Faculty'}</span>
+                                    <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-100 text-cyan-400 shrink-0 ml-1" />
                                   </div>
                                   <div className="text-[10px] text-slate-500 truncate">
                                     {slot.room_or_venue}
@@ -531,7 +789,169 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
         </div>
       )}
 
-      {/* TAB 2: Faculty Directory, Ratings & Active Blacklists */}
+      {/* TAB 2: Dynamic Policy Rules Engine */}
+      {activeTab === 'rules' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-indigo-400" />
+                Live Policy Rules & Scheduling Constraints
+              </h2>
+              <p className="text-xs text-slate-400">
+                Modify, enable, or add school rules dynamically without touching any code. LangGraph reads these rules live from Neon DB.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAddRuleModal(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 transition-all"
+            >
+              <PlusCircle className="w-4 h-4 text-cyan-400" />
+              Add Custom Policy Rule
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {rules.map((r) => (
+              <div
+                key={r.id}
+                className={`p-5 rounded-2xl border transition-all space-y-4 ${
+                  r.is_enabled
+                    ? 'bg-slate-900 border-slate-800 shadow-sm'
+                    : 'bg-slate-950/60 border-slate-900 opacity-60'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs px-2 py-0.5 rounded-full font-mono bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
+                        {r.category}
+                      </span>
+                      <h3 className="font-bold text-white text-sm">{r.name}</h3>
+                    </div>
+                    <p className="text-xs text-slate-400">{r.description}</p>
+                  </div>
+
+                  {/* Toggle Switch */}
+                  <button
+                    onClick={() => handleToggleRule(r.id)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      r.is_enabled ? 'bg-cyan-500' : 'bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        r.is_enabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Parameter Editor */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-2 text-xs">
+                  <div className="font-semibold text-slate-300">Live Parameters (Neon DB):</div>
+                  {r.rule_type === 'ground_capacity' && (
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-slate-400">Max Sections on Field Simultaneously:</span>
+                      <div className="flex items-center gap-2">
+                        {[1, 2, 3, 4].map((cap) => (
+                          <button
+                            key={cap}
+                            onClick={() => handleUpdateRuleParam(r.id, 'max_sections', cap)}
+                            className={`px-3 py-1 rounded-md font-bold text-xs ${
+                              r.parameters?.max_sections === cap
+                                ? 'bg-cyan-500 text-slate-950'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            }`}
+                          >
+                            {cap} Classes
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {r.rule_type === 'max_daily_teacher_periods' && (
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-slate-400">Max Teacher Daily Load:</span>
+                      <div className="flex items-center gap-2">
+                        {[4, 5, 6].map((p) => (
+                          <button
+                            key={p}
+                            onClick={() => handleUpdateRuleParam(r.id, 'max_periods', p)}
+                            className={`px-3 py-1 rounded-md font-bold text-xs ${
+                              r.parameters?.max_periods === p
+                                ? 'bg-cyan-500 text-slate-950'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            }`}
+                          >
+                            {p} Periods
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {r.rule_type === 'post_lunch_blacklist' && (
+                    <div className="text-slate-400">
+                      Blacklisted Period: <span className="font-mono text-cyan-400">Period {r.parameters?.forbidden_period || 8} (2:00 PM)</span>
+                    </div>
+                  )}
+
+                  {r.rule_type === 'rating_complaint_blacklist' && (
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-slate-400">Blacklist Rating Threshold:</span>
+                      <div className="flex items-center gap-2">
+                        {[2.0, 2.5, 3.0].map((th) => (
+                          <button
+                            key={th}
+                            onClick={() => handleUpdateRuleParam(r.id, 'threshold_rating', th)}
+                            className={`px-2.5 py-1 rounded-md font-bold text-xs ${
+                              r.parameters?.threshold_rating === th
+                                ? 'bg-cyan-500 text-slate-950'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            }`}
+                          >
+                            &le; {th} Stars
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {r.rule_type === 'consecutive_subject_limit' && (
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-slate-400">Max Consecutive Periods:</span>
+                      <span className="font-bold text-cyan-400">{r.parameters?.max_consecutive || 2} periods</span>
+                    </div>
+                  )}
+
+                  {r.rule_type === 'custom_day_schedule' && (
+                    <div className="space-y-1">
+                      <span className="text-slate-400">Configured Day Overrides:</span>
+                      <div className="font-mono text-[11px] text-indigo-300">
+                        {JSON.stringify(r.parameters?.overrides || {})}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={() => handleDeleteRule(r.id)}
+                    className="text-[11px] text-slate-500 hover:text-rose-400 flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Rule
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: Faculty Directory, Ratings & Active Blacklists */}
       {activeTab === 'teachers' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
@@ -576,7 +996,6 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
                     </div>
                   </div>
 
-                  {/* Skills */}
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {t.skills.map((sk) => (
                       <span key={sk} className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300">
@@ -585,7 +1004,6 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
                     ))}
                   </div>
 
-                  {/* Restrictions / Blacklists */}
                   {t.active_restrictions && t.active_restrictions.length > 0 && (
                     <div className="mt-4 pt-3 border-t border-rose-900/30 space-y-2">
                       <div className="text-[11px] font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -615,7 +1033,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
         </div>
       )}
 
-      {/* TAB 3: Autonomous Decisions & Audit Log */}
+      {/* TAB 4: Autonomous Decisions & Audit Log */}
       {activeTab === 'audit' && (
         <div className="space-y-6">
           <div>
@@ -652,7 +1070,294 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: _user }) 
         </div>
       )}
 
-      {/* File Student Feedback / Complaint Modal */}
+      {/* ── Period Management & Instant Substitute Finder Drawer ──────────────── */}
+      {activeSlotModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="font-bold text-white text-base flex items-center gap-2">
+                  <Edit3 className="w-4 h-4 text-cyan-400" />
+                  Period Management & Substitution Desk
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {activeSlotModal.day_of_week} &bull; Period {activeSlotModal.period_number} ({activeSlotModal.start_time} - {activeSlotModal.end_time})
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveSlotModal(null)}
+                className="text-slate-400 hover:text-slate-200 text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Current Allocation */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold text-slate-400">Current Subject</div>
+                <div className="text-sm font-bold text-white">{activeSlotModal.subject_name || 'Academic Class'}</div>
+                <div className="text-xs text-cyan-400 font-medium mt-0.5">Faculty: {activeSlotModal.teacher_name || 'Unassigned'}</div>
+              </div>
+
+              <div className="w-48">
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">Room / Venue</label>
+                <input
+                  type="text"
+                  value={editingRoom}
+                  onChange={(e) => setEditingRoom(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                />
+              </div>
+            </div>
+
+            {/* Smart Substitute Recommendations */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <UserCheck className="w-4 h-4 text-emerald-400" />
+                  Available Subject Qualified Substitutes
+                </div>
+                {loadingSubstitutes && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
+              </div>
+
+              {substitutes.length === 0 && !loadingSubstitutes ? (
+                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-400">
+                  No alternate teachers found with matching subject qualifications.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {substitutes.map((sub) => (
+                    <div
+                      key={sub.teacher_id}
+                      className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
+                        sub.is_free
+                          ? 'bg-slate-950/80 border-slate-800 hover:border-emerald-500/50'
+                          : 'bg-slate-950/40 border-slate-900 opacity-60'
+                      }`}
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white">{sub.display_name}</span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono">
+                            {sub.employee_id}
+                          </span>
+                          <span className="text-[10px] flex items-center gap-0.5 text-amber-400 font-bold">
+                            <Star className="w-3 h-3 fill-current" /> {sub.rating_avg}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          {sub.qualification} &bull; Load today: {sub.current_day_load}/{sub.max_daily_periods} periods
+                        </div>
+                        <div className={`text-[10px] font-medium ${sub.is_free ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {sub.conflict_notes}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleAssignSubstitute(sub.teacher_id)}
+                        disabled={!sub.is_free}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          sub.is_free
+                            ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                            : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                        }`}
+                      >
+                        Assign Substitute
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setActiveSlotModal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSlotEdits}
+                className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all"
+              >
+                Save Venue Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Custom Policy Rule Modal ────────────────────────────────────── */}
+      {showAddRuleModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <PlusCircle className="w-4 h-4 text-cyan-400" />
+                Create New Scheduling Policy Rule
+              </h3>
+              <button
+                onClick={() => setShowAddRuleModal(false)}
+                className="text-slate-400 hover:text-slate-200 text-sm"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateRule} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Rule Name</label>
+                <input
+                  required
+                  type="text"
+                  value={newRuleName}
+                  onChange={(e) => setNewRuleName(e.target.value)}
+                  placeholder="e.g. Wednesday Delayed Morning Start"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Rule Type</label>
+                <select
+                  value={newRuleType}
+                  onChange={(e) => setNewRuleType(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100"
+                >
+                  <option value="ground_capacity">Ground Concurrent Capacity Limit</option>
+                  <option value="max_daily_teacher_periods">Teacher Daily Workload Cap</option>
+                  <option value="custom_day_schedule">Special Day Schedule (Delayed Start)</option>
+                  <option value="lab_capacity">Lab Concurrent Section Limit</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                  Parameter Value (e.g. 3 classes, or "Wednesday")
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={newRuleParamVal}
+                  onChange={(e) => setNewRuleParamVal(e.target.value)}
+                  placeholder="e.g. 3"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={newRuleDesc}
+                  onChange={(e) => setNewRuleDesc(e.target.value)}
+                  placeholder="Explain why this rule exists..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddRuleModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all"
+                >
+                  Save Rule to Neon DB
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Log Teacher Leave Modal ─────────────────────────────────────────── */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <UserX className="w-4 h-4 text-amber-400" />
+                Simulate Faculty Leave & Absence
+              </h3>
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="text-slate-400 hover:text-slate-200 text-sm"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleLeaveSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Select Absent Teacher</label>
+                <select
+                  value={leaveTeacherId}
+                  onChange={(e) => setLeaveTeacherId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100"
+                >
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.display_name} ({t.employee_id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Day of Week</label>
+                <select
+                  value={leaveDay}
+                  onChange={(e) => setLeaveDay(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100"
+                >
+                  {WEEKDAYS.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Reason</label>
+                <input
+                  type="text"
+                  value={leaveReason}
+                  onChange={(e) => setLeaveReason(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLeaveModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingLeave}
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  {submittingLeave ? 'Logging...' : 'Record Absence & Re-route'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── File Student Review / Complaint Modal ────────────────────────────── */}
       {showFeedbackModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">

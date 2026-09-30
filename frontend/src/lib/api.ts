@@ -246,4 +246,57 @@ export const submitTeacherFeedback = (payload: {
 export const toggleTeacherRestriction = (restrictionId: string) =>
   request<{ status: string; restriction_id: string; is_active: boolean }>(`/api/v1/timetable/restrictions/${restrictionId}/toggle`, { method: 'POST' })
 
+// ── Dynamic Rules, Substitutions, Swapping & Leave API ───────────────────────
+export type TimetableRule = {
+  id: string
+  name: string
+  rule_type: string
+  category: string
+  description: string
+  parameters: Record<string, any>
+  is_enabled: boolean
+  priority: number
+}
+
+export type SubstituteTeacher = {
+  teacher_id: string
+  display_name: string
+  employee_id: string
+  qualification: string
+  rating_avg: number
+  current_day_load: number
+  max_daily_periods: number
+  is_free: boolean
+  is_restricted_for_class: boolean
+  match_score: number
+  conflict_notes?: string
+}
+
+export const getTimetableRules = () => request<TimetableRule[]>('/api/v1/timetable/rules')
+export const createTimetableRule = (payload: Partial<TimetableRule>) =>
+  request<TimetableRule>('/api/v1/timetable/rules', { method: 'POST', body: JSON.stringify(payload) })
+export const updateTimetableRule = (ruleId: string, payload: Partial<TimetableRule>) =>
+  request<TimetableRule>(`/api/v1/timetable/rules/${ruleId}`, { method: 'PUT', body: JSON.stringify(payload) })
+export const deleteTimetableRule = (ruleId: string) =>
+  request<{ status: string; message: string }>(`/api/v1/timetable/rules/${ruleId}`, { method: 'DELETE' })
+export const toggleTimetableRule = (ruleId: string) =>
+  request<TimetableRule>(`/api/v1/timetable/rules/${ruleId}/toggle`, { method: 'POST' })
+
+export const getSlotSubstitutes = (slotId: string) =>
+  request<SubstituteTeacher[]>(`/api/v1/timetable/substitutes?slot_id=${slotId}`)
+export const swapSlots = (slotId1: string, slotId2: string) =>
+  request<{ status: string; message: string }>('/api/v1/timetable/slots/swap', {
+    method: 'POST',
+    body: JSON.stringify({ slot_id_1: slotId1, slot_id_2: slotId2 })
+  })
+export const updateSlot = (slotId: string, payload: { subject_id?: string; teacher_id?: string; room_or_venue?: string }) =>
+  request<TimetableSlot>(`/api/v1/timetable/slots/${slotId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+export const recordTeacherLeave = (payload: { teacher_id: string; day_of_week: string; reason: string }) =>
+  request<any>('/api/v1/timetable/leaves', { method: 'POST', body: JSON.stringify(payload) })
+export const getTeacherLeaves = () => request<any[]>('/api/v1/timetable/leaves')
+
+
 
