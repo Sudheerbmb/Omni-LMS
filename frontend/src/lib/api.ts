@@ -336,3 +336,65 @@ export const getSchoolCourses = (params?: { grade_number?: number; teacher_id?: 
   if (params?.user_role) query.set('user_role', params.user_role)
   return request<SchoolCourse[]>(`/api/v1/timetable/courses?${query.toString()}`)
 }
+
+export interface TeacherTimetableSlot {
+  grade_number: number
+  grade_name: string
+  section_name: string
+  subject_code: string
+  subject_name: string
+  period_number: number
+  day_of_week: string
+  start_time: string
+  end_time: string
+  room_or_venue: string
+}
+
+export interface SchoolLiveClass {
+  id: string
+  title: string
+  teacher_id: string
+  teacher_name?: string
+  starts_at: string
+  ends_at: string
+  meeting_url?: string
+  status: 'scheduled' | 'live' | 'ended'
+  grade_number?: number
+  section_name?: string
+  subject_code?: string
+  subject_name?: string
+  period_number?: number
+  room_number?: string
+}
+
+export const getTeacherTimetableSlots = () =>
+  request<TeacherTimetableSlot[]>('/api/v1/classroom/teacher-slots')
+
+export const getSchoolLiveClasses = (params?: { grade_number?: number; status_filter?: string }) => {
+  const query = new URLSearchParams()
+  if (params?.grade_number) query.set('grade_number', params.grade_number.toString())
+  if (params?.status_filter) query.set('status_filter', params.status_filter)
+  return request<SchoolLiveClass[]>(`/api/v1/classroom/classes?${query.toString()}`)
+}
+
+export const createSchoolLiveClass = (payload: {
+  title: string
+  starts_at: string
+  ends_at: string
+  grade_number?: number
+  section_name?: string
+  subject_code?: string
+  subject_name?: string
+  period_number?: number
+  room_number?: string
+  status?: string
+}) =>
+  request<SchoolLiveClass>('/api/v1/classroom/classes', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+
+export const updateLiveClassStatus = (classId: string, newStatus: string) =>
+  request<{ id: string; status: string }>(`/api/v1/classroom/classes/${classId}/status?new_status=${newStatus}`, {
+    method: 'PUT'
+  })
