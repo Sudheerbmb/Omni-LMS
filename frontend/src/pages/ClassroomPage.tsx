@@ -31,6 +31,8 @@ import {
   Monitor,
 
   PenTool,
+  Lightbulb,
+  HelpCircle,
 
   RotateCcw,
 
@@ -93,6 +95,7 @@ import {
   updateLiveClassStatus,
 
   uploadClassRecording,
+  getTeacherCopilotAssistance,
 
   getWsBaseUrl
 
@@ -459,6 +462,14 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
   const [selectedRecordingUrl, setSelectedRecordingUrl] = useState<string | null>(null)
   const [selectedRecordingClass, setSelectedRecordingClass] = useState<SchoolLiveClass | null>(null)
+  
+  // Teacher AI Copilot State
+  const [showTeacherCopilot, setShowTeacherCopilot] = useState(false)
+  const [copilotTopic, setCopilotTopic] = useState('')
+  const [copilotAction, setCopilotAction] = useState<'enhance' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question'>('enhance')
+  const [copilotResult, setCopilotResult] = useState<string | null>(null)
+  const [copilotPollData, setCopilotPollData] = useState<any | null>(null)
+  const [isCopilotLoading, setIsCopilotLoading] = useState(false)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 
@@ -2725,6 +2736,55 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
     })
 
+  }
+
+  
+  const handleTriggerTeacherCopilot = async (action: 'enhance' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question', customTopic?: string) => {
+    const topicToUse = (customTopic || copilotTopic || activeCallRoom?.title || 'Classroom Lesson').trim()
+    setCopilotAction(action)
+    setIsCopilotLoading(true)
+    setCopilotResult(null)
+    setCopilotPollData(null)
+
+    try {
+      const res = await getTeacherCopilotAssistance(activeCallRoom?.id || 'live-session', {
+        current_topic: topicToUse,
+        grade: activeCallRoom?.grade_number || 5,
+        subject: activeCallRoom?.subject_name || 'Academic Class',
+        action
+      })
+      setCopilotResult(res.result)
+      if (res.poll_data) {
+        setCopilotPollData(res.poll_data)
+      }
+    } catch (err: any) {
+      console.error('Teacher copilot error:', err)
+      setCopilotResult(`💡 Teaching Tip for "${topicToUse}": Break the concept into 2 visual parts, write the main rule on the whiteboard, and invite a student to solve the first step!`)
+    } finally {
+      setIsCopilotLoading(false)
+    }
+  }
+
+  const handleLaunchCopilotPoll = () => {
+    if (!copilotPollData) return
+    const newPoll: PollData = {
+      id: `poll_${Date.now()}`,
+      question: copilotPollData.question || 'Quick Check Poll',
+      options: (copilotPollData.options || ['Option A', 'Option B']).map((t: string) => ({ text: t, votes: 0 })),
+      totalVotes: 0,
+      isActive: true,
+      creatorName: user.display_name || 'Instructor'
+    }
+    setActivePoll(newPoll)
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'poll_create',
+        roomId: activeCallRoom?.id,
+        poll: newPoll
+      }))
+    }
+    setShowTeacherCopilot(false)
+    setActiveSideDrawer('polls')
   }
 
   const handleCreatePoll = (e: React.FormEvent) => {
@@ -5423,6 +5483,27 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
             </button>
 
+            {/* AI Teaching Copilot (Host Only) */}
+            {isHost && (
+              <button
+                onClick={() => {
+                  setShowTeacherCopilot(prev => !prev)
+                  if (!showTeacherCopilot && !copilotTopic && activeCallRoom?.title) {
+                    setCopilotTopic(activeCallRoom.title)
+                  }
+                }}
+                className={`p-3 rounded-2xl flex items-center gap-2 font-bold text-xs transition-all shadow-md active:scale-95 ${
+                  showTeacherCopilot
+                    ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-indigo-500/30 ring-2 ring-indigo-400'
+                    : 'bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/30'
+                }`}
+                title="AI Teaching Assistant (Interactive Copilot)"
+              >
+                <Sparkles className="w-5 h-5 text-indigo-300" />
+                <span className="hidden sm:inline">AI Copilot</span>
+              </button>
+            )}
+
             {/* Record Class to Cloudinary Button (Host Only) */}
 
             {isHost && (
@@ -6332,6 +6413,179 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
         </div>
 
       )}
+
+            {/* ── MODAL: TEACHER AI COPILOT & CLASSROOM ENHANCER ─────────────────── */}
+      {showTeacherCopilot && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-indigo-500/40 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-slate-100">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-white">AI Teaching Assistant</h3>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      Live Copilot
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">Real-time pedagogical tips, analogies, fun facts & instant class polls</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTeacherCopilot(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+              {/* Current Topic Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Current Topic / Concept Discussed:</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={copilotTopic}
+                    onChange={(e) => setCopilotTopic(e.target.value)}
+                    placeholder={(activeCallRoom as any)?.title || "e.g., Adding Fractions, Photosynthesis, Quadratic Equations"}
+                    className="flex-1 bg-slate-800/90 border border-slate-700 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-400 focus:outline-none transition"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Select Copilot Action:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <button
+                    onClick={() => handleTriggerTeacherCopilot('enhance')}
+                    disabled={isCopilotLoading}
+                    className={`p-2.5 rounded-xl border text-xs font-medium flex items-center gap-2 transition ${
+                      copilotAction === 'enhance'
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
+                        : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/60'
+                    }`}
+                  >
+                    <Lightbulb className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Teaching Tips</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerTeacherCopilot('fun_fact')}
+                    disabled={isCopilotLoading}
+                    className={`p-2.5 rounded-xl border text-xs font-medium flex items-center gap-2 transition ${
+                      copilotAction === 'fun_fact'
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
+                        : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/60'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                    <span>Fun Fact</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerTeacherCopilot('analogy')}
+                    disabled={isCopilotLoading}
+                    className={`p-2.5 rounded-xl border text-xs font-medium flex items-center gap-2 transition ${
+                      copilotAction === 'analogy'
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
+                        : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/60'
+                    }`}
+                  >
+                    <BookOpen className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Relatable Analogy</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerTeacherCopilot('quick_poll')}
+                    disabled={isCopilotLoading}
+                    className={`p-2.5 rounded-xl border text-xs font-medium flex items-center gap-2 transition ${
+                      copilotAction === 'quick_poll'
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
+                        : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/60'
+                    }`}
+                  >
+                    <BarChart2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                    <span>Instant Poll Idea</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerTeacherCopilot('engagement_question')}
+                    disabled={isCopilotLoading}
+                    className={`col-span-2 sm:col-span-2 p-2.5 rounded-xl border text-xs font-medium flex items-center gap-2 transition ${
+                      copilotAction === 'engagement_question'
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
+                        : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/60'
+                    }`}
+                  >
+                    <HelpCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>Ask the Class Question</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Copilot Result Box */}
+              <div className="rounded-2xl bg-slate-950/70 border border-slate-800 p-4 space-y-3 min-h-[140px] flex flex-col justify-center">
+                {isCopilotLoading ? (
+                  <div className="flex flex-col items-center justify-center py-6 gap-2 text-indigo-400 text-xs">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span>AI Copilot is generating interactive content...</span>
+                  </div>
+                ) : copilotResult ? (
+                  <div className="space-y-3">
+                    <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                      {copilotResult}
+                    </div>
+
+                    {/* If Poll Data generated, show quick Launch button */}
+                    {copilotPollData && (
+                      <div className="p-3 rounded-xl bg-cyan-950/40 border border-cyan-500/40 space-y-2">
+                        <div className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                          <BarChart2 className="w-4 h-4" />
+                          <span>Generated Live Poll</span>
+                        </div>
+                        <p className="text-xs text-white font-medium">{copilotPollData.question}</p>
+                        <div className="space-y-1 pl-2">
+                          {copilotPollData.options?.map((opt: string, i: number) => (
+                            <div key={i} className="text-xs text-slate-300 flex items-center gap-2">
+                              <span className="w-4 h-4 rounded bg-slate-800 text-[10px] flex items-center justify-center text-slate-400">{i+1}</span>
+                              <span>{opt}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="pt-2">
+                          <button
+                            onClick={handleLaunchCopilotPoll}
+                            className="w-full py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg transition"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Launch This Poll to Class Now</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-xs text-slate-400">
+                    Click any button above to get real-time teaching tips, fun facts, or instant polls for your class!
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* MODAL: Watch Class Recording with AI Doubt Solver & Summary */}
       {selectedRecordingUrl && (

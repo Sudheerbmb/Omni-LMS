@@ -336,6 +336,133 @@ class AiDoubtRequest(BaseModel):
     grade: Optional[Any] = None
 
 
+class TeacherCopilotRequest(BaseModel):
+    current_topic: str
+    grade: Optional[Any] = None
+    subject: Optional[str] = None
+    action: Optional[str] = "enhance"  # enhance | fun_fact | analogy | quick_poll | engagement_question
+
+
+async def transcribe_video_url_with_groq(media_url: str) -> Optional[str]:
+    api_key = settings.groq_api_key or os.getenv("GROQ_API_KEY", "")
+    if not api_key or not media_url:
+        return None
+
+    try:
+        def _fetch_and_transcribe():
+            import urllib.request
+            import urllib.error
+            import io
+            import json
+
+            req_dl = urllib.request.Request(media_url, headers={'User-Agent': 'OmniLMS/1.0'})
+            with urllib.request.urlopen(req_dl, timeout=40) as resp:
+                media_data = resp.read()
+
+            boundary = '----WebKitFormBoundaryGroqWhisperOmni'
+            body = io.BytesIO()
+
+            def add_field(name, value):
+                body.write(f'--{boundary}\r\n'.encode('utf-8'))
+                body.write(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode('utf-8'))
+                body.write(f'{value}\r\n'.encode('utf-8'))
+
+            add_field('model', 'whisper-large-v3-turbo')
+            add_field('response_format', 'json')
+
+            body.write(f'--{boundary}\r\n'.encode('utf-8'))
+            body.write(b'Content-Disposition: form-data; name="file"; filename="recording.webm"\r\n')
+            body.write(b'Content-Type: video/webm\r\n\r\n')
+            body.write(media_data)
+            body.write(b'\r\n')
+            body.write(f'--{boundary}--\r\n'.encode('utf-8'))
+
+            req = urllib.request.Request(
+                'https://api.groq.com/openai/v1/audio/transcriptions',
+                data=body.getvalue(),
+                headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': f'multipart/form-data; boundary={boundary}',
+                    'User-Agent': 'OmniLMS/1.0'
+                },
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                res = json.loads(resp.read().decode('utf-8'))
+                return res.get('text', '').strip()
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _fetch_and_transcribe)
+    except Exception as e:
+        print(f"Whisper transcription error for {media_url[:60]}: {e}")
+        return None
+
+
+async def call_groq_llm(messages: List[Dict[str, str]], json_mode: bool = False, max_tokens: int = 650, temperature: float = 0.3) -> Optional[str]:
+    api_key = settings.groq_api_key or os.getenv("GROQ_API_KEY", "")
+    if not api_key:
+        return None
+
+    try:
+        def _call_chat():
+            import urllib.request
+            import urllib.error
+            import json
+
+            req_data = {
+                'model': settings.groq_model or 'qwen/qwen3.8-27b',
+                'messages': messages,
+                'max_tokens': max_tokens,
+                'temperature': temperature
+            }
+            if json_mode:
+                req_data['response_format'] = {'type': 'json_object'}
+
+            req = urllib.request.Request(
+                'https://api.groq.com/openai/v1/chat/completions',
+                data=json.dumps(req_data).encode('utf-8'),
+                headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'OmniLMS/1.0'
+                }
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                res = json.loads(resp.read().decode('utf-8'))
+                return res['choices'][0]['message']['content'].strip()
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _call_chat)
+    except Exception as e:
+        print(f"Groq LLM call error: {e}")
+        return None
+
+
+async def get_or_transcribe_class(class_id_str: str, session: AsyncSession) -> tuple[Optional[str], Optional[LiveClass]]:
+    live_class = None
+    try:
+        import uuid as _uuid_mod
+        c_uuid = _uuid_mod.UUID(class_id_str)
+        live_class = await session.scalar(select(LiveClass).where(LiveClass.id == c_uuid))
+    except Exception:
+        pass
+
+    if not live_class:
+        return None, None
+
+    if live_class.transcript_text and live_class.transcript_text.strip():
+        return live_class.transcript_text.strip(), live_class
+
+    if live_class.recording_url:
+        transcript = await transcribe_video_url_with_groq(live_class.recording_url)
+        if transcript:
+            live_class.transcript_text = transcript
+            await session.commit()
+            return transcript, live_class
+
+    return None, live_class
+
+
 @router.post("/classes/{class_id}/ai-doubt")
 async def ask_class_ai_doubt(
     class_id: str,
@@ -343,13 +470,7 @@ async def ask_class_ai_doubt(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    live_class = None
-    try:
-        import uuid as _uuid_mod
-        c_uuid = _uuid_mod.UUID(class_id)
-        live_class = await session.scalar(select(LiveClass).where(LiveClass.id == c_uuid))
-    except Exception:
-        pass
+    transcript, live_class = await get_or_transcribe_class(class_id, session)
 
     title = payload.title or (live_class.title if live_class else "Class Lecture")
     subject = payload.subject or (live_class.subject_name if live_class and live_class.subject_name else None)
@@ -388,13 +509,29 @@ async def ask_class_ai_doubt(
         else:
             grade_num = 1
 
-    is_primary = grade_num is not None and grade_num <= 3
-    is_middle = grade_num is not None and 4 <= grade_num <= 8
-
     question = payload.question.strip()
     answer = None
 
-    if settings.openai_api_key:
+    # 1. If real transcript exists, ground the AI answer strictly in what was spoken in the video!
+    if transcript:
+        system_prompt = (
+            f"You are an encouraging, world-class AI study companion assisting a student watching "
+            f"the recorded lecture '{title}' ({subject}, Grade {grade_num}).\n\n"
+            f"Here is the VERBATIM spoken transcript of what was actually said in this video recording:\n"
+            f'\"\"\"{transcript}\"\"\"\n\n'
+            f"RULES:\n"
+            f"1. Base your answer strictly on the actual words and concepts spoken in the video transcript above.\n"
+            f"2. If the user asks 'what is the video about' or asks about topics, summarize the real content from the transcript.\n"
+            f"3. If the video discusses specific items (e.g. portal testing, AI agents, mathematics, etc.), refer directly to them.\n"
+            f"4. Keep the tone helpful, encouraging, and clear."
+        )
+        answer = await call_groq_llm([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question}
+        ])
+
+    # 2. Fallback to OpenAI if configured and no transcript answer
+    if not answer and settings.openai_api_key:
         try:
             import httpx
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -406,11 +543,7 @@ async def ask_class_ai_doubt(
                         "messages": [
                             {
                                 "role": "system",
-                                "content": (
-                                    f"You are a friendly, encouraging school tutor assisting a Grade {grade_num} "
-                                    f"student watching the recorded video lecture '{title}' on {subject}. "
-                                    f"Adapt your tone, vocabulary, and examples specifically for Grade {grade_num} level."
-                                ),
+                                "content": f"You are a friendly AI tutor assisting a Grade {grade_num} student on '{title}' ({subject}).",
                             },
                             {"role": "user", "content": question},
                         ],
@@ -422,102 +555,24 @@ async def ask_class_ai_doubt(
         except Exception:
             pass
 
+    # 3. Intelligent synthesizer fallback if network or transcript unavailable
     if not answer:
         lower = question.lower()
         is_about_query = any(w in lower for w in ["what is the video about", "what is this video about", "about", "summary", "recap", "overview", "what was covered", "topics"])
-        is_formula_query = any(w in lower for w in ["formula", "equation", "math", "theorem", "rule", "definition"])
-        is_quiz_query = any(w in lower for w in ["quiz", "question", "test", "practice", "exam"])
-        is_simple_query = any(w in lower for w in ["simple", "grade", "child", "easy", "explain simply", "explain"])
-
-        if is_primary:
-            if is_about_query:
-                answer = (
-                    f"🌟 **About this Lecture: {title}**\n\n"
-                    f"This video is a friendly, interactive **Grade {grade_num} {subject}** lesson!\n\n"
-                    f"Here is what your teacher covers in this recording:\n"
-                    f"• **Fun Basics & Numbers:** Learning numbers and core concepts using familiar objects (apples, balloons, and stars).\n"
-                    f"• **Interactive Whiteboard Walkthrough:** The teacher writes and draws on the board step-by-step so you can easily follow along.\n"
-                    f"• **Counting & Solving:** Easy practice questions to build your skills and boost your confidence.\n\n"
-                    f"💡 *Have a doubt? Feel free to ask me anything about the video, or click the **Quick Quiz** tab to try 2 fun questions!*"
-                )
-            elif is_formula_query:
-                answer = (
-                    f"📐 **Key Rules for Grade {grade_num} {subject}:**\n\n"
-                    f"• **Putting Groups Together (Addition +):** When you combine two sets, count them all up (e.g. 2 apples 🍎🍎 + 3 apples 🍎🍎🍎 = 5 apples 🍎🍎🍎🍎🍎)!\n"
-                    f"• **Taking Away (Subtraction -):** Count what is left after taking some away!\n"
-                    f"• **Counting Order:** Always count steadily: 1, 2, 3, 4, 5... You can use your fingers or draw dots on paper!"
-                )
-            elif is_quiz_query:
-                answer = (
-                    f"🎈 **Fun Practice for Grade {grade_num} {subject}:**\n\n"
-                    f"*Question:* If you have 3 blue stars ⭐⭐⭐ and your teacher gives you 2 more ⭐⭐, how many stars do you have in total?\n\n"
-                    f"• **A)** 4 stars\n"
-                    f"• **B)** 5 stars [Correct! 🎉]\n"
-                    f"• **C)** 6 stars\n\n"
-                    f"*Explanation:* Count them together: 1, 2, 3... 4, 5! You have 5 stars!"
-                )
-            else:
-                answer = (
-                    f"😊 **Hello Grade {grade_num} Learner!**\n\n"
-                    f"For your question: **'{question}'**\n\n"
-                    f"In this {subject} lesson, your teacher showed that we can solve this by taking one easy step at a time! "
-                    f"Think of it like building blocks—first see what numbers or pieces you have, follow the teacher's steps on the board, and count your result.\n\n"
-                    f"Would you like to try another fun example together?"
-                )
-        elif is_middle:
-            if is_about_query:
-                answer = (
-                    f"📚 **Lecture Overview: {title} (Grade {grade_num} {subject})**\n\n"
-                    f"In this recorded session, your teacher focuses on establishing clear conceptual understanding and practical problem-solving:\n"
-                    f"1. **Core Concept Introduction:** Systematic breakdown of the topic with real-world analogies.\n"
-                    f"2. **Whiteboard Walkthrough:** Deriving key steps and solving standard textbook exercises.\n"
-                    f"3. **Common Mistakes:** Highlighting tricky spots where students often lose marks in tests.\n"
-                    f"4. **Practice Takeaways:** Key methods to remember when revising."
-                )
-            elif is_formula_query:
-                answer = (
-                    f"📐 **Key Formulas & Principles ({subject} - Grade {grade_num}):**\n\n"
-                    f"• **Primary Relationship:** Ensure you know how the primary variables connect and scale.\n"
-                    f"• **Working Method:** (1) State knowns and unknowns, (2) Substitute into the core equation, (3) Double check your calculations and units.\n"
-                    f"• Check the **AI Summary** tab for full whiteboard equations from this lecture!"
-                )
-            else:
-                answer = (
-                    f"Great question regarding **'{question}'**!\n\n"
-                    f"In this Grade {grade_num} {subject} lecture, the key is understanding how each step follows logically from the previous one. "
-                    f"Review the board notes around this section in the video, apply the standard method, and test yourself on the **Quick Quiz** tab!"
-                )
+        is_primary = grade_num <= 3
+        if is_about_query:
+            answer = (
+                f"🌟 **Lecture Overview: {title}**\n\n"
+                f"This video is an educational session for **Grade {grade_num} {subject}**.\n"
+                f"The instructor explains core concepts, demonstrates key problems on the whiteboard, "
+                f"and reviews practical takeaways for students."
+            )
         else:
-            if is_about_query:
-                answer = (
-                    f"**Executive Lecture Summary for {title}:**\n\n"
-                    f"1. **Core Subject Focus:** This session explored key foundational principles of {subject} structured for Grade {grade_num}.\n"
-                    f"2. **Theoretical Foundations:** Emphasis was placed on definitions, governing laws, and systemic behavior.\n"
-                    f"3. **Worked Examples:** Step-by-step problem solving demonstrated on the board.\n"
-                    f"4. **Key Takeaway:** Ensure you understand the underlying mechanisms and test your skills with practice questions."
-                )
-            elif is_formula_query:
-                answer = (
-                    f"**Key Formulas & Analytical Tools ({subject}):**\n\n"
-                    f"• **Governing Principle:** State transitions are determined by initial conditions and external forces.\n"
-                    f"• **Proportionality Rule:** Verify whether dependent variables scale directly or inversely.\n"
-                    f"• **Methodology Tip:** Always write down given variables first, apply the standard formula, and check final units."
-                )
-            elif is_quiz_query:
-                answer = (
-                    f"**Practice Comprehension Check for {subject}:**\n\n"
-                    f"*Question:* Based on this recorded lecture, what is the first step in solving analytical problems in {subject}?\n\n"
-                    f"• **A)** Identify given constraints and apply the governing law [Correct]\n"
-                    f"• **B)** Guess an arbitrary value\n"
-                    f"• **C)** Skip dimensional verification\n\n"
-                    f"*Explanation:* Grade {grade_num} {subject} requires structured problem identification before applying algebraic computation."
-                )
-            else:
-                answer = (
-                    f"Regarding **'{question}'**: In this {subject} lecture for Grade {grade_num}, "
-                    f"the instructor highlighted that understanding how the concepts connect is key to solving test problems. "
-                    f"Trace each step from cause to effect, and let me know if you would like a practice problem or a step-by-step derivation!"
-                )
+            answer = (
+                f"Regarding **'{question}'**: In this {subject} lesson for Grade {grade_num}, "
+                f"the instructor highlighted that understanding how the concepts connect step-by-step is key to solving problems. "
+                f"Trace each step from cause to effect, and check the **AI Summary** tab for notes!"
+            )
 
     return {
         "class_id": str(class_id),
@@ -525,6 +580,7 @@ async def ask_class_ai_doubt(
         "answer": answer,
         "subject": subject,
         "grade": grade_num,
+        "has_transcript": bool(transcript)
     }
 
 
@@ -534,139 +590,215 @@ async def get_class_ai_summary(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    live_class = None
-    try:
-        import uuid as _uuid_mod
-        c_uuid = _uuid_mod.UUID(class_id)
-        live_class = await session.scalar(select(LiveClass).where(LiveClass.id == c_uuid))
-    except Exception:
-        pass
+    transcript, live_class = await get_or_transcribe_class(class_id, session)
+
+    # If cached summary exists in DB, return it immediately
+    if live_class and live_class.summary_json:
+        return live_class.summary_json
 
     title = live_class.title if live_class else "Class Lecture"
-    subject = live_class.subject_name if live_class and live_class.subject_name else None
-    
-    title_lower = title.lower()
-    if not subject:
-        if "math" in title_lower:
-            subject = "Mathematics"
-        elif any(k in title_lower for k in ["science", "physics", "chem", "bio"]):
-            subject = "Science"
-        elif any(k in title_lower for k in ["english", "grammar", "reading"]):
-            subject = "English"
-        elif any(k in title_lower for k in ["history", "social", "geography"]):
-            subject = "Social Studies"
-        elif any(k in title_lower for k in ["computer", "code", "python"]):
-            subject = "Computer Science"
-        else:
-            subject = "Academic Lesson"
+    subject = live_class.subject_name if live_class and live_class.subject_name else "Academic Subject"
+    grade_num = live_class.grade_number if live_class and live_class.grade_number else 1
 
-    grade_num = live_class.grade_number if live_class and live_class.grade_number else None
-    if grade_num is None:
-        import re
-        m = re.search(r'grade\s*(\d+)', title_lower)
-        if m:
-            grade_num = int(m.group(1))
-        else:
-            grade_num = 1
+    # If transcript exists, generate real summary with Groq LLM
+    if transcript:
+        prompt = (
+            f"Based on this verbatim video transcript from the lecture '{title}':\n"
+            f'\"\"\"{transcript}\"\"\"\n\n'
+            f"Generate a JSON object with:\n"
+            f"- 'overview': 2-3 sentences summarizing what was actually discussed in the video\n"
+            f"- 'key_topics': array of 3-5 specific topics mentioned\n"
+            f"- 'whiteboard_notes': array of 2-4 key takeaways/notes from the speaker\n"
+            f"- 'exam_takeaways': array of 2-3 key takeaways\n"
+            f"- 'quiz': array of 2 multiple-choice questions based directly on the video transcript, each with:\n"
+            f"   'question': string,\n"
+            f"   'options': array of 4 choices,\n"
+            f"   'correct_index': integer 0-3,\n"
+            f"   'explanation': string\n"
+            f"Return pure JSON only."
+        )
+        json_res = await call_groq_llm([
+            {"role": "system", "content": "You are a JSON-only educational synthesizer. Output valid JSON."},
+            {"role": "user", "content": prompt}
+        ], json_mode=True, max_tokens=700)
 
-    if grade_num <= 3:
-        return {
-            "class_id": str(class_id),
-            "title": title,
-            "subject": subject,
-            "grade": grade_num,
-            "overview": (
-                f"This recorded video is a fun and interactive Grade {grade_num} {subject} class! "
-                f"The teacher uses clear whiteboard demonstrations, friendly visual examples, and step-by-step counting "
-                f"to make learning enjoyable and easy to remember."
-            ),
-            "key_topics": [
-                f"Introduction to Grade {grade_num} {subject} Fundamentals",
-                "Counting & Visual Problem Walkthroughs",
-                "Teacher's Interactive Whiteboard Drawings & Demonstrations",
-                "Fun Practice Questions with Immediate Teacher Feedback",
-            ],
-            "whiteboard_notes": [
-                "Visual Counting: Count items one-by-one with dots or pictures.",
-                "Basic Operations: Putting groups together and finding total amounts.",
-                "Practice Tip: Say numbers out loud while writing them down.",
-            ],
-            "exam_takeaways": [
-                "Practice counting objects around your house (toys, books, pencils).",
-                "Remember to write numbers carefully and clearly.",
-                "Try the 2 practice questions in the Quick Quiz tab!",
-            ],
-            "quiz": [
-                {
-                    "question": f"What was the main topic of this Grade {grade_num} {subject} lesson?",
-                    "options": [
-                        f"Foundational concepts and practice in {title}",
-                        "College physics",
-                        "Silent study with no teacher",
-                        "Recess and games only",
-                    ],
-                    "correct_index": 0,
-                    "explanation": f"The lecture focused on teaching and practicing core Grade {grade_num} {subject}.",
-                },
-                {
-                    "question": "What is the best way to practice what you learned in this video?",
-                    "options": [
-                        "Never look at numbers again",
-                        "Try practice problems and review the teacher's board notes",
-                        "Skip homework completely",
-                        "Close the notebook immediately",
-                    ],
-                    "correct_index": 1,
-                    "explanation": "Reviewing the board notes and practicing helps remember the lesson!",
-                },
-            ],
-        }
+        if json_res:
+            try:
+                import json as _json
+                data = _json.loads(json_res)
+                data["class_id"] = str(class_id)
+                data["title"] = title
+                data["subject"] = subject
+                data["grade"] = grade_num
+                data["has_transcript"] = True
+                
+                # Save to database cache
+                if live_class:
+                    live_class.summary_json = data
+                    await session.commit()
+                return data
+            except Exception as e:
+                print(f"Error parsing Groq summary JSON: {e}")
 
+    # Fallback structured summary
     return {
         "class_id": str(class_id),
         "title": title,
         "subject": subject,
         "grade": grade_num,
-        "overview": f"This recorded lecture for Grade {grade_num} provides in-depth coverage of {subject}, focusing on fundamental definitions, analytical derivations, and practical application.",
+        "overview": f"This recorded lecture for Grade {grade_num} covers {subject}, focusing on fundamental definitions and whiteboard problem walkthroughs.",
         "key_topics": [
-            f"Introduction to {subject} Foundations",
-            "Core Theoretical Frameworks & Whiteboard Derivations",
-            "Worked Problem Solving & Step-by-Step Methodology",
-            "Common Exam Pitfalls & How to Avoid Them",
-            "Interactive Summary & Key Homework Points",
+            f"Introduction to {subject} Concepts",
+            "Whiteboard Problem Solving",
+            "Interactive Student Discussion",
+            "Key Exam Takeaways"
         ],
         "whiteboard_notes": [
-            "Governing Law: Fundamental equation and definitions demonstrated during presentation.",
-            "Boundary Conditions: How initial constraints determine the outcome.",
-            "Verification Step: Always check SI units and dimensions.",
+            "Follow the step-by-step method shown on the board",
+            "Check initial conditions and final units"
         ],
         "exam_takeaways": [
-            "Memorize the standard scientific / mathematical definitions.",
-            "Be prepared to explain the difference between related core concepts in test questions.",
-            "Practice at least three textbook numerical problems before the next quiz.",
+            "Review key definitions from this session",
+            "Practice the worked examples before class assessment"
         ],
         "quiz": [
             {
-                "question": f"What was the main analytical principle taught in this {subject} lecture?",
+                "question": f"What was the main topic discussed in this {subject} lecture?",
                 "options": [
-                    "Structured application of governing laws to solve problems",
-                    "Rote memorization without understanding concepts",
-                    "Ignoring standard units and dimensions",
-                    "None of the above",
+                    f"Core principles demonstrated in {title}",
+                    "Unrelated trivia",
+                    "Administrative announcements only",
+                    "None of the above"
                 ],
                 "correct_index": 0,
-                "explanation": f"The lecture emphasized using governing laws methodically to understand {subject}.",
+                "explanation": f"The lecture focused on {title}."
             },
             {
-                "question": f"When approaching questions on {subject}, what was the recommended methodology?",
+                "question": "What is the best way to review this recorded lesson?",
                 "options": [
-                    "Guess the result directly",
-                    "List given variables, select governing formula, and verify units",
-                    "Skip reading the problem statement carefully",
-                    "Omit intermediate steps",
+                    "Practice the worked problems and check board notes",
+                    "Never look at the notes again",
+                    "Skip homework exercises",
+                    "Ignore the teacher's steps"
                 ],
-                "correct_index": 1,
-                "explanation": "Listing variables, choosing formulas, and checking units guarantees maximum accuracy.",
-            },
+                "correct_index": 0,
+                "explanation": "Active problem review reinforces comprehension."
+            }
         ],
+        "has_transcript": False
+    }
+
+
+@router.get("/classes/{class_id}/transcript")
+async def get_class_transcript_endpoint(
+    class_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    transcript, live_class = await get_or_transcribe_class(class_id, session)
+    title = live_class.title if live_class else "Class Lecture"
+    return {
+        "class_id": str(class_id),
+        "title": title,
+        "transcript_text": transcript or "",
+        "has_transcript": bool(transcript)
+    }
+
+
+@router.post("/classes/{class_id}/teacher-copilot")
+async def teacher_copilot_assistant(
+    class_id: str,
+    payload: TeacherCopilotRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    topic = payload.current_topic.strip() or "General Academic Topic"
+    grade = payload.grade or "General"
+    subject = payload.subject or "Classroom Lesson"
+    action = payload.action or "enhance"
+
+    if action == "fun_fact":
+        prompt = (
+            f"You are an inspiring AI teaching assistant in a live virtual classroom.\n"
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
+            f"Provide 1 mind-blowing, surprising, and kid-friendly FUN FACT about '{topic}' "
+            f"that the teacher can immediately read aloud to capture students' excitement and hook their attention! "
+            f"Keep it under 3 sentences."
+        )
+    elif action == "analogy":
+        prompt = (
+            f"You are an inspiring AI teaching assistant in a live virtual classroom.\n"
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
+            f"Provide an intuitive, memorable, everyday REAL-WORLD ANALOGY to explain '{topic}' "
+            f"so that students in Grade {grade} can visualize and understand it instantly! "
+            f"Keep it concise, relatable, and fun."
+        )
+    elif action == "engagement_question":
+        prompt = (
+            f"You are an inspiring AI teaching assistant in a live virtual classroom.\n"
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
+            f"Provide 1 thought-provoking, interactive question for the teacher to ask the students right now "
+            f"to spark lively discussion and check their understanding! "
+            f"Include a brief hint on what to look for in their answers."
+        )
+    elif action == "quick_poll":
+        prompt = (
+            f"You are an inspiring AI teaching assistant in a live virtual classroom.\n"
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
+            f"Generate a quick 1-question multiple choice poll for the teacher to launch to the class right now.\n"
+            f"Output a JSON object with:\n"
+            f"- 'question': string,\n"
+            f"- 'options': array of 3 or 4 choices,\n"
+            f"- 'correct_index': integer 0-3,\n"
+            f"- 'explanation': 1 sentence explaining why that choice is correct.\n"
+            f"Return valid JSON only."
+        )
+        res_json = await call_groq_llm([
+            {"role": "system", "content": "You are a JSON-only poll generator for teachers. Output valid JSON."},
+            {"role": "user", "content": prompt}
+        ], json_mode=True, max_tokens=350, temperature=0.5)
+
+        poll_obj = None
+        if res_json:
+            try:
+                import json as _json
+                poll_obj = _json.loads(res_json)
+            except Exception:
+                pass
+
+        return {
+            "action": "quick_poll",
+            "topic": topic,
+            "result": poll_obj.get("question") if poll_obj else "What is the key takeaway?",
+            "poll_data": poll_obj
+        }
+    else:  # "enhance" - Teaching tips
+        prompt = (
+            f"You are an expert AI teaching copilot assisting a live teacher in real-time.\n"
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
+            f"Provide:\n"
+            f"1. 💡 **Teaching Tip:** A high-impact pedagogical trick to explain this topic effectively.\n"
+            f"2. ⚠️ **Common Pitfall:** What students often misunderstand and how to steer them right.\n"
+            f"3. 🎯 **Quick Activity:** A 1-minute interactive challenge to keep the class active and engaged.\n"
+            f"Format with clean bullet points and clear emojis."
+        )
+
+    res_text = await call_groq_llm([
+        {"role": "system", "content": "You are an elite AI teaching copilot assisting a live virtual classroom teacher."},
+        {"role": "user", "content": prompt}
+    ], max_tokens=450, temperature=0.6)
+
+    if not res_text:
+        res_text = (
+            f"💡 **Teaching Tips for {topic}:**\n\n"
+            f"• Break the concept down into two simple steps before solving examples on the board.\n"
+            f"• Ask students to raise their hands or type their thoughts in the chat to keep them active!\n"
+            f"• Use the Quick Poll button to test understanding before moving to the next section."
+        )
+
+    return {
+        "action": action,
+        "topic": topic,
+        "result": res_text,
+        "poll_data": None
     }

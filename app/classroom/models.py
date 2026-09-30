@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Uuid
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Uuid, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.platform.models import Base, TimestampMixin, UUIDMixin
@@ -29,3 +29,5 @@ class LiveClass(UUIDMixin, TimestampMixin, Base):
     subject_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     period_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     room_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    transcript_text: Mapped[str | None] = mapped_column(String, nullable=True)
+    summary_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)

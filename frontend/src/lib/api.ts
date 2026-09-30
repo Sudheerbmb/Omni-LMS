@@ -821,3 +821,40 @@ export const askClassAiDoubt = (
 export const getClassAiSummary = (classId: string) =>
   request<ClassAiSummaryData>(`/api/v1/classroom/classes/${classId}/ai-summary`)
 
+export interface ClassTranscriptData {
+  class_id: string
+  title: string
+  transcript_text: string
+  has_transcript: boolean
+}
+
+export const getClassTranscript = (classId: string) =>
+  request<ClassTranscriptData>(`/api/v1/classroom/classes/${classId}/transcript`)
+
+export interface TeacherCopilotData {
+  action: string
+  topic: string
+  result: string
+  poll_data?: {
+    question: string
+    options: string[]
+    correct_index: number
+    explanation?: string
+  } | null
+}
+
+export const getTeacherCopilotAssistance = (
+  classId: string,
+  payload: {
+    current_topic: string
+    grade?: any
+    subject?: string
+    action: 'enhance' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question'
+  }
+) =>
+  request<TeacherCopilotData>(`/api/v1/classroom/classes/${classId}/teacher-copilot`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+
+
