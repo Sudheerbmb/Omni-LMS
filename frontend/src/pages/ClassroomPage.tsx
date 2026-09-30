@@ -1,36 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react'
-import type { 
-  User, 
-  SchoolLiveClass, 
-  TeacherTimetableSlot 
+import type {
+  User,
+  SchoolLiveClass,
+  TeacherTimetableSlot
 } from '../lib/api'
-import { 
-  getSchoolLiveClasses, 
-  getTeacherTimetableSlots, 
-  createSchoolLiveClass, 
-  updateLiveClassStatus 
+import {
+  getSchoolLiveClasses,
+  getTeacherTimetableSlots,
+  createSchoolLiveClass,
+  updateLiveClassStatus
 } from '../lib/api'
-import { 
-  Video, 
-  VideoOff, 
-  Mic, 
-  MicOff, 
-  Monitor, 
-  PenTool, 
-  Eraser, 
-  Trash2, 
-  Download, 
-  Hand, 
-  MessageSquare, 
-  Users, 
-  BarChart2, 
-  Play, 
-  Plus, 
-  X, 
-  Send, 
-  ShieldCheck, 
+import {
+  Video,
+  VideoOff,
+  Mic,
+  MicOff,
+  Monitor,
+  PenTool,
+  Eraser,
+  Trash2,
+  Download,
+  Hand,
+  MessageSquare,
+  Users,
+  BarChart2,
+  Play,
+  Plus,
+  X,
+  Send,
+  ShieldCheck,
   GraduationCap,
-  BookOpen
+  BookOpen,
+  Radio,
+  CheckCircle,
+  Eye
 } from 'lucide-react'
 
 type ClassroomPageProps = {
@@ -53,12 +56,22 @@ interface PollData {
   isActive: boolean
 }
 
+interface PeerUser {
+  id: string
+  display_name: string
+  role: string
+  avatar: string
+  isMicOn?: boolean
+  isCameraOn?: boolean
+  isHandRaised?: boolean
+}
+
 export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const [classes, setClasses] = useState<SchoolLiveClass[]>([])
   const [teacherSlots, setTeacherSlots] = useState<TeacherTimetableSlot[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Scheduling Modal
+  // Scheduling Modal State
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number>(0)
   const [customTitle, setCustomTitle] = useState('')
@@ -71,7 +84,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const [isCameraOn, setIsCameraOn] = useState(true)
   const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [isHandRaised, setIsHandRaised] = useState(false)
-  
+
   // Classroom Views: 'gallery' | 'spotlight' | 'whiteboard'
   const [callView, setCallView] = useState<'gallery' | 'spotlight' | 'whiteboard'>('gallery')
   const [activeSideDrawer, setActiveSideDrawer] = useState<'chat' | 'participants' | 'polls' | null>(null)
@@ -79,74 +92,110 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   // Media Stream references
   const localVideoRef = useRef<HTMLVideoElement | null>(null)
   const screenVideoRef = useRef<HTMLVideoElement | null>(null)
+  const remoteScreenVideoRef = useRef<HTMLVideoElement | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
   const screenStreamRef = useRef<MediaStream | null>(null)
+
+  // Remote Screen Share State (Received from Teacher or Presenter)
+  const [remoteScreenInfo, setRemoteScreenInfo] = useState<{
+    active: boolean
+    sharerName: string
+    sharerId: string
+  }>({ active: false, sharerName: '', sharerId: '' })
+  const [remoteScreenFrame, setRemoteScreenFrame] = useState<string | null>(null)
+  const [hasRemoteWebRTCStream, setHasRemoteWebRTCStream] = useState(false)
+
+  // Connected Peers Roster State
+  const [connectedPeers, setConnectedPeers] = useState<Record<string, PeerUser>>({})
+  const [unreadChatCount, setUnreadChatCount] = useState(0)
+
+  // Real-Time WebSocket & WebRTC references
+  const wsRef = useRef<WebSocket | null>(null)
+  const myPeerIdRef = useRef<string>(`peer_${user.id ? user.id.substring(0, 8) : Math.random().toString(36).substring(2, 8)}_${Math.random().toString(36).substring(2, 6)}`)
+  const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({})
+  const screenFrameIntervalRef = useRef<number | null>(null)
 
   // Whiteboard Canvas State
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [isDrawing, setIsDrawing] = useState(false)
-  const [whiteboardTool, setWhiteboardTool] = useState<'pen' | 'eraser' | 'line' | 'rect' | 'circle'>('pen')
+  const [whiteboardTool, setWhiteboardTool] = useState<'pen' | 'eraser'>('pen')
   const [whiteboardColor, setWhiteboardColor] = useState('#38bdf8')
   const [whiteboardWidth, setWhiteboardWidth] = useState(3)
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null)
 
   // Floating Emoji Reactions State
   const [floatingReactions, setFloatingReactions] = useState<{ id: number; emoji: string; left: number }[]>([])
 
   // Live Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { id: '1', sender: 'System', role: 'system', text: 'Welcome to Zoom LMS High-Definition Live Classroom!', timestamp: '10:00 AM' }
+    { id: 'init_1', sender: 'System', role: 'system', text: 'Welcome to Omni-LMS Real-Time Classroom!', timestamp: 'Now' }
   ])
   const [newChatText, setNewChatText] = useState('')
+  const chatBottomRef = useRef<HTMLDivElement | null>(null)
 
   // Live Poll State
   const [activePoll, setActivePoll] = useState<PollData>({
     id: 'poll-1',
-    question: 'How clear is the current concept of rational fractions?',
+    question: 'How clear is the concept presented in this session?',
     options: [
-      { text: 'Completely Understood 👍', votes: 8 },
-      { text: 'Need One More Example 🤔', votes: 4 },
-      { text: 'Please Repeat From Start ✋', votes: 1 }
+      { text: 'Extremely clear, fully understood!', votes: 2 },
+      { text: 'Understood most parts, need slight revision', votes: 1 },
+      { text: 'Need a brief recap / clarification', votes: 0 }
     ],
-    totalVotes: 13,
+    totalVotes: 3,
     isActive: true
   })
   const [hasVoted, setHasVoted] = useState(false)
-  const [callDuration, setCallDuration] = useState(0)
 
-  const role = user.role || 'student'
-  const isAdmin = role === 'admin'
-  const isTeacher = role === 'teacher'
-  const isStudent = role === 'student'
+  // Meeting duration timer
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
-  const userGradeMatch = user.email.match(/class(\\d+)/i) || user.display_name?.match(/Class\\s*(\\d+)/i)
-  const studentGradeNum = userGradeMatch ? parseInt(userGradeMatch[1], 10) : 9
+  // Filter state
+  const [filterGrade, setFilterGrade] = useState<number | 'all'>('all')
 
+  const isTeacher = user.role === 'teacher'
+  const isAdmin = user.role === 'admin'
+  
+  // ── Helper to send WebSocket message safely ───────────────────────────────────
+  const sendWsMessage = (msg: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg))
+    }
+  }
+
+  // ── WebRTC Configuration with Public STUN Servers ─────────────────────────────
+  const rtcConfig: RTCConfiguration = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' }
+    ]
+  }
+
+  // ── Scroll chat to bottom ───────────────────────────────────────────────────
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  // ── Load Classroom Schedule & Teacher Slots on Mount ────────────────────────
   useEffect(() => {
     loadClassroomData()
-  }, [user.email, user.role])
-
-  // Call timer effect
-  useEffect(() => {
-    let timer: any
-    if (activeCallRoom) {
-      timer = setInterval(() => {
-        setCallDuration(prev => prev + 1)
-      }, 1000)
-    } else {
-      setCallDuration(0)
-    }
-    return () => clearInterval(timer)
-  }, [activeCallRoom])
+  }, [filterGrade])
 
   const loadClassroomData = async () => {
     try {
       setLoading(true)
-      const classesList = await getSchoolLiveClasses()
-      setClasses(classesList || [])
+      const gradeQuery = filterGrade === 'all' ? undefined : filterGrade
+      const liveData = await getSchoolLiveClasses(gradeQuery !== undefined ? { grade_number: gradeQuery } : undefined)
+      setClasses(liveData)
 
       if (isTeacher || isAdmin) {
-        const slots = await getTeacherTimetableSlots()
-        setTeacherSlots(slots || [])
+        try {
+          const slots = await getTeacherTimetableSlots()
+          setTeacherSlots(slots)
+        } catch (e) {
+          console.warn('Teacher slots error:', e)
+        }
       }
     } catch (err) {
       console.error('Failed to load classroom data:', err)
@@ -155,21 +204,400 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     }
   }
 
-  // ── Video & Audio Media Stream Initializers ──────────────────────────────────
+  // ── Meeting Timer Interval ──────────────────────────────────────────────────
+  useEffect(() => {
+    let interval: any = null
+    if (activeCallRoom) {
+      interval = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1)
+      }, 1000)
+    } else {
+      setElapsedSeconds(0)
+    }
+    return () => clearInterval(interval)
+  }, [activeCallRoom])
+
+  // ── WebRTC / WebSocket Room Connection Lifecycle ─────────────────────────────
+  useEffect(() => {
+    if (!activeCallRoom) {
+      // Disconnect WS and Peer Connections when leaving room
+      if (wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
+      }
+      Object.values(peerConnectionsRef.current).forEach(pc => pc.close())
+      peerConnectionsRef.current = {}
+      setConnectedPeers({})
+      setRemoteScreenInfo({ active: false, sharerName: '', sharerId: '' })
+      setRemoteScreenFrame(null)
+      setHasRemoteWebRTCStream(false)
+      return
+    }
+
+    const roomId = activeCallRoom.id
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const wsUrl = `${protocol}//${host}/api/v1/classroom/ws/${roomId}`
+
+    console.log('[Classroom WS] Connecting to:', wsUrl)
+    const socket = new WebSocket(wsUrl)
+    wsRef.current = socket
+
+    socket.onopen = () => {
+      console.log('[Classroom WS] Connected to live room:', roomId)
+      // Announce presence to all peers in this room
+      const myUserPayload: PeerUser = {
+        id: user.id || myPeerIdRef.current,
+        display_name: user.display_name || user.email || (isTeacher ? 'Instructor' : 'Student'),
+        role: user.role || 'student',
+        avatar: (user.display_name || user.email || 'U').charAt(0).toUpperCase(),
+        isMicOn: true,
+        isCameraOn: true,
+        isHandRaised: false
+      }
+      socket.send(JSON.stringify({
+        type: 'peer_join',
+        peerId: myPeerIdRef.current,
+        user: myUserPayload
+      }))
+    }
+
+    socket.onmessage = async (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        const myPeerId = myPeerIdRef.current
+
+        switch (data.type) {
+          // ── Real-Time Chat Message ──────────────────────────────────────────
+          case 'chat': {
+            if (data.payload) {
+              setChatMessages(prev => {
+                // Deduplicate by message ID
+                if (prev.some(m => m.id === data.payload.id)) return prev
+                return [...prev, data.payload]
+              })
+              if (activeSideDrawer !== 'chat') {
+                setUnreadChatCount(prev => prev + 1)
+              }
+            }
+            break
+          }
+
+          // ── Peer Join Announcement ──────────────────────────────────────────
+          case 'peer_join': {
+            if (data.peerId && data.peerId !== myPeerId) {
+              setConnectedPeers(prev => ({
+                ...prev,
+                [data.peerId]: data.user
+              }))
+              // Greet the newcomer back so they register our presence
+              socket.send(JSON.stringify({
+                type: 'peer_announce',
+                targetPeerId: data.peerId,
+                peerId: myPeerId,
+                user: {
+                  id: user.id || myPeerId,
+                  display_name: user.display_name || (isTeacher ? 'Instructor' : 'Student'),
+                  role: user.role || 'student',
+                  avatar: (user.display_name || 'U').charAt(0).toUpperCase(),
+                  isMicOn,
+                  isCameraOn,
+                  isHandRaised
+                }
+              }))
+
+              // If WE are currently sharing screen, send WebRTC offer to newcomer
+              if (screenStreamRef.current && isScreenSharing) {
+                createPeerOfferForStream(data.peerId, screenStreamRef.current)
+              }
+            }
+            break
+          }
+
+          // ── Peer Announce Response ──────────────────────────────────────────
+          case 'peer_announce': {
+            if ((!data.targetPeerId || data.targetPeerId === myPeerId) && data.peerId !== myPeerId) {
+              setConnectedPeers(prev => ({
+                ...prev,
+                [data.peerId]: data.user
+              }))
+            }
+            break
+          }
+
+          // ── Peer Left ───────────────────────────────────────────────────────
+          case 'peer_leave': {
+            if (data.peerId) {
+              setConnectedPeers(prev => {
+                const next = { ...prev }
+                delete next[data.peerId]
+                return next
+              })
+              if (peerConnectionsRef.current[data.peerId]) {
+                peerConnectionsRef.current[data.peerId].close()
+                delete peerConnectionsRef.current[data.peerId]
+              }
+              if (remoteScreenInfo.sharerId === data.peerId) {
+                setRemoteScreenInfo({ active: false, sharerName: '', sharerId: '' })
+                setRemoteScreenFrame(null)
+                setHasRemoteWebRTCStream(false)
+                setCallView('gallery')
+              }
+            }
+            break
+          }
+
+          // ── Real-Time Collaborative Whiteboard Vector Strokes ───────────────
+          case 'whiteboard_draw': {
+            const canvas = canvasRef.current
+            if (canvas) {
+              const ctx = canvas.getContext('2d')
+              if (ctx) {
+                ctx.beginPath()
+                ctx.moveTo(data.x0, data.y0)
+                ctx.lineTo(data.x1, data.y1)
+                ctx.strokeStyle = data.tool === 'eraser' ? '#0f172a' : data.color
+                ctx.lineWidth = data.tool === 'eraser' ? 26 : data.width
+                ctx.lineCap = 'round'
+                ctx.lineJoin = 'round'
+                ctx.stroke()
+              }
+            }
+            break
+          }
+
+          case 'whiteboard_clear': {
+            const canvas = canvasRef.current
+            if (canvas) {
+              const ctx = canvas.getContext('2d')
+              if (ctx) {
+                ctx.fillStyle = '#0f172a'
+                ctx.fillRect(0, 0, canvas.width, canvas.height)
+              }
+            }
+            break
+          }
+
+          // ── Floating Emoji Reaction ─────────────────────────────────────────
+          case 'reaction': {
+            if (data.emoji) {
+              const id = Date.now() + Math.random()
+              const left = Math.floor(Math.random() * 80) + 10
+              setFloatingReactions(prev => [...prev, { id, emoji: data.emoji, left }])
+              setTimeout(() => {
+                setFloatingReactions(prev => prev.filter(r => r.id !== id))
+              }, 2800)
+            }
+            break
+          }
+
+          // ── Live Poll Voting ─────────────────────────────────────────────────
+          case 'poll_vote': {
+            if (typeof data.optionIndex === 'number') {
+              setActivePoll(prev => {
+                const next = { ...prev }
+                if (next.options[data.optionIndex]) {
+                  next.options[data.optionIndex].votes += 1
+                  next.totalVotes += 1
+                }
+                return next
+              })
+            }
+            break
+          }
+
+          // ── Screen Share State Broadcasts ───────────────────────────────────
+          case 'screen_share_start': {
+            if (data.sharerId !== myPeerId) {
+              setRemoteScreenInfo({
+                active: true,
+                sharerName: data.sharerName || 'Teacher',
+                sharerId: data.sharerId
+              })
+              setCallView('spotlight')
+            }
+            break
+          }
+
+          case 'screen_share_stop': {
+            setRemoteScreenInfo({ active: false, sharerName: '', sharerId: '' })
+            setRemoteScreenFrame(null)
+            setHasRemoteWebRTCStream(false)
+            if (remoteScreenVideoRef.current) {
+              remoteScreenVideoRef.current.srcObject = null
+            }
+            setCallView('gallery')
+            break
+          }
+
+          // ── Fallback High-Speed Screen Snapshot Broadcast ───────────────────
+          case 'screen_frame': {
+            if (data.sharerId !== myPeerId) {
+              setRemoteScreenFrame(data.frameData)
+              if (!remoteScreenInfo.active) {
+                setRemoteScreenInfo({
+                  active: true,
+                  sharerName: data.sharerName || 'Teacher',
+                  sharerId: data.sharerId
+                })
+                setCallView('spotlight')
+              }
+            }
+            break
+          }
+
+          // ── WebRTC Signaling (Offer, Answer, ICE Candidates) ─────────────────
+          case 'webrtc_offer': {
+            if (data.targetPeerId === myPeerId && data.offer) {
+              await handleIncomingPeerOffer(data.senderPeerId, data.offer, data.sharerName)
+            }
+            break
+          }
+
+          case 'webrtc_answer': {
+            if (data.targetPeerId === myPeerId && data.answer) {
+              const pc = peerConnectionsRef.current[data.senderPeerId]
+              if (pc) {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.answer))
+              }
+            }
+            break
+          }
+
+          case 'webrtc_ice': {
+            if (data.targetPeerId === myPeerId && data.candidate) {
+              const pc = peerConnectionsRef.current[data.senderPeerId]
+              if (pc) {
+                await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(err => {
+                  console.warn('ICE Candidate add error:', err)
+                })
+              }
+            }
+            break
+          }
+
+          default:
+            break
+        }
+      } catch (err) {
+        console.error('[Classroom WS] Error parsing message:', err)
+      }
+    }
+
+    socket.onclose = () => {
+      console.log('[Classroom WS] Disconnected')
+    }
+
+    return () => {
+      socket.close()
+    }
+  }, [activeCallRoom])
+
+  // ── WebRTC Presenter: Create Offer to Broadcast Screen Track ──────────────────
+  const createPeerOfferForStream = async (targetPeerId: string, stream: MediaStream) => {
+    try {
+      const pc = new RTCPeerConnection(rtcConfig)
+      peerConnectionsRef.current[targetPeerId] = pc
+
+      stream.getTracks().forEach(track => {
+        pc.addTrack(track, stream)
+      })
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          sendWsMessage({
+            type: 'webrtc_ice',
+            targetPeerId,
+            senderPeerId: myPeerIdRef.current,
+            candidate: event.candidate
+          })
+        }
+      }
+
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+
+      sendWsMessage({
+        type: 'webrtc_offer',
+        targetPeerId,
+        senderPeerId: myPeerIdRef.current,
+        sharerName: user.display_name || 'Presenter',
+        offer
+      })
+    } catch (err) {
+      console.error('[WebRTC] Failed to create offer for peer:', targetPeerId, err)
+    }
+  }
+
+  // ── WebRTC Attendee: Handle Incoming Offer & Render Remote Stream ──────────────
+  const handleIncomingPeerOffer = async (senderPeerId: string, offer: RTCSessionDescriptionInit, sharerName?: string) => {
+    try {
+      const pc = new RTCPeerConnection(rtcConfig)
+      peerConnectionsRef.current[senderPeerId] = pc
+
+      pc.ontrack = (event) => {
+        console.log('[WebRTC] Received remote screen track:', event.streams)
+        if (event.streams && event.streams[0]) {
+          const remoteStream = event.streams[0]
+          if (remoteScreenVideoRef.current) {
+            remoteScreenVideoRef.current.srcObject = remoteStream
+            remoteScreenVideoRef.current.play().catch(() => {})
+          }
+          setHasRemoteWebRTCStream(true)
+          setRemoteScreenInfo({
+            active: true,
+            sharerName: sharerName || 'Teacher',
+            sharerId: senderPeerId
+          })
+          setCallView('spotlight')
+        }
+      }
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          sendWsMessage({
+            type: 'webrtc_ice',
+            targetPeerId: senderPeerId,
+            senderPeerId: myPeerIdRef.current,
+            candidate: event.candidate
+          })
+        }
+      }
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer))
+      const answer = await pc.createAnswer()
+      await pc.setLocalDescription(answer)
+
+      sendWsMessage({
+        type: 'webrtc_answer',
+        targetPeerId: senderPeerId,
+        senderPeerId: myPeerIdRef.current,
+        answer
+      })
+    } catch (err) {
+      console.error('[WebRTC] Failed to answer incoming offer:', err)
+    }
+  }
+
+  // ── Camera and Microphone Local Media Handling ─────────────────────────────────
   const startCameraStream = async () => {
     try {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 },
+          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
           audio: true
         })
         localStreamRef.current = stream
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream
         }
+        setIsCameraOn(true)
+        setIsMicOn(true)
       }
     } catch (err) {
-      console.warn('Camera/mic access skipped (fallback to simulated avatar video):', err)
+      console.warn('Media devices camera/mic permission not granted:', err)
+      setIsCameraOn(false)
+      setIsMicOn(false)
     }
   }
 
@@ -181,6 +609,10 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     if (screenStreamRef.current) {
       screenStreamRef.current.getTracks().forEach(track => track.stop())
       screenStreamRef.current = null
+    }
+    if (screenFrameIntervalRef.current) {
+      clearInterval(screenFrameIntervalRef.current)
+      screenFrameIntervalRef.current = null
     }
   }
 
@@ -204,32 +636,82 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     setIsCameraOn(!isCameraOn)
   }
 
+  // ── Screen Sharing with Dual WebRTC + High-Speed Frame Broadcaster ─────────────
   const toggleScreenShare = async () => {
     if (!isScreenSharing) {
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-          const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true })
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { displaySurface: 'monitor' },
+            audio: true
+          })
           screenStreamRef.current = screenStream
+
           if (screenVideoRef.current) {
             screenVideoRef.current.srcObject = screenStream
           }
-          screenStream.getVideoTracks()[0].onended = () => {
-            setIsScreenSharing(false)
-          }
+
           setIsScreenSharing(true)
           setCallView('spotlight')
+
+          // Broadcast Screen Share Start notification
+          sendWsMessage({
+            type: 'screen_share_start',
+            sharerId: myPeerIdRef.current,
+            sharerName: user.display_name || 'Presenter'
+          })
+
+          // Create WebRTC Offer for each peer in the room
+          Object.keys(connectedPeers).forEach(peerId => {
+            createPeerOfferForStream(peerId, screenStream)
+          })
+
+          // Real-time canvas snapshot broadcaster (Fallback for 100% cross-browser sync)
+          const hiddenCanvas = document.createElement('canvas')
+          hiddenCanvas.width = 960
+          hiddenCanvas.height = 540
+          const hiddenCtx = hiddenCanvas.getContext('2d')
+
+          screenFrameIntervalRef.current = window.setInterval(() => {
+            if (screenVideoRef.current && hiddenCtx && screenVideoRef.current.videoWidth > 0) {
+              hiddenCtx.drawImage(screenVideoRef.current, 0, 0, hiddenCanvas.width, hiddenCanvas.height)
+              const frameData = hiddenCanvas.toDataURL('image/jpeg', 0.65)
+              sendWsMessage({
+                type: 'screen_frame',
+                sharerId: myPeerIdRef.current,
+                sharerName: user.display_name || 'Presenter',
+                frameData
+              })
+            }
+          }, 150)
+
+          screenStream.getVideoTracks()[0].onended = () => {
+            handleStopScreenShare()
+          }
         }
       } catch (err) {
-        console.warn('Screen share cancelled or not supported:', err)
+        console.warn('Screen share cancelled or not allowed:', err)
       }
     } else {
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach(track => track.stop())
-        screenStreamRef.current = null
-      }
-      setIsScreenSharing(false)
-      setCallView('gallery')
+      handleStopScreenShare()
     }
+  }
+
+  const handleStopScreenShare = () => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop())
+      screenStreamRef.current = null
+    }
+    if (screenFrameIntervalRef.current) {
+      clearInterval(screenFrameIntervalRef.current)
+      screenFrameIntervalRef.current = null
+    }
+    setIsScreenSharing(false)
+    sendWsMessage({
+      type: 'screen_share_stop',
+      sharerId: myPeerIdRef.current
+    })
+    setCallView('gallery')
   }
 
   // ── Enter and Leave Meeting Handlers ─────────────────────────────────────────
@@ -247,8 +729,8 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   }
 
   const handleLeaveClass = async () => {
+    handleStopScreenShare()
     stopCameraStream()
-    setIsScreenSharing(false)
     setActiveCallRoom(null)
   }
 
@@ -311,6 +793,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     const id = Date.now() + Math.random()
     const left = Math.floor(Math.random() * 80) + 10
     setFloatingReactions(prev => [...prev, { id, emoji, left }])
+    sendWsMessage({ type: 'reaction', emoji })
     setTimeout(() => {
       setFloatingReactions(prev => prev.filter(r => r.id !== id))
     }, 2800)
@@ -320,13 +803,19 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newChatText.trim()) return
+
     const msg: ChatMessage = {
-      id: Date.now().toString(),
-      sender: user.display_name || (isTeacher ? 'Dr. Sarah Connor' : 'Student'),
+      id: `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      sender: user.display_name || user.email || (isTeacher ? 'Dr. Sarah Connor' : 'Student'),
       role: user.role || 'student',
       text: newChatText.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
+
+    // Broadcast through WebSocket to all other participants
+    sendWsMessage({ type: 'chat', payload: msg })
+
+    // Add to local state immediately
     setChatMessages(prev => [...prev, msg])
     setNewChatText('')
   }
@@ -342,6 +831,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     })
     setHasVoted(true)
     triggerReaction('👍')
+    sendWsMessage({ type: 'poll_vote', optionIndex })
   }
 
   // ── Interactive Collaborative Whiteboard Drawing ────────────────────────────
@@ -349,38 +839,57 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    const x = (e.clientX - rect.left) * scaleX
+    const y = (e.clientY - rect.top) * scaleY
+
     setIsDrawing(true)
+    lastPointRef.current = { x, y }
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.beginPath()
     ctx.moveTo(x, y)
     ctx.strokeStyle = whiteboardTool === 'eraser' ? '#0f172a' : whiteboardColor
-    ctx.lineWidth = whiteboardTool === 'eraser' ? 24 : whiteboardWidth
+    ctx.lineWidth = whiteboardTool === 'eraser' ? 26 : whiteboardWidth
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
   }
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return
+    if (!isDrawing || !lastPointRef.current) return
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    const x = (e.clientX - rect.left) * scaleX
+    const y = (e.clientY - rect.top) * scaleY
 
-    if (whiteboardTool === 'pen' || whiteboardTool === 'eraser') {
-      ctx.lineTo(x, y)
-      ctx.stroke()
-    }
+    ctx.lineTo(x, y)
+    ctx.stroke()
+
+    // Broadcast stroke to other peers via WebSocket
+    sendWsMessage({
+      type: 'whiteboard_draw',
+      x0: lastPointRef.current.x,
+      y0: lastPointRef.current.y,
+      x1: x,
+      y1: y,
+      color: whiteboardColor,
+      width: whiteboardWidth,
+      tool: whiteboardTool
+    })
+
+    lastPointRef.current = { x, y }
   }
 
   const stopDrawing = () => {
     setIsDrawing(false)
+    lastPointRef.current = null
   }
 
   const clearWhiteboard = () => {
@@ -391,6 +900,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       ctx.fillStyle = '#0f172a'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
     }
+    sendWsMessage({ type: 'whiteboard_clear' })
   }
 
   const downloadWhiteboard = () => {
@@ -398,7 +908,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     if (!canvas) return
     const a = document.createElement('a')
     a.href = canvas.toDataURL('image/png')
-    a.download = `whiteboard_notes_${activeCallRoom?.title || 'session'}.png`
+    a.download = `whiteboard_${activeCallRoom?.title || 'session'}.png`
     a.click()
   }
 
@@ -408,8 +918,11 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     return `${mins}:${secs}`
   }
 
-  // ── RENDER 1: FULL-SCREEN IN-CALL VIDEO ROOM (Zoom / Teams / Court Tantra) ───
+  // ── RENDER 1: FULL-SCREEN IN-CALL VIDEO ROOM (Zoom / Teams / Omni-Classroom) ──
   if (activeCallRoom) {
+    const totalParticipantCount = 1 + Object.keys(connectedPeers).length
+    const isPresenterActive = isScreenSharing || remoteScreenInfo.active
+
     return (
       <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col overflow-hidden text-slate-100 select-none animate-in fade-in duration-300">
         {/* Floating Animated Reaction Emojis */}
@@ -418,114 +931,141 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             <div
               key={r.id}
               className="absolute bottom-20 text-4xl animate-bounce transition-all duration-1000 ease-out"
-              style={{
-                left: `${r.left}%`,
-                transform: 'translateY(-200px) scale(1.4)',
-                opacity: 0.95
-              }}
+              style={{ left: `${r.left}%` }}
             >
               {r.emoji}
             </div>
           ))}
         </div>
 
-        {/* Top Header Bar */}
-        <header className="h-16 px-6 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between shrink-0 z-20">
+        {/* TOP BAR: Room Title, Timetable Subject, Live Timer, Badges */}
+        <header className="h-16 px-6 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 flex items-center justify-between shrink-0 z-30">
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-mono font-bold animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-              REC {formatTimer(callDuration)}
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center font-black text-white shadow-lg shadow-cyan-500/20">
+              {activeCallRoom.subject_code ? activeCallRoom.subject_code.slice(0, 3) : 'LMS'}
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                {activeCallRoom.title}
-                <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 uppercase">
-                  {activeCallRoom.subject_code || 'MATH'}
+              <div className="flex items-center gap-2">
+                <h1 className="font-bold text-base text-white truncate max-w-sm sm:max-w-md">
+                  {activeCallRoom.title}
+                </h1>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
+                  <Radio className="w-3 h-3 animate-pulse text-red-500" />
+                  LIVE
                 </span>
-              </h2>
-              <div className="text-[11px] text-slate-400">
-                Host: <strong className="text-slate-200">{activeCallRoom.teacher_name || 'Dr. Sarah Connor'}</strong> &bull; {activeCallRoom.room_number || 'Room 701'}
+                {isPresenterActive && (
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 animate-pulse">
+                    <Monitor className="w-3 h-3" />
+                    {isScreenSharing ? 'Sharing Your Screen' : `${remoteScreenInfo.sharerName} is Presenting`}
+                  </span>
+                )}
               </div>
+              <p className="text-xs text-slate-400 flex items-center gap-2">
+                <span>Grade {activeCallRoom.grade_number}-{activeCallRoom.section_name}</span>
+                <span>&bull;</span>
+                <span>{activeCallRoom.subject_name}</span>
+                {activeCallRoom.period_number && (
+                  <>
+                    <span>&bull;</span>
+                    <span className="text-cyan-400 font-medium">Period {activeCallRoom.period_number}</span>
+                  </>
+                )}
+                {activeCallRoom.room_number && (
+                  <>
+                    <span>&bull;</span>
+                    <span>Venue: {activeCallRoom.room_number}</span>
+                  </>
+                )}
+              </p>
             </div>
           </div>
 
-          {/* View Toggles */}
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl p-1 text-xs">
-            <button
-              onClick={() => setCallView('gallery')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
-                callView === 'gallery' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Gallery View
-            </button>
-            <button
-              onClick={() => setCallView('spotlight')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
-                callView === 'spotlight' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Speaker Spotlight
-            </button>
-            <button
-              onClick={() => setCallView('whiteboard')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
-                callView === 'whiteboard' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <PenTool className="w-3.5 h-3.5" />
-              Whiteboard
-            </button>
-          </div>
+          <div className="flex items-center gap-4">
+            {/* View Mode Switcher Pills */}
+            <div className="hidden md:flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <button
+                onClick={() => setCallView('gallery')}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                  callView === 'gallery' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Gallery View
+              </button>
+              <button
+                onClick={() => setCallView('spotlight')}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                  callView === 'spotlight' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Spotlight {isPresenterActive ? '(Screen)' : ''}
+              </button>
+              <button
+                onClick={() => setCallView('whiteboard')}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                  callView === 'whiteboard' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Whiteboard
+              </button>
+            </div>
 
-          {/* Host Controls */}
-          <div className="flex items-center gap-3">
-            {(isTeacher || isAdmin) && (
+            {/* In-Call Duration Counter */}
+            <div className="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 font-mono text-xs font-bold text-cyan-300">
+              {formatTimer(elapsedSeconds)}
+            </div>
+
+            {/* End / Leave Button */}
+            {(isTeacher || isAdmin) ? (
               <button
                 onClick={handleEndClassAsHost}
-                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs transition-all shadow-md shadow-rose-600/30"
+                className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg shadow-red-600/30 transition-all flex items-center gap-1.5"
               >
-                End Class for All
+                End Meeting
+              </button>
+            ) : (
+              <button
+                onClick={handleLeaveClass}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all flex items-center gap-1.5 border border-slate-700"
+              >
+                Leave
               </button>
             )}
-            <button
-              onClick={handleLeaveClass}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all"
-            >
-              Leave Room
-            </button>
           </div>
         </header>
 
-        {/* Main Stage & Interactive Workspaces */}
-        <div className="flex-1 flex overflow-hidden relative">
-          <div className="flex-1 p-4 flex flex-col justify-between overflow-hidden relative">
-            {/* Screen Sharing Alert Bar */}
-            {isScreenSharing && (
-              <div className="px-4 py-2 mb-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-between animate-in slide-in-from-top-2">
-                <div className="flex items-center gap-2">
-                  <Monitor className="w-4 h-4 text-emerald-400 animate-pulse" />
-                  <span>You are actively broadcasting your screen to all students.</span>
-                </div>
-                <button
-                  onClick={toggleScreenShare}
-                  className="px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[11px] font-bold border border-rose-500/30"
-                >
-                  Stop Share
-                </button>
-              </div>
-            )}
+        {/* Remote Screen Share Alert Pill for Students */}
+        {remoteScreenInfo.active && callView !== 'spotlight' && (
+          <div className="bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2 flex items-center justify-between text-xs font-bold text-white shadow-md z-30">
+            <span className="flex items-center gap-2">
+              <Monitor className="w-4 h-4 animate-bounce" />
+              {remoteScreenInfo.sharerName} is sharing their screen right now!
+            </span>
+            <button
+              onClick={() => setCallView('spotlight')}
+              className="px-3 py-0.5 bg-white text-slate-900 rounded-lg font-black hover:bg-slate-100 flex items-center gap-1"
+            >
+              <Eye className="w-3.5 h-3.5" /> View Screen
+            </button>
+          </div>
+        )}
 
-            {/* VIEW MODE A: INTERACTIVE COLLABORATIVE WHITEBOARD */}
+        {/* MAIN STAGE CONTENT AREA */}
+        <div className="flex-1 flex overflow-hidden relative">
+          <div className="flex-1 flex flex-col p-4 overflow-hidden relative">
             {callView === 'whiteboard' ? (
-              <div className="flex-1 bg-slate-900 border border-slate-800 rounded-3xl p-4 flex flex-col gap-3 shadow-2xl relative">
+              /* VIEW MODE A: REAL-TIME COLLABORATIVE WHITEBOARD */
+              <div className="flex-1 flex flex-col bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden shadow-2xl relative">
                 {/* Whiteboard Toolbar */}
-                <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-950 border border-slate-800 rounded-2xl">
-                  <div className="flex items-center gap-2">
+                <div className="h-14 px-4 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                      <PenTool className="w-4 h-4" /> Live Collaborative Canvas
+                    </span>
+                    <div className="h-4 w-px bg-slate-800" />
                     <button
                       onClick={() => setWhiteboardTool('pen')}
-                      className={`p-2 rounded-xl transition-all ${
-                        whiteboardTool === 'pen' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400 hover:bg-slate-800'
+                      className={`p-2 rounded-lg transition-all ${
+                        whiteboardTool === 'pen' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'text-slate-400 hover:text-white'
                       }`}
                       title="Pen Tool"
                     >
@@ -533,512 +1073,583 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                     </button>
                     <button
                       onClick={() => setWhiteboardTool('eraser')}
-                      className={`p-2 rounded-xl transition-all ${
-                        whiteboardTool === 'eraser' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400 hover:bg-slate-800'
+                      className={`p-2 rounded-lg transition-all ${
+                        whiteboardTool === 'eraser' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'text-slate-400 hover:text-white'
                       }`}
                       title="Eraser"
                     >
                       <Eraser className="w-4 h-4" />
                     </button>
 
-                    <div className="h-6 w-px bg-slate-800 mx-1" />
-
-                    {/* Color Palette */}
-                    <div className="flex items-center gap-1.5">
-                      {['#38bdf8', '#facc15', '#f43f5e', '#10b981', '#a855f7', '#ffffff'].map((c) => (
+                    {/* Color palette */}
+                    <div className="flex items-center gap-1.5 ml-2">
+                      {['#38bdf8', '#4ade80', '#f43f5e', '#fbbf24', '#ffffff'].map(c => (
                         <button
                           key={c}
-                          onClick={() => { setWhiteboardColor(c); setWhiteboardTool('pen'); }}
-                          className={`w-6 h-6 rounded-full border-2 transition-all ${
-                            whiteboardColor === c ? 'scale-110 border-white' : 'border-transparent'
-                          }`}
+                          onClick={() => { setWhiteboardColor(c); setWhiteboardTool('pen') }}
                           style={{ backgroundColor: c }}
+                          className={`w-5 h-5 rounded-full transition-transform ${whiteboardColor === c && whiteboardTool === 'pen' ? 'scale-125 ring-2 ring-white' : 'hover:scale-110'}`}
                         />
                       ))}
                     </div>
 
-                    <div className="h-6 w-px bg-slate-800 mx-1" />
-
-                    {/* Stroke Width */}
+                    {/* Width selector */}
                     <input
                       type="range"
-                      min={2}
-                      max={18}
+                      min="1"
+                      max="12"
                       value={whiteboardWidth}
-                      onChange={(e) => setWhiteboardWidth(parseInt(e.target.value))}
-                      className="w-20 accent-cyan-400"
-                      title="Brush Stroke Width"
+                      onChange={(e) => setWhiteboardWidth(Number(e.target.value))}
+                      className="w-20 accent-cyan-400 cursor-pointer ml-2"
+                      title="Pen Stroke Width"
                     />
                   </div>
 
                   <div className="flex items-center gap-2">
                     <button
                       onClick={clearWhiteboard}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
                     >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                      Clear
+                      <Trash2 className="w-3.5 h-3.5" /> Clear All
                     </button>
                     <button
                       onClick={downloadWhiteboard}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold shadow-md shadow-cyan-500/20"
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
                     >
-                      <Download className="w-3.5 h-3.5" />
-                      Save Canvas
+                      <Download className="w-3.5 h-3.5" /> Export PNG
                     </button>
                   </div>
                 </div>
 
-                {/* Whiteboard Canvas */}
-                <div className="flex-1 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden relative shadow-inner">
+                {/* Whiteboard Surface */}
+                <div className="flex-1 bg-[#0f172a] relative overflow-hidden flex items-center justify-center cursor-crosshair">
                   <canvas
                     ref={canvasRef}
-                    width={1200}
-                    height={700}
+                    width={1920}
+                    height={1080}
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
                     onMouseUp={stopDrawing}
                     onMouseLeave={stopDrawing}
-                    className="w-full h-full cursor-crosshair touch-none"
+                    className="w-full h-full object-contain"
                   />
-                  <div className="absolute bottom-3 left-4 text-[11px] text-slate-500 pointer-events-none">
-                    Interactive Stylus/Touch Whiteboard &bull; Real-time Drawing Board
+                  <div className="absolute bottom-3 right-4 px-3 py-1 rounded-full bg-slate-950/70 border border-slate-800 text-[11px] text-slate-400 pointer-events-none">
+                    Multi-user Synchronized Canvas &bull; All students & teachers see updates in real time
                   </div>
                 </div>
               </div>
-            ) : callView === 'spotlight' || isScreenSharing ? (
-              /* VIEW MODE B: SPOTLIGHT / SCREEN SHARE */
+            ) : callView === 'spotlight' || isPresenterActive ? (
+              /* VIEW MODE B: SPOTLIGHT / SCREEN SHARING */
               <div className="flex-1 flex flex-col md:flex-row gap-4 overflow-hidden">
-                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden relative shadow-2xl flex items-center justify-center">
+                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
+                  {/* LOCAL PRESENTER: User is sharing their screen */}
                   {isScreenSharing ? (
                     <video
                       ref={screenVideoRef}
                       autoPlay
                       playsInline
+                      muted
                       className="w-full h-full object-contain bg-black"
                     />
+                  ) : remoteScreenInfo.active ? (
+                    /* REMOTE ATTENDEE: Viewing Teacher / Presenter's Screen */
+                    <div className="w-full h-full relative bg-black flex items-center justify-center">
+                      {/* WebRTC Video Element (High-framerate video stream) */}
+                      <video
+                        ref={remoteScreenVideoRef}
+                        autoPlay
+                        playsInline
+                        className={`w-full h-full object-contain ${hasRemoteWebRTCStream ? 'block' : 'hidden'}`}
+                      />
+
+                      {/* Fallback Screen Frame Broadcaster (Instant snapshot image) */}
+                      {!hasRemoteWebRTCStream && remoteScreenFrame && (
+                        <img
+                          src={remoteScreenFrame}
+                          alt="Remote Screen Broadcast"
+                          className="w-full h-full object-contain"
+                        />
+                      )}
+
+                      {!hasRemoteWebRTCStream && !remoteScreenFrame && (
+                        <div className="flex flex-col items-center gap-3 text-slate-400">
+                          <Monitor className="w-12 h-12 text-cyan-400 animate-pulse" />
+                          <p className="text-sm font-semibold">Connecting to {remoteScreenInfo.sharerName}'s screen share...</p>
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-tr from-slate-900 via-indigo-950/30 to-slate-900 relative">
-                      <div className="w-28 h-28 rounded-full bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center text-4xl font-extrabold text-cyan-300 shadow-2xl shadow-cyan-500/30 animate-pulse">
+                    /* Regular Spotlight (Teacher Stage) */
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-tr from-slate-900 via-slate-950 to-slate-900">
+                      <div className="w-28 h-28 rounded-full bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center text-3xl font-black text-cyan-400 shadow-xl shadow-cyan-500/10">
                         {activeCallRoom.teacher_name?.charAt(0) || 'T'}
                       </div>
                       <h3 className="text-xl font-black text-white mt-4">{activeCallRoom.teacher_name}</h3>
-                      <p className="text-xs text-slate-400 mt-1">Speaking &bull; Primary Instructor Stage</p>
+                      <p className="text-xs text-slate-400 mt-1">Instructor Stage &bull; Primary Speaker</p>
                     </div>
                   )}
 
-                  <div className="absolute bottom-4 left-4 px-3.5 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 flex items-center gap-2 text-xs font-bold text-white">
+                  {/* Stage Label Badge */}
+                  <div className="absolute bottom-4 left-4 px-3.5 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-white flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                    {isScreenSharing ? 'Host Screen Broadcast' : `${activeCallRoom.teacher_name} (Spotlight)`}
+                    {isScreenSharing
+                      ? 'You are sharing your screen (Broadcasting Live)'
+                      : remoteScreenInfo.active
+                      ? `${remoteScreenInfo.sharerName}'s Shared Screen (Live)`
+                      : `${activeCallRoom.teacher_name} (Instructor Spotlight)`}
                   </div>
                 </div>
 
-                {/* Side participant filmstrip */}
+                {/* Side participant filmstrip in Spotlight mode */}
                 <div className="w-full md:w-64 flex md:flex-col gap-3 overflow-x-auto md:overflow-y-auto shrink-0">
-                  <div className="h-36 rounded-2xl bg-slate-900 border border-slate-800 p-3 relative overflow-hidden flex flex-col justify-between">
+                  {/* Local camera preview */}
+                  <div className="h-36 rounded-2xl bg-slate-900 border border-slate-800 p-3 relative overflow-hidden flex flex-col justify-between shrink-0 shadow-lg">
                     <div className="w-full h-full flex items-center justify-center">
-                      <video ref={localVideoRef} autoPlay playsInline muted className={`w-full h-full object-cover rounded-xl ${isCameraOn ? 'block' : 'hidden'}`} />
+                      <video
+                        ref={localVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className={`w-full h-full object-cover rounded-xl ${isCameraOn ? 'block' : 'hidden'}`}
+                      />
                       {!isCameraOn && (
                         <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-sm font-bold text-slate-300">
                           {user.display_name?.charAt(0) || 'U'}
                         </div>
                       )}
                     </div>
-                    <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-slate-950/80 text-[10px] font-bold text-white">
-                      You {isMicOn ? '🎙️' : '🔇'}
+                    <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-slate-950/80 text-[10px] font-bold text-slate-300 flex items-center gap-1">
+                      <span>You ({isTeacher ? 'Teacher' : 'Student'})</span>
+                      {!isMicOn && <MicOff className="w-2.5 h-2.5 text-red-400" />}
                     </div>
                   </div>
 
-                  {/* Student attendee avatars */}
-                  {[
-                    { name: 'Aarav Patel', role: 'Student', mic: false, avatar: 'A' },
-                    { name: 'Diya Sharma', role: 'Student', mic: true, avatar: 'D' },
-                    { name: 'Ishaan Verma', role: 'Student', mic: false, avatar: 'I' },
-                    { name: 'Ananya Iyer', role: 'Student', mic: false, avatar: 'A' }
-                  ].map((s, idx) => (
-                    <div key={idx} className="h-28 rounded-2xl bg-slate-900 border border-slate-800 p-2.5 relative flex flex-col justify-between shrink-0">
-                      <div className="w-full h-full flex items-center justify-center">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-xs font-bold text-white shadow-md">
-                          {s.avatar}
+                  {/* Connected remote peers filmstrip */}
+                  {Object.entries(connectedPeers).map(([pId, peer]) => (
+                    <div key={pId} className="h-36 rounded-2xl bg-slate-900 border border-slate-800 p-3 relative overflow-hidden flex flex-col justify-between shrink-0 shadow-lg">
+                      <div className="w-full h-full flex flex-col items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-sm font-bold text-white shadow-md">
+                          {peer.avatar || peer.display_name.charAt(0)}
                         </div>
+                        <span className="text-[11px] font-semibold text-slate-300 mt-2 truncate max-w-[120px]">
+                          {peer.display_name}
+                        </span>
                       </div>
-                      <div className="absolute bottom-1.5 left-2 px-1.5 py-0.5 rounded bg-slate-950/80 text-[9px] font-semibold text-slate-300 flex items-center gap-1">
-                        <span>{s.name}</span>
-                        <span>{s.mic ? '🎙️' : '🔇'}</span>
+                      <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-slate-950/80 text-[10px] font-bold text-slate-300 flex items-center gap-1">
+                        <span>{peer.display_name}</span>
+                        <span className="text-[9px] text-cyan-400 font-normal">({peer.role})</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              /* VIEW MODE C: GALLERY GRID VIEW (Zoom / Teams Style) */
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto">
-                {/* 1. Host / Teacher Card */}
-                <div className="relative bg-slate-900 border-2 border-cyan-500/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between p-4 group">
-                  <div className="w-full h-full flex flex-col items-center justify-center">
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-3xl font-extrabold text-slate-950 shadow-xl shadow-cyan-500/20 relative">
-                      {activeCallRoom.teacher_name?.charAt(0) || 'T'}
-                      <span className="absolute -top-2 -right-2 text-xl">👑</span>
-                    </div>
-                    <div className="mt-3 text-center">
-                      <div className="text-sm font-extrabold text-white">{activeCallRoom.teacher_name || 'Dr. Sarah Connor'}</div>
-                      <div className="text-[11px] text-cyan-400 font-semibold">Teacher & Host</div>
-                    </div>
-                  </div>
-
-                  <div className="absolute bottom-3 left-3 px-3 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 flex items-center gap-2 text-xs font-bold text-slate-200">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Active Host 🎙️</span>
-                  </div>
-                </div>
-
-                {/* 2. Current User (You) */}
-                <div className="relative bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between p-4">
-                  <div className="w-full h-full flex items-center justify-center">
-                    <video ref={localVideoRef} autoPlay playsInline muted className={`w-full h-full object-cover rounded-2xl ${isCameraOn ? 'block' : 'hidden'}`} />
+              /* VIEW MODE C: GALLERY GRID VIEW (Equal video tiles for all participants) */
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 overflow-y-auto pr-1">
+                {/* 1. Local User Tile */}
+                <div className="rounded-3xl bg-slate-900 border border-slate-800 relative overflow-hidden shadow-xl flex flex-col min-h-[220px]">
+                  <div className="flex-1 flex items-center justify-center relative bg-gradient-to-tr from-slate-900 to-slate-950">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={`w-full h-full object-cover ${isCameraOn ? 'block' : 'hidden'}`}
+                    />
                     {!isCameraOn && (
-                      <div className="w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center text-2xl font-black text-slate-300">
+                      <div className="w-20 h-20 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-2xl font-black text-cyan-400 shadow-xl">
                         {user.display_name?.charAt(0) || 'U'}
                       </div>
                     )}
                   </div>
-
-                  <div className="absolute bottom-3 left-3 px-3 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 flex items-center gap-2 text-xs font-bold text-slate-200">
-                    <span>{user.display_name || 'You'} (You)</span>
-                    <span>{isMicOn ? '🎙️' : '🔇'}</span>
-                    {isHandRaised && <span className="animate-bounce">✋</span>}
+                  <div className="absolute bottom-3 left-3 px-3 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-white flex items-center gap-2">
+                    <span>You ({user.display_name || user.email})</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                      {isTeacher ? 'Host' : 'Student'}
+                    </span>
+                    {!isMicOn && <MicOff className="w-3 h-3 text-red-400 ml-1" />}
                   </div>
+                  {isHandRaised && (
+                    <div className="absolute top-3 right-3 p-1.5 rounded-full bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 animate-bounce">
+                      <Hand className="w-4 h-4" />
+                    </div>
+                  )}
                 </div>
 
-                {/* 3. Class Attendees / Students */}
-                {[
-                  { name: 'Aarav Patel', role: 'Student', mic: false, avatar: 'A' },
-                  { name: 'Diya Sharma', role: 'Student', mic: true, avatar: 'D' },
-                  { name: 'Ishaan Verma', role: 'Student', mic: false, avatar: 'I' },
-                  { name: 'Ananya Iyer', role: 'Student', mic: false, avatar: 'A' }
-                ].map((st, i) => (
-                  <div key={i} className="relative bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between p-4">
-                    <div className="w-full h-full flex flex-col items-center justify-center">
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-2xl font-extrabold text-white shadow-lg">
-                        {st.avatar}
+                {/* 2. Connected Remote Peers Tiles */}
+                {Object.entries(connectedPeers).map(([pId, peer]) => (
+                  <div key={pId} className="rounded-3xl bg-slate-900 border border-slate-800 relative overflow-hidden shadow-xl flex flex-col min-h-[220px]">
+                    <div className="flex-1 flex flex-col items-center justify-center bg-gradient-to-tr from-slate-900 to-slate-950">
+                      <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border-2 border-cyan-400 flex items-center justify-center text-2xl font-black text-white shadow-xl">
+                        {peer.avatar || peer.display_name.charAt(0)}
                       </div>
-                      <div className="text-xs font-bold text-slate-300 mt-2">{st.name}</div>
+                      <h4 className="text-sm font-bold text-white mt-3">{peer.display_name}</h4>
+                      <p className="text-xs text-slate-400 capitalize">{peer.role}</p>
                     </div>
-
-                    <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 flex items-center gap-1.5 text-xs text-slate-300">
-                      <span>{st.name}</span>
-                      <span>{st.mic ? '🎙️' : '🔇'}</span>
+                    <div className="absolute bottom-3 left-3 px-3 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-white flex items-center gap-2">
+                      <span>{peer.display_name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                        {peer.role}
+                      </span>
                     </div>
                   </div>
                 ))}
+
+                {/* Fallback tiles if only 1 participant is present */}
+                {totalParticipantCount === 1 && (
+                  <div className="rounded-3xl bg-slate-900/40 border border-dashed border-slate-800 flex flex-col items-center justify-center text-center p-6 min-h-[220px]">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-800/80 flex items-center justify-center text-slate-400 mb-3">
+                      <Users className="w-6 h-6 text-cyan-400" />
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-300">Waiting for others to join...</h4>
+                    <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                      When students join this Grade {activeCallRoom.grade_number}-{activeCallRoom.section_name} session, their video tiles will appear right here automatically.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
-
-            {/* Bottom Meeting Controls Bar (Zoom/Teams dock) */}
-            <div className="mt-4 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4">
-              {/* Audio/Video Controls */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={toggleMic}
-                  className={`p-3 rounded-2xl flex items-center gap-2 font-bold text-xs transition-all ${
-                    isMicOn ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                  }`}
-                  title={isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}
-                >
-                  {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                  <span className="hidden sm:inline">{isMicOn ? 'Mute' : 'Unmuted'}</span>
-                </button>
-
-                <button
-                  onClick={toggleCamera}
-                  className={`p-3 rounded-2xl flex items-center gap-2 font-bold text-xs transition-all ${
-                    isCameraOn ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                  }`}
-                  title={isCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
-                >
-                  {isCameraOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-                  <span className="hidden sm:inline">{isCameraOn ? 'Stop Video' : 'Start Video'}</span>
-                </button>
-              </div>
-
-              {/* Collaborative Features (Screen Share, Whiteboard, Raise Hand) */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={toggleScreenShare}
-                  className={`p-3 rounded-2xl flex items-center gap-2 font-bold text-xs transition-all ${
-                    isScreenSharing ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  }`}
-                  title="Share Screen (DisplayMedia)"
-                >
-                  <Monitor className="w-4 h-4" />
-                  <span className="hidden sm:inline">{isScreenSharing ? 'Sharing' : 'Share Screen'}</span>
-                </button>
-
-                <button
-                  onClick={() => setCallView(callView === 'whiteboard' ? 'gallery' : 'whiteboard')}
-                  className={`p-3 rounded-2xl flex items-center gap-2 font-bold text-xs transition-all ${
-                    callView === 'whiteboard' ? 'bg-cyan-500 text-slate-950 font-black' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  }`}
-                  title="Interactive Whiteboard"
-                >
-                  <PenTool className="w-4 h-4" />
-                  <span className="hidden sm:inline">Whiteboard</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsHandRaised(!isHandRaised)
-                    if (!isHandRaised) triggerReaction('✋')
-                  }}
-                  className={`p-3 rounded-2xl flex items-center gap-2 font-bold text-xs transition-all ${
-                    isHandRaised ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  }`}
-                  title="Raise Hand"
-                >
-                  <Hand className="w-4 h-4" />
-                  <span className="hidden sm:inline">{isHandRaised ? 'Hand Up' : 'Raise Hand'}</span>
-                </button>
-              </div>
-
-              {/* Floating Reaction Emojis Bar */}
-              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-2xl px-2 py-1.5">
-                {[
-                  { icon: '👍', name: 'Thumbs Up' },
-                  { icon: '👎', name: 'Thumbs Down' },
-                  { icon: '👏', name: 'Clap' },
-                  { icon: '❤️', name: 'Love' },
-                  { icon: '🔥', name: 'Fire' },
-                  { icon: '💡', name: 'Idea' }
-                ].map((em) => (
-                  <button
-                    key={em.icon}
-                    onClick={() => triggerReaction(em.icon)}
-                    className="p-1.5 hover:bg-slate-800 rounded-xl text-base transition-transform hover:scale-125"
-                    title={em.name}
-                  >
-                    {em.icon}
-                  </button>
-                ))}
-              </div>
-
-              {/* Side Panels Toggle (Polls, Chat, Roster) */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setActiveSideDrawer(activeSideDrawer === 'polls' ? null : 'polls')}
-                  className={`p-3 rounded-2xl flex items-center gap-1.5 font-bold text-xs transition-all relative ${
-                    activeSideDrawer === 'polls' ? 'bg-cyan-500 text-slate-950 font-black' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  }`}
-                  title="Class Polls"
-                >
-                  <BarChart2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Polls</span>
-                  {activePoll.isActive && !hasVoted && (
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 absolute top-2 right-2 animate-ping" />
-                  )}
-                </button>
-
-                <button
-                  onClick={() => setActiveSideDrawer(activeSideDrawer === 'chat' ? null : 'chat')}
-                  className={`p-3 rounded-2xl flex items-center gap-1.5 font-bold text-xs transition-all ${
-                    activeSideDrawer === 'chat' ? 'bg-cyan-500 text-slate-950 font-black' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  }`}
-                  title="In-call Chat"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span className="hidden sm:inline">Chat</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveSideDrawer(activeSideDrawer === 'participants' ? null : 'participants')}
-                  className={`p-3 rounded-2xl flex items-center gap-1.5 font-bold text-xs transition-all ${
-                    activeSideDrawer === 'participants' ? 'bg-cyan-500 text-slate-950 font-black' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  }`}
-                  title="Participants Roster"
-                >
-                  <Users className="w-4 h-4" />
-                  <span className="hidden sm:inline">5</span>
-                </button>
-              </div>
-            </div>
           </div>
 
-          {/* ── SIDE DRAWER PANELS (Chat / Polls / Participants) ──────────────── */}
+          {/* SIDE DRAWER (Chat, Participants, Polls) */}
           {activeSideDrawer && (
-            <div className="w-80 md:w-96 bg-slate-900 border-l border-slate-800 flex flex-col justify-between shrink-0 z-30 animate-in slide-in-from-right duration-200">
+            <aside className="w-80 md:w-96 bg-slate-900 border-l border-slate-800 flex flex-col z-30 animate-in slide-in-from-right duration-200">
               {/* Drawer Header */}
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                  {activeSideDrawer === 'chat' && <><MessageSquare className="w-4 h-4 text-cyan-400" /> In-Call Messages</>}
-                  {activeSideDrawer === 'polls' && <><BarChart2 className="w-4 h-4 text-cyan-400" /> Interactive Class Polls</>}
-                  {activeSideDrawer === 'participants' && <><Users className="w-4 h-4 text-cyan-400" /> Participants (5)</>}
-                </h3>
+              <div className="h-14 px-5 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {activeSideDrawer === 'chat' && (
+                    <>
+                      <MessageSquare className="w-4 h-4 text-cyan-400" />
+                      <h3 className="font-bold text-sm text-white">Live In-Call Chat</h3>
+                    </>
+                  )}
+                  {activeSideDrawer === 'participants' && (
+                    <>
+                      <Users className="w-4 h-4 text-cyan-400" />
+                      <h3 className="font-bold text-sm text-white">Attendees ({totalParticipantCount})</h3>
+                    </>
+                  )}
+                  {activeSideDrawer === 'polls' && (
+                    <>
+                      <BarChart2 className="w-4 h-4 text-cyan-400" />
+                      <h3 className="font-bold text-sm text-white">Interactive Live Poll</h3>
+                    </>
+                  )}
+                </div>
                 <button
                   onClick={() => setActiveSideDrawer(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                  className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Drawer Content */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                {activeSideDrawer === 'chat' && (
-                  <div className="space-y-3">
+              {/* DRAWER 1: IN-CALL CHAT */}
+              {activeSideDrawer === 'chat' && (
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="flex-1 p-4 overflow-y-auto space-y-3">
                     {chatMessages.map((m) => (
-                      <div key={m.id} className="space-y-1">
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="font-bold text-cyan-400">{m.sender}</span>
-                          <span className="text-slate-500">{m.timestamp}</span>
+                      <div
+                        key={m.id}
+                        className={`flex flex-col ${
+                          m.sender === (user.display_name || user.email) ? 'items-end' : 'items-start'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1 text-[11px]">
+                          <span className="font-bold text-slate-300">{m.sender}</span>
+                          <span className={`px-1.5 py-0.2 rounded text-[9px] uppercase font-bold ${
+                            m.role === 'teacher' ? 'bg-cyan-500/20 text-cyan-400' :
+                            m.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
+                            m.role === 'system' ? 'bg-slate-800 text-slate-400' :
+                            'bg-slate-800 text-slate-300'
+                          }`}>
+                            {m.role}
+                          </span>
+                          <span className="text-slate-500 text-[10px]">{m.timestamp}</span>
                         </div>
-                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200">
+                        <div className={`p-3 rounded-2xl text-xs max-w-[85%] break-words ${
+                          m.sender === (user.display_name || user.email)
+                            ? 'bg-cyan-600 text-white rounded-tr-none'
+                            : m.role === 'system'
+                            ? 'bg-slate-800/80 text-cyan-300 italic border border-slate-700 w-full text-center'
+                            : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700/60'
+                        }`}>
                           {m.text}
                         </div>
                       </div>
                     ))}
+                    <div ref={chatBottomRef} />
                   </div>
-                )}
 
-                {activeSideDrawer === 'polls' && (
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-                      <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider">
-                        Active Teacher Poll
+                  <form onSubmit={handleSendChat} className="p-3 border-t border-slate-800 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Type message to class..."
+                      value={newChatText}
+                      onChange={(e) => setNewChatText(e.target.value)}
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newChatText.trim()}
+                      className="px-3.5 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center justify-center transition-all"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* DRAWER 2: PARTICIPANTS ROSTER */}
+              {activeSideDrawer === 'participants' && (
+                <div className="flex-1 p-4 overflow-y-auto space-y-2">
+                  {/* Current User */}
+                  <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center text-xs border border-cyan-500/30">
+                        {user.display_name?.charAt(0) || 'U'}
                       </div>
-                      <h4 className="text-xs font-extrabold text-white">
-                        {activePoll.question}
-                      </h4>
-
-                      <div className="space-y-2 pt-1">
-                        {activePoll.options.map((opt, oIdx) => {
-                          const pct = activePoll.totalVotes > 0 ? Math.round((opt.votes / activePoll.totalVotes) * 100) : 0
-                          return (
-                            <button
-                              key={oIdx}
-                              disabled={hasVoted}
-                              onClick={() => handleVote(oIdx)}
-                              className="w-full text-left p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/60 transition-all space-y-1.5 disabled:cursor-default"
-                            >
-                              <div className="flex justify-between text-xs font-semibold">
-                                <span className="text-slate-200">{opt.text}</span>
-                                <span className="text-cyan-400">{pct}% ({opt.votes})</span>
-                              </div>
-                              <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                <div
-                                  className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full rounded-full transition-all"
-                                  style={{ width: `${pct}%` }}
-                                />
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-
-                      <div className="text-[10px] text-slate-500 text-center pt-1">
-                        {hasVoted ? '✓ Your vote has been submitted' : 'Click any option to vote in real-time'} &bull; {activePoll.totalVotes} total responses
+                      <div>
+                        <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                          {user.display_name || user.email} (You)
+                        </h4>
+                        <span className="text-[10px] text-cyan-400 font-semibold uppercase">{user.role}</span>
                       </div>
                     </div>
+                    <div className="flex items-center gap-1.5 text-slate-400">
+                      {isMicOn ? <Mic className="w-3.5 h-3.5 text-emerald-400" /> : <MicOff className="w-3.5 h-3.5 text-red-400" />}
+                      {isCameraOn ? <Video className="w-3.5 h-3.5 text-emerald-400" /> : <VideoOff className="w-3.5 h-3.5 text-red-400" />}
+                    </div>
                   </div>
-                )}
 
-                {activeSideDrawer === 'participants' && (
-                  <div className="space-y-2">
-                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-cyan-500 text-slate-950 font-black flex items-center justify-center text-xs">
-                          {activeCallRoom.teacher_name?.charAt(0) || 'T'}
+                  {/* Connected Remote Peers */}
+                  {Object.entries(connectedPeers).map(([pId, peer]) => (
+                    <div key={pId} className="p-3 rounded-xl bg-slate-800/40 border border-slate-800 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-md">
+                          {peer.avatar || peer.display_name.charAt(0)}
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                            {activeCallRoom.teacher_name}
-                            <span className="text-[10px]">👑</span>
-                          </div>
-                          <div className="text-[10px] text-cyan-400">Host / Teacher</div>
+                          <h4 className="text-xs font-bold text-slate-200">{peer.display_name}</h4>
+                          <span className="text-[10px] text-slate-400 capitalize">{peer.role}</span>
                         </div>
                       </div>
-                      <span className="text-xs">🎙️</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      </div>
                     </div>
-
-                    {[
-                      { name: user.display_name + ' (You)', mic: isMicOn },
-                      { name: 'Aarav Patel', mic: false },
-                      { name: 'Diya Sharma', mic: true },
-                      { name: 'Ishaan Verma', mic: false },
-                      { name: 'Ananya Iyer', mic: false }
-                    ].map((p, pIdx) => (
-                      <div key={pIdx} className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 font-bold flex items-center justify-center text-[11px]">
-                            {p.name.charAt(0)}
-                          </div>
-                          <span className="text-slate-200 font-semibold">{p.name}</span>
-                        </div>
-                        <span>{p.mic ? '🎙️' : '🔇'}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Chat Input Footer */}
-              {activeSideDrawer === 'chat' && (
-                <form onSubmit={handleSendChat} className="p-3 border-t border-slate-800 flex gap-2">
-                  <input
-                    type="text"
-                    value={newChatText}
-                    onChange={(e) => setNewChatText(e.target.value)}
-                    placeholder="Type message to class..."
-                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
-                  />
-                  <button
-                    type="submit"
-                    className="p-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
+                  ))}
+                </div>
               )}
-            </div>
+
+              {/* DRAWER 3: INTERACTIVE LIVE POLL */}
+              {activeSideDrawer === 'polls' && (
+                <div className="flex-1 p-5 overflow-y-auto flex flex-col justify-between">
+                  <div>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                      Question of the Hour
+                    </span>
+                    <h4 className="text-sm font-bold text-white mt-2 leading-relaxed">
+                      {activePoll.question}
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-1">Total votes submitted: {activePoll.totalVotes}</p>
+
+                    <div className="mt-4 space-y-3">
+                      {activePoll.options.map((opt, i) => {
+                        const pct = activePoll.totalVotes > 0 ? Math.round((opt.votes / activePoll.totalVotes) * 100) : 0
+                        return (
+                          <button
+                            key={i}
+                            disabled={hasVoted}
+                            onClick={() => handleVote(i)}
+                            className={`w-full p-3.5 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
+                              hasVoted
+                                ? 'bg-slate-800/80 border-slate-700 cursor-default'
+                                : 'bg-slate-800 hover:bg-slate-700 border-slate-700 hover:border-cyan-500/50 cursor-pointer'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-xs font-semibold z-10">
+                              <span className="text-slate-200">{opt.text}</span>
+                              <span className="text-cyan-400 font-bold ml-2">{pct}%</span>
+                            </div>
+                            {/* Vote percentage bar */}
+                            <div
+                              className="absolute left-0 top-0 bottom-0 bg-cyan-500/20 transition-all duration-500 ease-out"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {hasVoted && (
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center text-xs text-emerald-300 font-bold flex items-center justify-center gap-2 mt-4">
+                      <CheckCircle className="w-4 h-4" /> Thank you for voting! Results sync live.
+                    </div>
+                  )}
+                </div>
+              )}
+            </aside>
           )}
         </div>
+
+        {/* BOTTOM CALL CONTROL BAR (Mic, Cam, Screen Share, Whiteboard, Reactions, Chat, Leave) */}
+        <footer className="h-20 bg-slate-900 border-t border-slate-800 px-6 flex items-center justify-between shrink-0 z-30">
+          {/* Left: Device status */}
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-400">Classroom:</span>
+            <span className="text-xs font-bold text-slate-200">{activeCallRoom.title}</span>
+          </div>
+
+          {/* Center: Main Call Action Buttons */}
+          <div className="flex items-center gap-2.5 sm:gap-3 mx-auto sm:mx-0">
+            {/* Microphone Toggle */}
+            <button
+              onClick={toggleMic}
+              className={`p-3.5 rounded-2xl font-bold transition-all shadow-md ${
+                isMicOn ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-red-600 hover:bg-red-500 text-white'
+              }`}
+              title={isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}
+            >
+              {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+            </button>
+
+            {/* Camera Toggle */}
+            <button
+              onClick={toggleCamera}
+              className={`p-3.5 rounded-2xl font-bold transition-all shadow-md ${
+                isCameraOn ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-red-600 hover:bg-red-500 text-white'
+              }`}
+              title={isCameraOn ? 'Turn Video Off' : 'Turn Video On'}
+            >
+              {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+            </button>
+
+            {/* Screen Share Button */}
+            <button
+              onClick={toggleScreenShare}
+              className={`p-3.5 rounded-2xl font-bold transition-all shadow-md ${
+                isScreenSharing
+                  ? 'bg-cyan-500 text-slate-950 font-black ring-4 ring-cyan-500/30'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+              }`}
+              title={isScreenSharing ? 'Stop Screen Sharing' : 'Share Screen (Broadcast to Students)'}
+            >
+              <Monitor className="w-5 h-5" />
+            </button>
+
+            {/* Collaborative Whiteboard Toggle */}
+            <button
+              onClick={() => setCallView(callView === 'whiteboard' ? 'gallery' : 'whiteboard')}
+              className={`p-3.5 rounded-2xl font-bold transition-all shadow-md ${
+                callView === 'whiteboard'
+                  ? 'bg-cyan-500 text-slate-950 font-black'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+              }`}
+              title="Interactive Collaborative Whiteboard"
+            >
+              <PenTool className="w-5 h-5" />
+            </button>
+
+            {/* Raise Hand Toggle */}
+            <button
+              onClick={() => {
+                const next = !isHandRaised
+                setIsHandRaised(next)
+                if (next) triggerReaction('✋')
+              }}
+              className={`p-3.5 rounded-2xl font-bold transition-all shadow-md ${
+                isHandRaised ? 'bg-amber-500 text-slate-950 ring-4 ring-amber-500/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+              }`}
+              title="Raise / Lower Hand"
+            >
+              <Hand className="w-5 h-5" />
+            </button>
+
+            {/* Floating Reactions Bar */}
+            <div className="hidden lg:flex items-center gap-1 bg-slate-950 px-2 py-1.5 rounded-2xl border border-slate-800">
+              {['👏', '❤️', '🎉', '💡', '🔥'].map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => triggerReaction(emoji)}
+                  className="w-8 h-8 rounded-xl hover:bg-slate-800 flex items-center justify-center text-lg transition-transform hover:scale-125"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Right: Drawer Toggles */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setActiveSideDrawer(activeSideDrawer === 'chat' ? null : 'chat')
+                setUnreadChatCount(0)
+              }}
+              className={`p-3 rounded-xl text-xs font-semibold relative transition-all ${
+                activeSideDrawer === 'chat' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+              }`}
+              title="In-call Chat"
+            >
+              <MessageSquare className="w-4 h-4" />
+              {unreadChatCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-cyan-500 text-slate-950 text-[9px] font-black flex items-center justify-center">
+                  {unreadChatCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveSideDrawer(activeSideDrawer === 'participants' ? null : 'participants')}
+              className={`p-3 rounded-xl text-xs font-semibold transition-all ${
+                activeSideDrawer === 'participants' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+              }`}
+              title="Attendees Roster"
+            >
+              <Users className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setActiveSideDrawer(activeSideDrawer === 'polls' ? null : 'polls')}
+              className={`p-3 rounded-xl text-xs font-semibold transition-all ${
+                activeSideDrawer === 'polls' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+              }`}
+              title="Live Polls"
+            >
+              <BarChart2 className="w-4 h-4" />
+            </button>
+          </div>
+        </footer>
       </div>
     )
   }
 
-  // ── RENDER 2: CLASSROOM DASHBOARD / LOBBY ──────────────────────────────────
+  // ── RENDER 2: CLASSROOM HUB / DASHBOARD VIEW ─────────────────────────────────
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 p-8 rounded-2xl border border-slate-800 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="space-y-2 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold uppercase tracking-wider">
-            {isAdmin && <ShieldCheck className="w-3.5 h-3.5" />}
-            {isTeacher && <GraduationCap className="w-3.5 h-3.5" />}
-            {isStudent && <BookOpen className="w-3.5 h-3.5" />}
-            {isAdmin 
-              ? 'Administrator Virtual Classroom Suite' 
-              : isTeacher 
-              ? 'Faculty Live Class Scheduling' 
-              : `Class ${studentGradeNum} Live Classroom`}
+    <div className="space-y-6">
+      {/* HEADER SECTION */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+              Live Interactive Classrooms
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/10 text-cyan-600 border border-cyan-500/20">
+              Timetable Linked
+            </span>
           </div>
-
-          <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
-            <Video className="w-8 h-8 text-cyan-400" />
-            Live Video Classrooms (Zoom & Teams Style)
-          </h1>
-
-          <p className="text-slate-400 text-sm max-w-2xl">
-            {isAdmin && 'Supervise synchronous video classrooms, conduct live broadcasts, inspect attendance, and manage schedule slots across all 10 grades.'}
-            {isTeacher && 'Schedule and launch real-time video classes matching your timetable periods. Share screen, use collaborative whiteboard, conduct polls, and teach interactively.'}
-            {isStudent && `Join your official Class ${studentGradeNum} live video lectures. Speak with your teacher, ask questions in chat, vote in polls, and view screen sharing.`}
+          <p className="text-sm text-slate-500 mt-1">
+            Real-time HD audio/video lectures, collaborative whiteboards, live polls, and instant screen sharing.
           </p>
         </div>
 
-        {/* Action Button */}
+        {/* Schedule / Launch Action for Teachers & Admins */}
         {(isTeacher || isAdmin) && (
           <button
             onClick={() => setShowScheduleModal(true)}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs transition-all shadow-xl shadow-cyan-500/20 shrink-0 relative z-10"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-lg shadow-cyan-600/20 transition-all flex items-center gap-2 shrink-0"
           >
             <Plus className="w-4 h-4" />
             Schedule / Launch Live Class
@@ -1046,214 +1657,220 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
         )}
       </div>
 
-      {/* Active Live Classrooms Notice */}
-      {classes.some(c => c.status === 'live') && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 border border-rose-500/30 flex items-center justify-between gap-4 animate-in slide-in-from-top-2">
-          <div className="flex items-center gap-3">
-            <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping" />
-            <div>
-              <div className="text-xs font-extrabold text-rose-400 uppercase tracking-wider">
-                🟢 Live Video Class Active Now
-              </div>
-              <div className="text-sm font-bold text-white">
-                {classes.find(c => c.status === 'live')?.title}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => handleJoinClass(classes.find(c => c.status === 'live')!)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs shadow-lg shadow-rose-600/30 transition-all"
+      {/* FILTER BAR */}
+      <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-500 ml-2">Grade Filter:</span>
+          <select
+            value={filterGrade}
+            onChange={(e) => setFilterGrade(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-cyan-500"
           >
-            <Play className="w-4 h-4 fill-white" />
-            Join Live Class Now
-          </button>
-        </div>
-      )}
-
-      {/* Classroom Schedule Grid */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-extrabold text-white">
-            {isStudent ? `Class ${studentGradeNum} Scheduled Video Sessions` : 'Classroom Broadcast Sessions'}
-          </h2>
-          <span className="text-xs text-slate-500">{classes.length} Total Sessions</span>
+            <option value="all">All Grades (1 to 10)</option>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(g => (
+              <option key={g} value={g}>Class {g}</option>
+            ))}
+          </select>
         </div>
 
-        {loading ? (
-          <div className="p-16 text-center text-slate-400 space-y-3">
-            <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-sm">Loading virtual classroom schedule...</p>
-          </div>
-        ) : classes.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800 space-y-2">
-            <VideoOff className="w-8 h-8 mx-auto text-slate-600" />
-            <p className="text-sm font-semibold text-slate-400">No live or upcoming sessions scheduled.</p>
-            {(isTeacher || isAdmin) && (
-              <p className="text-xs text-slate-500">Click &quot;Schedule / Launch Live Class&quot; above to initiate a class from your timetable.</p>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {classes.map((c) => {
-              const isLive = c.status === 'live'
-              return (
-                <div
-                  key={c.id}
-                  className={`bg-slate-900 border rounded-3xl p-6 flex flex-col justify-between transition-all hover:shadow-2xl ${
-                    isLive 
-                      ? 'border-rose-500/50 shadow-rose-950/20' 
-                      : 'border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                            isLive 
-                              ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse' 
-                              : c.status === 'ended' 
-                              ? 'bg-slate-800 text-slate-400' 
-                              : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                          }`}>
-                            {isLive ? '🟢 LIVE NOW' : c.status}
-                          </span>
-                          <span className="text-xs font-semibold text-slate-400">
-                            Class {c.grade_number || 7} &bull; Period {c.period_number || 4}
-                          </span>
-                        </div>
-                        <h3 className="text-base font-extrabold text-white mt-1.5 line-clamp-2">
-                          {c.title}
-                        </h3>
-                      </div>
-                    </div>
+        <button
+          onClick={loadClassroomData}
+          className="text-xs font-semibold text-cyan-600 hover:text-cyan-700 px-3 py-1.5 rounded-lg hover:bg-cyan-50 transition-colors"
+        >
+          Refresh Sessions
+        </button>
+      </div>
 
-                    <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between text-slate-300">
-                        <span className="text-slate-500">Instructor:</span>
-                        <strong className="text-slate-200">{c.teacher_name || 'Dr. Sarah Connor'}</strong>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-300">
-                        <span className="text-slate-500">Virtual Room:</span>
-                        <span className="font-mono text-cyan-400">{c.room_number || 'Room 701'}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-300">
-                        <span className="text-slate-500">Subject:</span>
-                        <span>{c.subject_name || 'Mathematics'}</span>
-                      </div>
-                    </div>
+      {/* CLASS SESSIONS LISTING */}
+      {loading ? (
+        <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-3">
+          <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-semibold">Loading live classes...</p>
+        </div>
+      ) : classes.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-12 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center mx-auto mb-4">
+            <Radio className="w-8 h-8" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-800">No Active Live Sessions</h3>
+          <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+            {isTeacher || isAdmin
+              ? 'Click the "Schedule / Launch Live Class" button to pick a timetable slot and begin teaching your students.'
+              : 'There are currently no active or scheduled live lectures for your grade. Check back during scheduled class hours!'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {classes.map((cls) => {
+            const isLive = cls.status === 'live'
+            const isEnded = cls.status === 'ended'
+
+            return (
+              <div
+                key={cls.id}
+                className={`bg-white rounded-3xl border p-5 transition-all shadow-sm hover:shadow-md flex flex-col justify-between ${
+                  isLive ? 'border-red-500/40 ring-2 ring-red-500/10' : 'border-slate-200/80'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-slate-100 text-slate-700">
+                      Class {cls.grade_number}-{cls.section_name}
+                    </span>
+                    {isLive ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/10 text-red-600 border border-red-500/20">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                        LIVE NOW
+                      </span>
+                    ) : isEnded ? (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500">
+                        Ended
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-600">
+                        Scheduled
+                      </span>
+                    )}
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between">
-                    <div className="text-[11px] text-slate-500 font-mono">
-                      {new Date(c.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
+                  <h3 className="font-bold text-base text-slate-900 group-hover:text-cyan-600 transition-colors line-clamp-1">
+                    {cls.title}
+                  </h3>
 
-                    {isLive ? (
-                      <button
-                        onClick={() => handleJoinClass(c)}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs shadow-lg shadow-rose-600/30 transition-all"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-white" />
-                        Join Call
-                      </button>
-                    ) : c.status === 'scheduled' ? (
-                      <button
-                        onClick={() => handleJoinClass(c)}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs shadow-md shadow-cyan-500/20 transition-all"
-                      >
-                        <Video className="w-3.5 h-3.5" />
-                        {isTeacher || isAdmin ? 'Start Class' : 'Enter Lobby'}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-slate-500 font-medium">Session Ended</span>
+                  <div className="mt-3 space-y-1.5 text-xs text-slate-500">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="w-3.5 h-3.5 text-cyan-600" />
+                      <span className="font-semibold text-slate-700">{cls.subject_name}</span>
+                      {cls.period_number && (
+                        <span className="text-slate-400">&bull; Period {cls.period_number}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <GraduationCap className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Instructor: {cls.teacher_name || 'Assigned Teacher'}</span>
+                    </div>
+                    {cls.room_number && (
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Assigned Room: {cls.room_number}</span>
+                      </div>
                     )}
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
 
-      {/* ── SCHEDULE / LAUNCH CLASS MODAL (Teacher Timetable Slot Integrated) ─── */}
+                <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
+                  <div className="text-[11px] text-slate-400 font-medium">
+                    {new Date(cls.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+
+                  {!isEnded ? (
+                    <button
+                      onClick={() => handleJoinClass(cls)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md ${
+                        isLive
+                          ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/20'
+                          : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/20'
+                      }`}
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      {isLive ? 'Join Live Lecture' : (isTeacher || isAdmin) ? 'Start Lecture Now' : 'Join Classroom'}
+                    </button>
+                  ) : (
+                    <span className="text-xs font-semibold text-slate-400 italic">Session Concluded</span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* SCHEDULE MODAL (Strictly Linked to Real Timetable Slots) */}
       {showScheduleModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-extrabold text-white text-base flex items-center gap-2">
-                <Video className="w-5 h-5 text-cyan-400" />
-                Schedule Live Class (Timetable Aligned)
-              </h3>
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-600 flex items-center justify-center font-bold">
+                  <Radio className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Schedule School Live Class</h3>
+                  <p className="text-xs text-slate-500">Pick from your assigned timetable periods</p>
+                </div>
+              </div>
               <button
                 onClick={() => setShowScheduleModal(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleScheduleSubmit} className="space-y-4">
+            <form onSubmit={handleScheduleSubmit} className="mt-5 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Select Your Assigned Teaching Slot (From Master Timetable)
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Assigned Timetable Period & Class
                 </label>
-                <p className="text-[11px] text-slate-500 mb-2">
-                  Only subjects and time periods you are assigned to teach appear here.
-                </p>
-                <select
-                  value={selectedSlotIndex}
-                  onChange={(e) => setSelectedSlotIndex(parseInt(e.target.value))}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 font-mono"
-                >
-                  {teacherSlots.map((slot, idx) => (
-                    <option key={idx} value={idx}>
-                      {slot.grade_name} Sec {slot.section_name} &bull; {slot.subject_name} &bull; Period {slot.period_number} ({slot.start_time} - {slot.end_time})
-                    </option>
-                  ))}
-                </select>
+                {teacherSlots.length === 0 ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                    No scheduled timetable slots found for your profile. Please check school master timetable.
+                  </div>
+                ) : (
+                  <select
+                    value={selectedSlotIndex}
+                    onChange={(e) => setSelectedSlotIndex(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-slate-50 focus:outline-none focus:border-cyan-500"
+                  >
+                    {teacherSlots.map((slot, idx) => (
+                      <option key={idx} value={idx}>
+                        Period {slot.period_number} &bull; {slot.grade_name} &bull; {slot.subject_name} ({slot.start_time} - {slot.end_time})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Lecture Topic / Title (Optional)
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Session Topic / Custom Title (Optional)
                 </label>
                 <input
                   type="text"
+                  placeholder="e.g. Chapter 4: Quadratic Equations & Graphing"
                   value={customTitle}
                   onChange={(e) => setCustomTitle(e.target.value)}
-                  placeholder="e.g. Rational Numbers — Problem Solving Workshop"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-white">Start Live Video Immediately</div>
-                  <div className="text-[11px] text-slate-400">Launch live call and alert students right away</div>
-                </div>
+              <div className="flex items-center gap-3 pt-2">
                 <input
                   type="checkbox"
+                  id="instantLaunch"
                   checked={instantLaunch}
                   onChange={(e) => setInstantLaunch(e.target.checked)}
-                  className="w-5 h-5 accent-cyan-400 rounded cursor-pointer"
+                  className="w-4 h-4 rounded text-cyan-600 accent-cyan-600 cursor-pointer"
                 />
+                <label htmlFor="instantLaunch" className="text-xs font-bold text-slate-700 cursor-pointer">
+                  Launch Live Classroom Immediately (Enter session right away)
+                </label>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowScheduleModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition-colors"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submittingSchedule}
-                  className="px-6 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 text-xs font-black transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50"
+                  disabled={submittingSchedule || teacherSlots.length === 0}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/20 disabled:opacity-50 transition-all flex items-center gap-2"
                 >
-                  {submittingSchedule ? 'Launching...' : instantLaunch ? '🚀 Launch Class Now' : 'Schedule Class'}
+                  {submittingSchedule ? 'Scheduling...' : instantLaunch ? 'Start Live Class' : 'Schedule Session'}
                 </button>
               </div>
             </form>

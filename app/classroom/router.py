@@ -1,7 +1,7 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.classroom.schemas import LiveClassCreate, LiveClassRead, TeacherTimetableSlotRead
@@ -19,6 +19,61 @@ from app.platform.database import get_session
 
 
 router = APIRouter(prefix="/api/v1/classroom", tags=["classroom"])
+
+
+# ── In-Memory Real-Time Room WebSocket Manager ─────────────────────────────────
+class RoomConnectionManager:
+    def __init__(self):
+        self.active_rooms: Dict[str, Set[WebSocket]] = {}
+
+    async def connect(self, room_id: str, websocket: WebSocket):
+        await websocket.accept()
+        if room_id not in self.active_rooms:
+            self.active_rooms[room_id] = set()
+        self.active_rooms[room_id].add(websocket)
+        print(f"[WS] Peer joined room {room_id}. Total peers in room: {len(self.active_rooms[room_id])}")
+
+    def disconnect(self, room_id: str, websocket: WebSocket):
+        if room_id in self.active_rooms:
+            self.active_rooms[room_id].discard(websocket)
+            if not self.active_rooms[room_id]:
+                del self.active_rooms[room_id]
+        print(f"[WS] Peer disconnected from room {room_id}")
+
+    async def broadcast(self, room_id: str, message: dict, sender: Optional[WebSocket] = None):
+        if room_id in self.active_rooms:
+            for connection in list(self.active_rooms[room_id]):
+                if connection != sender:
+                    try:
+                        await connection.send_json(message)
+                    except Exception:
+                        pass
+
+
+room_manager = RoomConnectionManager()
+
+
+@router.websocket("/ws/{room_id}")
+async def classroom_websocket_endpoint(websocket: WebSocket, room_id: str):
+    """
+    High-speed real-time WebSocket channel for:
+    - Real-time whiteboard vector synchronization
+    - Cross-browser in-call chat
+    - Live polls broadcasting & voting
+    - Floating reaction emojis
+    - WebRTC signaling (SDP offer/answer, ICE candidates)
+    """
+    await room_manager.connect(room_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            # Broadcast the signal/message to all other peers in this room
+            await room_manager.broadcast(room_id, data, sender=websocket)
+    except WebSocketDisconnect:
+        room_manager.disconnect(room_id, websocket)
+    except Exception as e:
+        print(f"[WS ERROR] {e}")
+        room_manager.disconnect(room_id, websocket)
 
 
 @router.get("/teacher-slots", response_model=List[TeacherTimetableSlotRead])
