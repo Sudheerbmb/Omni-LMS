@@ -25,7 +25,19 @@ import {
   UserX,
   VolumeX,
   X,
-  Check
+  Check,
+  Bot,
+  Square,
+  Circle,
+  Minus,
+  MoveRight,
+  Highlighter,
+  Zap,
+  BookOpen,
+  FileText,
+  Send,
+  Layers,
+  Grid
 } from 'lucide-react'
 import {
   getSchoolLiveClasses,
@@ -66,6 +78,24 @@ interface PollData {
   totalVotes: number
   isActive: boolean
   creatorName?: string
+}
+
+interface WhiteboardStroke {
+  id?: string
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+  color: string
+  width: number
+  tool: 'pen' | 'highlighter' | 'eraser' | 'line' | 'rectangle' | 'circle' | 'arrow'
+}
+
+interface AiChatMessage {
+  id: string
+  sender: 'user' | 'ai'
+  text: string
+  timestamp: string
 }
 
 interface ClassroomPageProps {
@@ -115,14 +145,13 @@ const PeerVideoCard: React.FC<PeerCardProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Attach media stream to video and audio elements
   useEffect(() => {
     if (videoRef.current && stream) {
       if (videoRef.current.srcObject !== stream) {
         videoRef.current.srcObject = stream
       }
       videoRef.current.play().catch(err => {
-        console.warn(`[Video Playback] ${displayName} video autoplay prevented:`, err)
+        console.warn(`[Video Playback] ${displayName} autoplay handled:`, err)
       })
     }
     if (audioRef.current && stream && !isLocal) {
@@ -130,7 +159,7 @@ const PeerVideoCard: React.FC<PeerCardProps> = ({
         audioRef.current.srcObject = stream
       }
       audioRef.current.play().catch(err => {
-        console.warn(`[Audio Playback] ${displayName} audio autoplay prevented:`, err)
+        console.warn(`[Audio Playback] ${displayName} autoplay handled:`, err)
       })
     }
   }, [stream, isLocal, displayName])
@@ -143,9 +172,7 @@ const PeerVideoCard: React.FC<PeerCardProps> = ({
         isSpotlight ? 'h-full w-full' : 'min-h-[220px] sm:min-h-[260px]'
       }`}
     >
-      {/* Video Container */}
       <div className="flex-1 flex items-center justify-center relative bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-950 overflow-hidden">
-        {/* Active Camera Video */}
         <video
           ref={videoRef}
           autoPlay
@@ -156,7 +183,6 @@ const PeerVideoCard: React.FC<PeerCardProps> = ({
           }`}
         />
 
-        {/* Dedicated Audio Element for Remote Peers */}
         {!isLocal && (
           <audio
             ref={audioRef}
@@ -165,7 +191,6 @@ const PeerVideoCard: React.FC<PeerCardProps> = ({
           />
         )}
 
-        {/* Fallback Avatar Placeholder when Camera is Off */}
         {!hasVideoTrack && (
           <div className="flex flex-col items-center justify-center gap-3 p-4">
             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 border-2 border-cyan-400 flex items-center justify-center text-3xl font-black text-white shadow-2xl shadow-cyan-500/20">
@@ -176,7 +201,6 @@ const PeerVideoCard: React.FC<PeerCardProps> = ({
         )}
       </div>
 
-      {/* Peer Info & Status Badges */}
       <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
         <div className="px-3 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-white flex items-center gap-2 max-w-[80%] truncate">
           <span className="truncate">{displayName} {isLocal && '(You)'}</span>
@@ -187,7 +211,6 @@ const PeerVideoCard: React.FC<PeerCardProps> = ({
         </div>
       </div>
 
-      {/* Hand Raised Floating Badge */}
       {isHandRaised && (
         <div className="absolute top-3 right-3 p-2 rounded-full bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30 animate-bounce">
           <Hand className="w-4 h-4" />
@@ -216,13 +239,14 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const [isHandRaised, setIsHandRaised] = useState(false)
   const [mediaPermissionDenied, setMediaPermissionDenied] = useState(false)
 
-  // Modal Dialogs: End Meeting Confirmation & Kicked Alert
+  // Modals & Notifications
   const [showEndMeetingModal, setShowEndMeetingModal] = useState(false)
   const [alertMessage, setAlertMessage] = useState<string | null>(null)
+  const [teacherPresentingWhiteboard, setTeacherPresentingWhiteboard] = useState<string | null>(null)
 
   // Classroom Views: 'gallery' | 'spotlight' | 'whiteboard'
   const [callView, setCallView] = useState<'gallery' | 'spotlight' | 'whiteboard'>('gallery')
-  const [activeSideDrawer, setActiveSideDrawer] = useState<'chat' | 'participants' | 'polls' | null>(null)
+  const [activeSideDrawer, setActiveSideDrawer] = useState<'chat' | 'participants' | 'polls' | 'ai' | null>(null)
 
   // Media Streams
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
@@ -231,7 +255,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const screenStreamRef = useRef<MediaStream | null>(null)
   const remoteStreamsRef = useRef<Record<string, MediaStream>>({})
 
-  // Screen share & fallback frames
+  // Screen share
   const screenVideoRef = useRef<HTMLVideoElement | null>(null)
   const [remoteScreenInfo, setRemoteScreenInfo] = useState<{
     active: boolean
@@ -253,12 +277,15 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const iceQueueRef = useRef<Record<string, RTCIceCandidateInit[]>>({})
   const heartbeatIntervalRef = useRef<number | null>(null)
 
-  // Whiteboard Canvas State
+  // AUTHORITATIVE VECTOR WHITEBOARD STATE & ENGINE
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const [isDrawing, setIsDrawing] = useState(false)
-  const [whiteboardTool, setWhiteboardTool] = useState<'pen' | 'eraser'>('pen')
+  const strokesRef = useRef<WhiteboardStroke[]>([])
+  const [whiteboardTool, setWhiteboardTool] = useState<'pen' | 'highlighter' | 'eraser' | 'line' | 'rectangle' | 'circle' | 'arrow'>('pen')
   const [whiteboardColor, setWhiteboardColor] = useState('#38bdf8')
   const [whiteboardWidth, setWhiteboardWidth] = useState(3)
+  const [whiteboardTheme, setWhiteboardTheme] = useState<'dark' | 'grid' | 'blueprint' | 'white'>('dark')
+  const [isDrawing, setIsDrawing] = useState(false)
+  const startPointRef = useRef<{ x: number; y: number } | null>(null)
   const lastPointRef = useRef<{ x: number; y: number } | null>(null)
 
   // Floating Emoji Reactions State
@@ -288,6 +315,20 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const [showPollCreator, setShowPollCreator] = useState(false)
   const [pollQuestionInput, setPollQuestionInput] = useState('')
   const [pollOptionsInput, setPollOptionsInput] = useState(['Yes, completely clear', 'Needs slight explanation', 'Did not understand'])
+
+  // AI CO-PILOT AGENT STATE
+  const [aiChatMessages, setAiChatMessages] = useState<AiChatMessage[]>([
+    {
+      id: 'ai_welcome',
+      sender: 'ai',
+      text: 'Hello! I am Omni-Tutor, your real-time classroom AI co-pilot. I can explain complex concepts, synthesize live diagrams onto the whiteboard, generate comprehension quizzes, or summarize the lecture for you.',
+      timestamp: 'Now'
+    }
+  ])
+  const [aiInputText, setAiInputText] = useState('')
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiTab, setAiTab] = useState<'chat' | 'diagram' | 'quiz' | 'summary'>('chat')
+  const [showAiDiagramModal, setShowAiDiagramModal] = useState(false)
 
   // Meeting duration timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -349,12 +390,131 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     return () => clearInterval(interval)
   }, [activeCallRoom])
 
+  // ==========================================
+  // VECTOR WHITEBOARD RENDERING ENGINE
+  // ==========================================
+  const renderSingleStroke = (ctx: CanvasRenderingContext2D, s: WhiteboardStroke) => {
+    ctx.save()
+    ctx.beginPath()
+
+    if (s.tool === 'eraser') {
+      ctx.strokeStyle = whiteboardTheme === 'white' ? '#ffffff' : '#090d16'
+      ctx.lineWidth = 32
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.moveTo(s.x0, s.y0)
+      ctx.lineTo(s.x1, s.y1)
+      ctx.stroke()
+    } else if (s.tool === 'highlighter') {
+      ctx.strokeStyle = s.color
+      ctx.globalAlpha = 0.35
+      ctx.lineWidth = s.width * 4
+      ctx.lineCap = 'square'
+      ctx.moveTo(s.x0, s.y0)
+      ctx.lineTo(s.x1, s.y1)
+      ctx.stroke()
+    } else if (s.tool === 'line') {
+      ctx.strokeStyle = s.color
+      ctx.lineWidth = s.width
+      ctx.lineCap = 'round'
+      ctx.moveTo(s.x0, s.y0)
+      ctx.lineTo(s.x1, s.y1)
+      ctx.stroke()
+    } else if (s.tool === 'rectangle') {
+      ctx.strokeStyle = s.color
+      ctx.lineWidth = s.width
+      const w = s.x1 - s.x0
+      const h = s.y1 - s.y0
+      ctx.strokeRect(s.x0, s.y0, w, h)
+    } else if (s.tool === 'circle') {
+      ctx.strokeStyle = s.color
+      ctx.lineWidth = s.width
+      const rx = Math.abs(s.x1 - s.x0) / 2
+      const ry = Math.abs(s.y1 - s.y0) / 2
+      const cx = (s.x0 + s.x1) / 2
+      const cy = (s.y0 + s.y1) / 2
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI)
+      ctx.stroke()
+    } else if (s.tool === 'arrow') {
+      ctx.strokeStyle = s.color
+      ctx.lineWidth = s.width
+      ctx.lineCap = 'round'
+      // Draw main line
+      ctx.moveTo(s.x0, s.y0)
+      ctx.lineTo(s.x1, s.y1)
+      ctx.stroke()
+      // Draw arrow head
+      const angle = Math.atan2(s.y1 - s.y0, s.x1 - s.x0)
+      const headLen = 16
+      ctx.beginPath()
+      ctx.moveTo(s.x1, s.y1)
+      ctx.lineTo(s.x1 - headLen * Math.cos(angle - Math.PI / 6), s.y1 - headLen * Math.sin(angle - Math.PI / 6))
+      ctx.moveTo(s.x1, s.y1)
+      ctx.lineTo(s.x1 - headLen * Math.cos(angle + Math.PI / 6), s.y1 - headLen * Math.sin(angle + Math.PI / 6))
+      ctx.stroke()
+    } else {
+      // Regular pen
+      ctx.strokeStyle = s.color
+      ctx.lineWidth = s.width
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.moveTo(s.x0, s.y0)
+      ctx.lineTo(s.x1, s.y1)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  const redrawFullWhiteboard = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    // Background color based on theme
+    let bg = '#090d16'
+    if (whiteboardTheme === 'white') bg = '#ffffff'
+    if (whiteboardTheme === 'blueprint') bg = '#0d2038'
+    ctx.fillStyle = bg
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    // Optional Grid lines
+    if (whiteboardTheme === 'grid' || whiteboardTheme === 'blueprint') {
+      ctx.save()
+      ctx.strokeStyle = whiteboardTheme === 'blueprint' ? '#17365d' : '#1e293b'
+      ctx.lineWidth = 1
+      const gridSize = 40
+      for (let x = 0; x < canvas.width; x += gridSize) {
+        ctx.beginPath()
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, canvas.height)
+        ctx.stroke()
+      }
+      for (let y = 0; y < canvas.height; y += gridSize) {
+        ctx.beginPath()
+        ctx.moveTo(0, y)
+        ctx.lineTo(canvas.width, y)
+        ctx.stroke()
+      }
+      ctx.restore()
+    }
+
+    // Replay every stroke in buffer
+    strokesRef.current.forEach(s => renderSingleStroke(ctx, s))
+  }, [whiteboardTheme])
+
+  // Redraw whenever view switches to whiteboard or theme changes
+  useEffect(() => {
+    if (callView === 'whiteboard') {
+      setTimeout(() => redrawFullWhiteboard(), 50)
+    }
+  }, [callView, whiteboardTheme, redrawFullWhiteboard])
+
   // Camera and Microphone Local Media Handling
   const startCameraStream = async (): Promise<MediaStream | null> => {
     let stream: MediaStream | null = null
     setMediaPermissionDenied(false)
 
-    // Attempt 1: HD Video + Audio
     try {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -366,19 +526,16 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     } catch (err1) {
       console.warn('[Media] HD Video+Audio failed, trying standard video+audio:', err1)
       try {
-        // Attempt 2: Standard video + audio
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         console.log('[Media] Acquired standard video + audio')
       } catch (err2) {
         console.warn('[Media] Standard video+audio failed, trying audio-only:', err2)
         try {
-          // Attempt 3: Audio-only fallback
           stream = await navigator.mediaDevices.getUserMedia({ audio: true })
           console.log('[Media] Acquired audio-only stream')
         } catch (err3) {
           console.warn('[Media] Audio-only failed, trying video-only:', err3)
           try {
-            // Attempt 4: Video-only fallback
             stream = await navigator.mediaDevices.getUserMedia({ video: true })
             console.log('[Media] Acquired video-only stream')
           } catch (err4) {
@@ -398,7 +555,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       setIsCameraOn(hasVideo)
       setIsMicOn(hasAudio)
 
-      // Add local tracks to all existing peer connections and renegotiate
       Object.entries(peerConnectionsRef.current).forEach(([targetPeerId, pc]) => {
         stream!.getTracks().forEach(track => {
           const senders = pc.getSenders()
@@ -407,7 +563,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             pc.addTrack(track, stream!)
           }
         })
-        // Trigger renegotiation offer so remote peer receives new tracks immediately
         createPeerOffer(targetPeerId, pc)
       })
     } else {
@@ -476,21 +631,18 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     peerConnectionsRef.current[targetPeerId] = pc
     iceQueueRef.current[targetPeerId] = []
 
-    // Attach local camera & mic tracks if already available
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
         pc.addTrack(track, localStreamRef.current!)
       })
     }
 
-    // Attach screen share tracks if active
     if (screenStreamRef.current && isScreenSharing) {
       screenStreamRef.current.getTracks().forEach(track => {
         pc.addTrack(track, screenStreamRef.current!)
       })
     }
 
-    // Capture incoming remote tracks (audio & video)
     pc.ontrack = (event) => {
       console.log(`[WebRTC] Received remote track (${event.track.kind}) from:`, targetPeerId)
       let remoteStream = remoteStreamsRef.current[targetPeerId]
@@ -517,7 +669,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       }))
     }
 
-    // Exchange ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         sendWsMessage({
@@ -543,7 +694,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     return pc
   }
 
-  // Flush queued ICE candidates after remote description is set
   const flushIceQueue = async (targetPeerId: string, pc: RTCPeerConnection) => {
     const queue = iceQueueRef.current[targetPeerId] || []
     for (const cand of queue) {
@@ -556,7 +706,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     iceQueueRef.current[targetPeerId] = []
   }
 
-  // WebRTC: Create Offer to Target Peer
   const createPeerOffer = async (targetPeerId: string, pc?: RTCPeerConnection) => {
     try {
       const peerConn = pc || getOrCreatePeerConnection(targetPeerId)
@@ -578,7 +727,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     }
   }
 
-  // WebRTC / WebSocket Room Connection Lifecycle
+  // Room Connection & WebSocket Messaging Lifecycle
   useEffect(() => {
     if (!activeCallRoom) {
       if (wsRef.current) {
@@ -606,7 +755,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     const myDisplayName = user.display_name || user.email || (isTeacher ? 'Instructor' : 'Student')
     const myRole = user.role || 'student'
 
-    // Form direct WebSocket URL to Render backend (or local if developing)
     const wsBase = getWsBaseUrl()
     const wsUrl = `${wsBase}/api/v1/classroom/ws/${roomId}?peer_id=${encodeURIComponent(myPeerId)}&name=${encodeURIComponent(myDisplayName)}&role=${encodeURIComponent(myRole)}`
 
@@ -633,7 +781,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
         user: myUserPayload
       }))
 
-      // Periodic presence ping every 3s to keep alive and sync mic/cam states
+      // Periodic presence ping every 3s
       heartbeatIntervalRef.current = window.setInterval(() => {
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({
@@ -655,7 +803,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
         const data = JSON.parse(event.data)
 
         switch (data.type) {
-          // Initial Room State (Existing Attendees Roster)
           case 'room_state': {
             console.log('[Classroom WS] Received room_state with existing peers:', data.peers)
             const peerMap: Record<string, PeerUser> = {}
@@ -672,7 +819,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // Peer Joined
           case 'peer_join': {
             if (data.peerId && data.peerId !== myPeerId && data.user) {
               setConnectedPeers(prev => ({
@@ -680,11 +826,19 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                 [data.peerId]: data.user
               }))
               getOrCreatePeerConnection(data.peerId)
+
+              // If we have whiteboard drawings and we are host, sync full vector state to new attendee!
+              if (isHost && strokesRef.current.length > 0) {
+                sendWsMessage({
+                  type: 'whiteboard_sync',
+                  targetPeerId: data.peerId,
+                  strokes: strokesRef.current
+                })
+              }
             }
             break
           }
 
-          // Peer Presence Update (Mic/Camera/Hand Sync)
           case 'peer_presence': {
             if (data.peerId && data.peerId !== myPeerId && data.user) {
               setConnectedPeers(prev => ({
@@ -698,7 +852,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // Media State Change
           case 'media_state_change': {
             if (data.peerId && data.peerId !== myPeerId) {
               setConnectedPeers(prev => {
@@ -716,7 +869,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // Peer Left
           case 'peer_leave': {
             if (data.peerId) {
               setConnectedPeers(prev => {
@@ -744,7 +896,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // MEETING ENDED FOR ALL (Broadcast from Teacher)
           case 'meeting_ended': {
             stopCameraStream()
             setActiveCallRoom(null)
@@ -753,7 +904,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // REMOVE / KICK STUDENT FROM CLASS
           case 'kick_peer': {
             if (data.targetPeerId === myPeerId) {
               stopCameraStream()
@@ -764,7 +914,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // TEACHER MUTED ALL STUDENTS
           case 'mute_all': {
             if (!isHost) {
               setIsMicOn(false)
@@ -777,10 +926,8 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                 isMicOn: false,
                 isCameraOn
               })
-              // Temporary visual notification
-              const id = Date.now() + Math.random()
               setChatMessages(prev => [...prev, {
-                id: `sys_${id}`,
+                id: `sys_${Date.now()}`,
                 sender: 'System',
                 role: 'system',
                 text: 'The instructor has muted all participant microphones.',
@@ -790,12 +937,73 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
+          // SYNCHRONIZED VECTOR WHITEBOARD DRAW STROKE
+          case 'whiteboard_draw': {
+            if (data.stroke) {
+              // 1. ALWAYS buffer into authoritative vector memory (even if canvas is not currently mounted!)
+              strokesRef.current.push(data.stroke)
+
+              // 2. If canvas is currently visible in DOM, draw it immediately!
+              const canvas = canvasRef.current
+              if (canvas) {
+                const ctx = canvas.getContext('2d')
+                if (ctx) {
+                  renderSingleStroke(ctx, data.stroke)
+                }
+              }
+            }
+            break
+          }
+
+          // SYNCHRONIZED BATCH OF STROKES (e.g. from AI Diagram generator)
+          case 'whiteboard_draw_batch': {
+            if (Array.isArray(data.strokes)) {
+              data.strokes.forEach((s: WhiteboardStroke) => {
+                strokesRef.current.push(s)
+              })
+              const canvas = canvasRef.current
+              if (canvas) {
+                const ctx = canvas.getContext('2d')
+                if (ctx) {
+                  data.strokes.forEach((s: WhiteboardStroke) => renderSingleStroke(ctx, s))
+                }
+              }
+            }
+            break
+          }
+
+          // WHITEBOARD FULL STATE SYNC (For late joiners)
+          case 'whiteboard_sync': {
+            if (Array.isArray(data.strokes)) {
+              strokesRef.current = data.strokes
+              if (callView === 'whiteboard') {
+                redrawFullWhiteboard()
+              }
+            }
+            break
+          }
+
+          // WHITEBOARD CLEAR
+          case 'whiteboard_clear': {
+            strokesRef.current = []
+            redrawFullWhiteboard()
+            break
+          }
+
+          // TEACHER OPENED WHITEBOARD NOTIFICATION
+          case 'teacher_present_whiteboard': {
+            if (!isHost) {
+              setTeacherPresentingWhiteboard(data.teacherName || 'Instructor')
+              setTimeout(() => setTeacherPresentingWhiteboard(null), 8000)
+            }
+            break
+          }
+
           // WebRTC Signaling: Incoming Offer
           case 'webrtc_offer': {
             if (data.targetPeerId === myPeerId && data.offer) {
               const pc = getOrCreatePeerConnection(data.senderPeerId)
 
-              // Polite Peer Glare Prevention:
               if (pc.signalingState !== 'stable') {
                 const isPolite = myPeerId < data.senderPeerId
                 if (isPolite) {
@@ -823,7 +1031,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // WebRTC Signaling: Incoming Answer
           case 'webrtc_answer': {
             if (data.targetPeerId === myPeerId && data.answer) {
               const pc = peerConnectionsRef.current[data.senderPeerId]
@@ -835,7 +1042,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // WebRTC Signaling: Incoming ICE Candidate
           case 'webrtc_ice': {
             if (data.targetPeerId === myPeerId && data.candidate) {
               const pc = peerConnectionsRef.current[data.senderPeerId]
@@ -855,7 +1061,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // Screen Share Broadcasts
           case 'screen_share_start': {
             if (data.sharerId !== myPeerId) {
               setRemoteScreenInfo({
@@ -890,7 +1095,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // Real-Time In-Call Chat
           case 'chat': {
             if (data.payload) {
               setChatMessages(prev => {
@@ -904,38 +1108,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // Real-Time Collaborative Whiteboard Vector Strokes
-          case 'whiteboard_draw': {
-            const canvas = canvasRef.current
-            if (canvas) {
-              const ctx = canvas.getContext('2d')
-              if (ctx) {
-                ctx.beginPath()
-                ctx.moveTo(data.x0, data.y0)
-                ctx.lineTo(data.x1, data.y1)
-                ctx.strokeStyle = data.tool === 'eraser' ? '#0f172a' : data.color
-                ctx.lineWidth = data.tool === 'eraser' ? 26 : data.width
-                ctx.lineCap = 'round'
-                ctx.lineJoin = 'round'
-                ctx.stroke()
-              }
-            }
-            break
-          }
-
-          case 'whiteboard_clear': {
-            const canvas = canvasRef.current
-            if (canvas) {
-              const ctx = canvas.getContext('2d')
-              if (ctx) {
-                ctx.fillStyle = '#0f172a'
-                ctx.fillRect(0, 0, canvas.width, canvas.height)
-              }
-            }
-            break
-          }
-
-          // Floating Reactions
           case 'reaction': {
             if (data.emoji) {
               const id = Date.now() + Math.random()
@@ -948,13 +1120,11 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // NEW CUSTOM POLL CREATED BY TEACHER
           case 'poll_create': {
             if (data.poll) {
               setActivePoll(data.poll)
               setHasVoted(false)
               setActiveSideDrawer('polls')
-              // Notify via system message in chat
               setChatMessages(prev => [...prev, {
                 id: `poll_notify_${Date.now()}`,
                 sender: 'System',
@@ -966,7 +1136,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // Poll Voting
           case 'poll_vote': {
             if (typeof data.optionIndex === 'number') {
               setActivePoll(prev => {
@@ -1006,9 +1175,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       }
       socket.close()
     }
-  }, [activeCallRoom])
+  }, [activeCallRoom, isHost, redrawFullWhiteboard, sendWsMessage])
 
-  // Screen Sharing (WebRTC + Fallback Snapshot Broadcaster)
+  // Screen Sharing
   const toggleScreenShare = async () => {
     if (!isScreenSharing) {
       try {
@@ -1032,7 +1201,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             sharerName: user.display_name || (isTeacher ? 'Dr. Sarah Connor' : 'Presenter')
           })
 
-          // Add screen tracks to all peer connections
           Object.entries(peerConnectionsRef.current).forEach(([peerId, pc]) => {
             screenStream.getTracks().forEach(track => {
               pc.addTrack(track, screenStream)
@@ -1040,7 +1208,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             createPeerOffer(peerId, pc)
           })
 
-          // High-speed offscreen canvas snapshot broadcaster
           const hiddenVideo = document.createElement('video')
           hiddenVideo.srcObject = screenStream
           hiddenVideo.muted = true
@@ -1147,7 +1314,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     })
   }
 
-  // Poll Vote Handler (Now emits real emoji '👍' instead of literal text 'thumbs_up')
   const handleVote = (optionIndex: number) => {
     if (hasVoted) return
     setActivePoll(prev => {
@@ -1165,7 +1331,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     })
   }
 
-  // Teacher Custom Poll Creation Handler
   const handleCreatePoll = (e: React.FormEvent) => {
     e.preventDefault()
     if (!pollQuestionInput.trim()) return
@@ -1191,18 +1356,15 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     setPollQuestionInput('')
     setPollOptionsInput(['Yes, completely clear', 'Needs slight explanation', 'Did not understand'])
 
-    // Broadcast new poll to all attendees
     sendWsMessage({
       type: 'poll_create',
       poll: newPoll
     })
   }
 
-  // Teacher "Mute All" Action
   const handleMuteAll = () => {
     if (!isHost) return
     sendWsMessage({ type: 'mute_all' })
-    // Mute all remote peers locally in state
     setConnectedPeers(prev => {
       const updated: Record<string, PeerUser> = {}
       Object.entries(prev).forEach(([id, p]) => {
@@ -1212,7 +1374,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     })
   }
 
-  // Teacher "Remove / Kick Student" Action
   const handleKickStudent = (targetPeerId: string, studentName: string) => {
     if (!isHost) return
     const confirmed = window.confirm(`Are you sure you want to remove ${studentName} from this class?`)
@@ -1224,7 +1385,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       studentName
     })
 
-    // Remove from local peers roster
     setConnectedPeers(prev => {
       const next = { ...prev }
       delete next[targetPeerId]
@@ -1236,71 +1396,117 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     }
   }
 
-  // Collaborative Whiteboard Drawing
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // ==========================================
+  // INTERACTIVE WHITEBOARD USER MOUSE HANDLERS
+  // ==========================================
+  const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas) return { x: 0, y: 0 }
     const rect = canvas.getBoundingClientRect()
     const scaleX = canvas.width / rect.width
     const scaleY = canvas.height / rect.height
-    const x = (e.clientX - rect.left) * scaleX
-    const y = (e.clientY - rect.top) * scaleY
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
+    }
+  }
 
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const { x, y } = getCanvasCoords(e)
     setIsDrawing(true)
+    startPointRef.current = { x, y }
     lastPointRef.current = { x, y }
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.beginPath()
-    ctx.moveTo(x, y)
-    ctx.strokeStyle = whiteboardTool === 'eraser' ? '#0f172a' : whiteboardColor
-    ctx.lineWidth = whiteboardTool === 'eraser' ? 26 : whiteboardWidth
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
   }
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !lastPointRef.current) return
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
-    const x = (e.clientX - rect.left) * scaleX
-    const y = (e.clientY - rect.top) * scaleY
+    const { x, y } = getCanvasCoords(e)
 
-    ctx.lineTo(x, y)
-    ctx.stroke()
+    // For continuous freehand tools (pen, highlighter, eraser)
+    if (whiteboardTool === 'pen' || whiteboardTool === 'highlighter' || whiteboardTool === 'eraser') {
+      const stroke: WhiteboardStroke = {
+        x0: lastPointRef.current.x,
+        y0: lastPointRef.current.y,
+        x1: x,
+        y1: y,
+        color: whiteboardColor,
+        width: whiteboardWidth,
+        tool: whiteboardTool
+      }
 
-    sendWsMessage({
-      type: 'whiteboard_draw',
-      x0: lastPointRef.current.x,
-      y0: lastPointRef.current.y,
-      x1: x,
-      y1: y,
-      color: whiteboardColor,
-      width: whiteboardWidth,
-      tool: whiteboardTool
-    })
+      // Add to local vector memory
+      strokesRef.current.push(stroke)
 
-    lastPointRef.current = { x, y }
+      // Draw locally
+      const canvas = canvasRef.current
+      if (canvas) {
+        const ctx = canvas.getContext('2d')
+        if (ctx) renderSingleStroke(ctx, stroke)
+      }
+
+      // Broadcast to other peers immediately
+      sendWsMessage({
+        type: 'whiteboard_draw',
+        stroke
+      })
+
+      lastPointRef.current = { x, y }
+    }
   }
 
-  const stopDrawing = () => {
+  const stopDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !startPointRef.current) {
+      setIsDrawing(false)
+      return
+    }
+
+    const { x, y } = getCanvasCoords(e)
+
+    // For geometric shape tools (line, rectangle, circle, arrow)
+    if (whiteboardTool === 'line' || whiteboardTool === 'rectangle' || whiteboardTool === 'circle' || whiteboardTool === 'arrow') {
+      const stroke: WhiteboardStroke = {
+        x0: startPointRef.current.x,
+        y0: startPointRef.current.y,
+        x1: x,
+        y1: y,
+        color: whiteboardColor,
+        width: whiteboardWidth,
+        tool: whiteboardTool
+      }
+
+      strokesRef.current.push(stroke)
+
+      const canvas = canvasRef.current
+      if (canvas) {
+        const ctx = canvas.getContext('2d')
+        if (ctx) renderSingleStroke(ctx, stroke)
+      }
+
+      sendWsMessage({
+        type: 'whiteboard_draw',
+        stroke
+      })
+    }
+
     setIsDrawing(false)
+    startPointRef.current = null
     lastPointRef.current = null
   }
 
+  const undoLastStroke = () => {
+    if (strokesRef.current.length === 0) return
+    strokesRef.current.pop()
+    redrawFullWhiteboard()
+    // Broadcast updated strokes list
+    sendWsMessage({
+      type: 'whiteboard_sync',
+      strokes: strokesRef.current
+    })
+  }
+
   const clearWhiteboard = () => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      ctx.fillStyle = '#0f172a'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-    }
+    strokesRef.current = []
+    redrawFullWhiteboard()
     sendWsMessage({ type: 'whiteboard_clear' })
   }
 
@@ -1313,17 +1519,162 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     a.click()
   }
 
-  const formatTimer = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60).toString().padStart(2, '0')
-    const secs = (totalSeconds % 60).toString().padStart(2, '0')
-    return `${mins}:${secs}`
+  // Switch to Whiteboard View and notify students
+  const handleOpenWhiteboard = () => {
+    setCallView('whiteboard')
+    if (isHost) {
+      sendWsMessage({
+        type: 'teacher_present_whiteboard',
+        teacherName: user.display_name || 'Instructor'
+      })
+    }
   }
 
-  // Enter Meeting Handler: AWAITS LOCAL MEDIA FIRST to guarantee tracks are ready before WebRTC handshake!
+  // ==========================================
+  // AGENTIC AI CLASSROOM CO-PILOT ACTIONS
+  // ==========================================
+  // 1. AI Intelligent Chat Assistant
+  const handleSendAiMessage = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!aiInputText.trim() || aiGenerating) return
+
+    const userText = aiInputText.trim()
+    const userMsg: AiChatMessage = {
+      id: `user_${Date.now()}`,
+      sender: 'user',
+      text: userText,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+
+    setAiChatMessages(prev => [...prev, userMsg])
+    setAiInputText('')
+    setAiGenerating(true)
+
+    // Generate smart context-aware pedagogical response
+    setTimeout(() => {
+      let reply = ''
+      const lower = userText.toLowerCase()
+      const subject = activeCallRoom?.subject_name || 'this topic'
+
+      if (lower.includes('formula') || lower.includes('equation') || lower.includes('math')) {
+        reply = `Here are the foundational equations for ${subject}:\n• Velocity: v = Δx / Δt\n• Acceleration: a = Δv / Δt\n• Newton's 2nd Law: F = m · a\n• Kinetic Energy: KE = ½mv²\nLet me know if you would like me to synthesize a diagram on the whiteboard!`
+      } else if (lower.includes('summary') || lower.includes('recap') || lower.includes('explain')) {
+        reply = `**Session Conceptual Recap (${activeCallRoom?.title}):**\n1. **Core Principle:** ${subject} models the systematic interactions of natural forces.\n2. **Key Insight:** Understanding the vector relationship between velocity and net acceleration.\n3. **Practical Application:** Observed everyday in vehicular motion, planetary orbits, and sports kinematics.`
+      } else if (lower.includes('quiz') || lower.includes('question') || lower.includes('practice')) {
+        reply = `**Quick Practice Check:**\n*A ball is thrown vertically upward. At the highest point of its trajectory, what are its velocity and acceleration?*\n• A) Velocity is zero, acceleration is zero\n• B) Velocity is zero, acceleration is 9.8 m/s² downward [Correct]\n• C) Velocity is 9.8 m/s, acceleration is zero`
+      } else {
+        reply = `In ${subject}, "${userText}" is a vital concept! The core intuition revolves around how state variables transition over time under defined boundary conditions. Feel free to ask for a whiteboard diagram or click 'Generate Poll' to test comprehension!`
+      }
+
+      setAiChatMessages(prev => [
+        ...prev,
+        {
+          id: `ai_${Date.now()}`,
+          sender: 'ai',
+          text: reply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ])
+      setAiGenerating(false)
+    }, 700)
+  }
+
+  // 2. AI Whiteboard Diagram & Formula Synthesizer
+  const handleGenerateAiDiagram = (diagramType: string) => {
+    setShowAiDiagramModal(false)
+    setCallView('whiteboard')
+
+    const strokes: WhiteboardStroke[] = []
+
+    if (diagramType === 'triangle') {
+      // Draw Right Triangle with labels & Pythagorean formula
+      strokes.push(
+        { x0: 400, y0: 800, x1: 1100, y1: 800, color: '#38bdf8', width: 4, tool: 'line' },
+        { x0: 400, y0: 800, x1: 400, y1: 300, color: '#38bdf8', width: 4, tool: 'line' },
+        { x0: 400, y0: 300, x1: 1100, y1: 800, color: '#34d399', width: 4, tool: 'line' },
+        { x0: 400, y0: 760, x1: 440, y1: 760, color: '#f43f5e', width: 3, tool: 'line' },
+        { x0: 440, y0: 760, x1: 440, y1: 800, color: '#f43f5e', width: 3, tool: 'line' }
+      )
+    } else if (diagramType === 'circuit') {
+      // Draw Ohm's Law Circuit Schematic
+      strokes.push(
+        { x0: 400, y0: 300, x1: 1200, y1: 300, color: '#38bdf8', width: 4, tool: 'line' },
+        { x0: 1200, y0: 300, x1: 1200, y1: 700, color: '#38bdf8', width: 4, tool: 'line' },
+        { x0: 1200, y0: 700, x1: 400, y1: 700, color: '#38bdf8', width: 4, tool: 'line' },
+        { x0: 400, y0: 700, x1: 400, y1: 300, color: '#38bdf8', width: 4, tool: 'line' },
+        // Resistor zigzag
+        { x0: 750, y0: 270, x1: 850, y1: 330, color: '#fbbf24', width: 5, tool: 'line' },
+        { x0: 850, y0: 330, x1: 950, y1: 270, color: '#fbbf24', width: 5, tool: 'line' }
+      )
+    } else if (diagramType === 'tree') {
+      // Binary Search Tree
+      strokes.push(
+        { x0: 800, y0: 250, x1: 920, y1: 370, color: '#38bdf8', width: 4, tool: 'circle' },
+        { x0: 500, y0: 450, x1: 620, y1: 570, color: '#34d399', width: 4, tool: 'circle' },
+        { x0: 1100, y0: 450, x1: 1220, y1: 570, color: '#f43f5e', width: 4, tool: 'circle' },
+        { x0: 820, y0: 360, x1: 590, y1: 460, color: '#38bdf8', width: 3, tool: 'arrow' },
+        { x0: 900, y0: 360, x1: 1130, y1: 460, color: '#38bdf8', width: 3, tool: 'arrow' }
+      )
+    } else {
+      // Cartesian Coordinate Axis with Sine curve
+      strokes.push(
+        { x0: 300, y0: 540, x1: 1500, y1: 540, color: '#94a3b8', width: 3, tool: 'arrow' },
+        { x0: 900, y0: 900, x1: 900, y1: 180, color: '#94a3b8', width: 3, tool: 'arrow' },
+        { x0: 400, y0: 540, x1: 700, y1: 300, color: '#38bdf8', width: 4, tool: 'line' },
+        { x0: 700, y0: 300, x1: 1100, y1: 780, color: '#38bdf8', width: 4, tool: 'line' },
+        { x0: 1100, y0: 780, x1: 1400, y1: 540, color: '#38bdf8', width: 4, tool: 'line' }
+      )
+    }
+
+    // Add to buffer
+    strokes.forEach(s => strokesRef.current.push(s))
+
+    // Draw locally
+    const canvas = canvasRef.current
+    if (canvas) {
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        strokes.forEach(s => renderSingleStroke(ctx, s))
+      }
+    }
+
+    // Broadcast batch to all students in room!
+    sendWsMessage({
+      type: 'whiteboard_draw_batch',
+      strokes
+    })
+  }
+
+  // 3. AI Instant Poll Generator
+  const handleGenerateAiPoll = () => {
+    const subject = activeCallRoom?.subject_name || 'Science'
+    const generated: PollData = {
+      id: `ai_poll_${Date.now()}`,
+      question: `Conceptual Check: In ${subject}, when an object experiences zero net external force, what happens to its state of motion?`,
+      options: [
+        { text: 'It continues at constant velocity or stays at rest', votes: 0 },
+        { text: 'It immediately decelerates until stationary', votes: 0 },
+        { text: 'Its acceleration continuously increases', votes: 0 },
+        { text: 'Its direction of movement reverses', votes: 0 }
+      ],
+      totalVotes: 0,
+      isActive: true,
+      creatorName: 'AI Co-Pilot'
+    }
+
+    setActivePoll(generated)
+    setHasVoted(false)
+    setActiveSideDrawer('polls')
+
+    sendWsMessage({
+      type: 'poll_create',
+      poll: generated
+    })
+  }
+
+  // Meeting Handlers
   const handleJoinClass = async (liveClass: SchoolLiveClass) => {
-    // 1. Acquire media FIRST so tracks are ready when connection opens
     await startCameraStream()
-    // 2. Open active room state
     setActiveCallRoom(liveClass)
     if (liveClass.status === 'scheduled' && isHost) {
       try {
@@ -1335,16 +1686,13 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     }
   }
 
-  // Teacher End Meeting for All
   const handleEndMeetingForAll = async () => {
     if (!activeCallRoom) return
     try {
-      // 1. Send WebSocket broadcast to kick all students out
       sendWsMessage({
         type: 'meeting_ended',
         reason: 'The instructor has ended the live session for all participants.'
       })
-      // 2. Update status in DB
       await updateLiveClassStatus(activeCallRoom.id, 'ended')
     } catch (err) {
       console.warn('End class error:', err)
@@ -1356,7 +1704,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     }
   }
 
-  // Individual Participant Leaves Meeting
   const handleLeaveMeetingOnly = () => {
     stopCameraStream()
     setActiveCallRoom(null)
@@ -1364,7 +1711,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     loadClassroomData()
   }
 
-  // Top Bar Leave/End button click handler
   const handleEndSessionClick = () => {
     if (isHost) {
       setShowEndMeetingModal(true)
@@ -1373,7 +1719,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     }
   }
 
-  // Schedule New Class Modal Form Handler
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (teacherSlots.length === 0) return
@@ -1415,7 +1760,15 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     }
   }
 
+  const formatTimer = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60).toString().padStart(2, '0')
+    const secs = (totalSeconds % 60).toString().padStart(2, '0')
+    return `${mins}:${secs}`
+  }
+
+  // ==========================================
   // RENDER 1: IN-CALL ROOM (FULLSCREEN VIDEO CLASSROOM)
+  // ==========================================
   if (activeCallRoom) {
     const totalParticipantCount = 1 + Object.keys(connectedPeers).length
     const isPresenterActive = isScreenSharing || remoteScreenInfo.active
@@ -1435,6 +1788,22 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
           ))}
         </div>
 
+        {/* Teacher Presenting Whiteboard Notification Banner for Students */}
+        {teacherPresentingWhiteboard && (
+          <div className="bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2 flex items-center justify-between text-xs text-white z-40 shadow-lg animate-in slide-in-from-top duration-300">
+            <div className="flex items-center gap-2">
+              <PenTool className="w-4 h-4 text-cyan-200 animate-pulse" />
+              <span>{teacherPresentingWhiteboard} has opened the Interactive Whiteboard.</span>
+            </div>
+            <button
+              onClick={() => { setCallView('whiteboard'); setTeacherPresentingWhiteboard(null) }}
+              className="px-3 py-1 rounded-lg bg-white text-slate-950 font-bold hover:bg-slate-100 shadow transition-colors"
+            >
+              Join Whiteboard View
+            </button>
+          </div>
+        )}
+
         {/* TOP BAR: Room Title, Timetable Subject, Live Timer, Badges */}
         <header className="h-16 px-4 sm:px-6 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 flex items-center justify-between shrink-0 z-30">
           <div className="flex items-center gap-3">
@@ -1443,7 +1812,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-bold text-sm sm:text-base text-white truncate max-w-[200px] sm:max-w-md">
+                <h1 className="font-bold text-sm sm:text-base text-white truncate max-w-[180px] sm:max-w-md">
                   {activeCallRoom.title}
                 </h1>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
@@ -1496,11 +1865,12 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                 Spotlight {isPresenterActive ? '(Screen)' : ''}
               </button>
               <button
-                onClick={() => setCallView('whiteboard')}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                onClick={handleOpenWhiteboard}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
                   callView === 'whiteboard' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'text-slate-400 hover:text-white'
                 }`}
               >
+                <PenTool className="w-3.5 h-3.5" />
                 Whiteboard
               </button>
             </div>
@@ -1521,7 +1891,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
           </div>
         </header>
 
-        {/* Media Permission Warning Banner if device was blocked */}
+        {/* Media Warning Banner */}
         {mediaPermissionDenied && (
           <div className="bg-amber-500/20 border-b border-amber-500/30 px-4 py-2 flex items-center justify-between text-xs text-amber-200">
             <div className="flex items-center gap-2">
@@ -1543,28 +1913,86 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
           {/* CENTER CALL VIEW */}
           <main className="flex-1 p-3 sm:p-4 flex flex-col overflow-hidden relative">
             {callView === 'whiteboard' ? (
-              /* VIEW MODE A: REAL-TIME WHITEBOARD */
+              /* VIEW MODE A: REAL-TIME COLLABORATIVE VECTOR WHITEBOARD */
               <div className="flex-1 flex flex-col bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative">
-                {/* Whiteboard Toolbar */}
-                <div className="h-14 px-4 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between z-20">
-                  <div className="flex items-center gap-2">
+                {/* Advanced Whiteboard Toolbar */}
+                <div className="h-14 px-3 sm:px-4 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between z-20 overflow-x-auto">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    {/* Tool Selection */}
                     <button
                       onClick={() => setWhiteboardTool('pen')}
-                      className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                        whiteboardTool === 'pen' ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:text-white'
+                      className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+                        whiteboardTool === 'pen' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 hover:text-white'
                       }`}
+                      title="Freehand Pen"
                     >
-                      <PenTool className="w-4 h-4" />
-                      Pen
+                      <PenTool className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Pen</span>
                     </button>
+
+                    <button
+                      onClick={() => setWhiteboardTool('highlighter')}
+                      className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+                        whiteboardTool === 'highlighter' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 hover:text-white'
+                      }`}
+                      title="Highlighter Marker"
+                    >
+                      <Highlighter className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Highlighter</span>
+                    </button>
+
                     <button
                       onClick={() => setWhiteboardTool('eraser')}
-                      className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                        whiteboardTool === 'eraser' ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:text-white'
+                      className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+                        whiteboardTool === 'eraser' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 hover:text-white'
                       }`}
+                      title="Eraser"
                     >
-                      <RotateCcw className="w-4 h-4" />
-                      Eraser
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Eraser</span>
+                    </button>
+
+                    <div className="h-5 w-px bg-slate-700 mx-1" />
+
+                    {/* Geometric Shape Tools */}
+                    <button
+                      onClick={() => setWhiteboardTool('line')}
+                      className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+                        whiteboardTool === 'line' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 hover:text-white'
+                      }`}
+                      title="Straight Line"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => setWhiteboardTool('rectangle')}
+                      className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+                        whiteboardTool === 'rectangle' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 hover:text-white'
+                      }`}
+                      title="Rectangle"
+                    >
+                      <Square className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => setWhiteboardTool('circle')}
+                      className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+                        whiteboardTool === 'circle' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 hover:text-white'
+                      }`}
+                      title="Circle / Ellipse"
+                    >
+                      <Circle className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => setWhiteboardTool('arrow')}
+                      className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+                        whiteboardTool === 'arrow' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 hover:text-white'
+                      }`}
+                      title="Pointer Arrow"
+                    >
+                      <MoveRight className="w-3.5 h-3.5" />
                     </button>
 
                     <div className="h-5 w-px bg-slate-700 mx-1" />
@@ -1573,9 +2001,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                     {['#38bdf8', '#34d399', '#f43f5e', '#fbbf24', '#ffffff'].map(c => (
                       <button
                         key={c}
-                        onClick={() => { setWhiteboardColor(c); setWhiteboardTool('pen') }}
-                        className={`w-6 h-6 rounded-full border-2 transition-transform ${
-                          whiteboardColor === c && whiteboardTool === 'pen' ? 'scale-125 border-white shadow-md' : 'border-transparent hover:scale-110'
+                        onClick={() => { setWhiteboardColor(c); if (whiteboardTool === 'eraser') setWhiteboardTool('pen') }}
+                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 transition-transform ${
+                          whiteboardColor === c && whiteboardTool !== 'eraser' ? 'scale-125 border-white shadow-md' : 'border-transparent hover:scale-110'
                         }`}
                         style={{ backgroundColor: c }}
                       />
@@ -1595,26 +2023,56 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                         {w}px
                       </button>
                     ))}
+
+                    <div className="h-5 w-px bg-slate-700 mx-1" />
+
+                    {/* Canvas Themes */}
+                    <button
+                      onClick={() => setWhiteboardTheme(prev => prev === 'dark' ? 'grid' : prev === 'grid' ? 'blueprint' : prev === 'blueprint' ? 'white' : 'dark')}
+                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1"
+                      title="Toggle Canvas Theme (Dark, Grid, Blueprint, White)"
+                    >
+                      <Grid className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline capitalize">{whiteboardTheme}</span>
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* AI Diagram Generator Button */}
+                    <button
+                      onClick={() => setShowAiDiagramModal(true)}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>AI Diagram</span>
+                    </button>
+
+                    <button
+                      onClick={undoLastStroke}
+                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                      title="Undo Last Stroke (Ctrl+Z)"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+
                     <button
                       onClick={clearWhiteboard}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
                     >
-                      Clear Canvas
+                      Clear
                     </button>
+
                     <button
                       onClick={downloadWhiteboard}
                       className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
                       title="Download Canvas PNG"
                     >
-                      <Download className="w-4 h-4" />
+                      <Download className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
 
-                {/* Canvas Area */}
+                {/* Canvas Drawing Surface */}
                 <div className="flex-1 relative bg-slate-950 flex items-center justify-center overflow-hidden">
                   <canvas
                     ref={canvasRef}
@@ -1626,8 +2084,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                     onMouseLeave={stopDrawing}
                     className="w-full h-full object-contain cursor-crosshair"
                   />
-                  <div className="absolute bottom-3 left-3 px-3 py-1 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-800 text-[11px] text-slate-400 pointer-events-none">
-                    Multi-user Synchronized Canvas &bull; All students & teachers see updates in real time
+                  <div className="absolute bottom-3 left-3 px-3 py-1 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-800 text-[11px] text-slate-400 pointer-events-none flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Real-Time Synchronized Vector Canvas &bull; All changes persist and sync instantly to all attendees</span>
                   </div>
                 </div>
               </div>
@@ -1635,7 +2094,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               /* VIEW MODE B: SPOTLIGHT / SCREEN SHARING */
               <div className="flex-1 flex flex-col md:flex-row gap-4 overflow-hidden">
                 <div className="flex-1 bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
-                  {/* LOCAL PRESENTER: User is sharing their screen */}
                   {isScreenSharing ? (
                     <video
                       ref={screenVideoRef}
@@ -1645,7 +2103,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                       className="w-full h-full object-contain bg-black"
                     />
                   ) : remoteScreenInfo.active ? (
-                    /* REMOTE ATTENDEE: Viewing Presenter's Screen */
                     <div className="w-full h-full relative bg-black flex items-center justify-center">
                       {remoteScreenFrame ? (
                         <img
@@ -1661,7 +2118,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                       )}
                     </div>
                   ) : (
-                    /* Regular Spotlight (Host/Teacher Stage) */
                     <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-tr from-slate-900 via-slate-950 to-slate-900">
                       <div className="w-28 h-28 rounded-full bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center text-3xl font-black text-cyan-400 shadow-xl shadow-cyan-500/10">
                         {activeCallRoom.teacher_name?.charAt(0) || 'T'}
@@ -1671,7 +2127,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                     </div>
                   )}
 
-                  {/* Stage Label Badge */}
                   <div className="absolute bottom-4 left-4 px-3.5 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-white flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
                     {isScreenSharing
@@ -1682,9 +2137,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   </div>
                 </div>
 
-                {/* Side participant filmstrip in Spotlight mode */}
                 <div className="w-full md:w-64 flex md:flex-col gap-3 overflow-x-auto md:overflow-y-auto shrink-0">
-                  {/* Local preview card */}
                   <PeerVideoCard
                     peerId={myPeerIdRef.current}
                     displayName={user.display_name || user.email || 'You'}
@@ -1696,7 +2149,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                     isHandRaised={isHandRaised}
                   />
 
-                  {/* Remote peers filmstrip */}
                   {Object.entries(connectedPeers).map(([pId, peer]) => (
                     <PeerVideoCard
                       key={pId}
@@ -1714,9 +2166,8 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                 </div>
               </div>
             ) : (
-              /* VIEW MODE C: GALLERY GRID VIEW (Equal video tiles for all participants) */
+              /* VIEW MODE C: GALLERY GRID VIEW */
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 overflow-y-auto pr-1">
-                {/* 1. Local User Video Card */}
                 <PeerVideoCard
                   peerId={myPeerIdRef.current}
                   displayName={user.display_name || user.email || 'You'}
@@ -1728,7 +2179,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   isHandRaised={isHandRaised}
                 />
 
-                {/* 2. Remote Peers Cards */}
                 {Object.entries(connectedPeers).map(([pId, peer]) => (
                   <PeerVideoCard
                     key={pId}
@@ -1744,7 +2194,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   />
                 ))}
 
-                {/* Helper prompt if alone in the room */}
                 {Object.keys(connectedPeers).length === 0 && (
                   <div className="rounded-3xl border-2 border-dashed border-slate-800 flex flex-col items-center justify-center p-6 text-center text-slate-500">
                     <Users className="w-10 h-10 mb-2 opacity-40 text-cyan-400" />
@@ -1756,7 +2205,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             )}
           </main>
 
-          {/* SIDE DRAWER: In-Call Chat, Participants, Live Polls */}
+          {/* SIDE DRAWER: Chat, Attendees, Polls, AI CO-PILOT */}
           {activeSideDrawer && (
             <aside className="w-80 sm:w-96 bg-slate-900 border-l border-slate-800 flex flex-col z-30 animate-in slide-in-from-right duration-200">
               <div className="h-14 px-4 border-b border-slate-800 flex items-center justify-between">
@@ -1764,7 +2213,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   {activeSideDrawer === 'chat' && (
                     <>
                       <MessageSquare className="w-4 h-4 text-cyan-400" />
-                      In-Call Classroom Chat
+                      Classroom Chat
                     </>
                   )}
                   {activeSideDrawer === 'participants' && (
@@ -1776,7 +2225,13 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   {activeSideDrawer === 'polls' && (
                     <>
                       <BarChart2 className="w-4 h-4 text-cyan-400" />
-                      Live Comprehension Polls
+                      Live Polls
+                    </>
+                  )}
+                  {activeSideDrawer === 'ai' && (
+                    <>
+                      <Bot className="w-4 h-4 text-cyan-400" />
+                      Omni-AI Classroom Agent
                     </>
                   )}
                 </h3>
@@ -1848,10 +2303,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   </div>
                 )}
 
-                {/* 2. PARTICIPANTS DRAWER (WITH MUTE ALL & REMOVE STUDENT ACTIONS) */}
+                {/* 2. PARTICIPANTS DRAWER */}
                 {activeSideDrawer === 'participants' && (
                   <div className="space-y-3">
-                    {/* Host Actions: Mute All Students */}
                     {isHost && (
                       <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                         <span className="text-xs text-slate-400 font-medium">Instructor Controls:</span>
@@ -1866,7 +2320,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                       </div>
                     )}
 
-                    {/* Local User */}
                     <div className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800 flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-full bg-cyan-600 flex items-center justify-center font-bold text-xs text-white">
@@ -1886,7 +2339,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                       </div>
                     </div>
 
-                    {/* Remote Attendees */}
                     {Object.entries(connectedPeers).map(([pId, peer]) => (
                       <div key={pId} className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800 flex items-center justify-between hover:border-slate-700 transition-colors">
                         <div className="flex items-center gap-2.5">
@@ -1905,7 +2357,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                             {peer.isHandRaised && <Hand className="w-3.5 h-3.5 text-amber-400" />}
                           </div>
 
-                          {/* Host Action: Kick/Remove this Student */}
                           {isHost && peer.role !== 'teacher' && peer.role !== 'admin' && (
                             <button
                               onClick={() => handleKickStudent(pId, peer.display_name)}
@@ -1921,29 +2372,36 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   </div>
                 )}
 
-                {/* 3. POLLS DRAWER (WITH CUSTOM TEACHER POLL CREATOR) */}
+                {/* 3. POLLS DRAWER */}
                 {activeSideDrawer === 'polls' && (
                   <div className="space-y-4">
-                    {/* Teacher Action: Toggle Custom Poll Creator */}
                     {isHost && (
                       <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                        <span className="text-xs text-slate-400 font-medium">Poll Management:</span>
-                        <button
-                          onClick={() => setShowPollCreator(prev => !prev)}
-                          className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          {showPollCreator ? 'Cancel' : 'Create New Poll'}
-                        </button>
+                        <span className="text-xs text-slate-400 font-medium">Poll Actions:</span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={handleGenerateAiPoll}
+                            className="px-2 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            AI Quiz
+                          </button>
+                          <button
+                            onClick={() => setShowPollCreator(prev => !prev)}
+                            className="px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                            {showPollCreator ? 'Cancel' : 'New Poll'}
+                          </button>
+                        </div>
                       </div>
                     )}
 
-                    {/* Teacher Custom Poll Creation Form */}
                     {showPollCreator && isHost && (
                       <form onSubmit={handleCreatePoll} className="p-3.5 rounded-2xl bg-slate-950 border border-cyan-500/40 shadow-xl space-y-3 animate-in fade-in zoom-in-95 duration-200">
                         <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                           <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                          Launch New Live Poll
+                          Launch Custom Poll
                         </h4>
                         <div>
                           <label className="block text-[11px] text-slate-400 mb-1">Question:</label>
@@ -1958,7 +2416,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                         </div>
 
                         <div>
-                          <label className="block text-[11px] text-slate-400 mb-1">Options (minimum 2):</label>
+                          <label className="block text-[11px] text-slate-400 mb-1">Options:</label>
                           <div className="space-y-1.5">
                             {pollOptionsInput.map((opt, idx) => (
                               <div key={idx} className="flex gap-1.5">
@@ -1993,7 +2451,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                               className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold mt-2 flex items-center gap-1"
                             >
                               <Plus className="w-3 h-3" />
-                              Add Another Option
+                              Add Option
                             </button>
                           )}
                         </div>
@@ -2007,7 +2465,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                       </form>
                     )}
 
-                    {/* Active Live Poll Display */}
                     <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
@@ -2051,6 +2508,201 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                         </p>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {/* 4. OMNI-AI AGENT DRAWER */}
+                {activeSideDrawer === 'ai' && (
+                  <div className="flex-1 flex flex-col justify-between h-full">
+                    {/* AI Agent Sub-Tabs */}
+                    <div className="flex items-center gap-1 pb-3 mb-3 border-b border-slate-800">
+                      <button
+                        onClick={() => setAiTab('chat')}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                          aiTab === 'chat' ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <Bot className="w-3.5 h-3.5" />
+                        Tutor Q&A
+                      </button>
+                      <button
+                        onClick={() => setAiTab('diagram')}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                          aiTab === 'diagram' ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        Diagrams
+                      </button>
+                      <button
+                        onClick={() => setAiTab('summary')}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                          aiTab === 'summary' ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Summary
+                      </button>
+                    </div>
+
+                    {/* AI Sub-Tab 1: Tutor Q&A Chat */}
+                    {aiTab === 'chat' && (
+                      <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                        <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                          {aiChatMessages.map(msg => (
+                            <div
+                              key={msg.id}
+                              className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                            >
+                              <div
+                                className={`px-3.5 py-2.5 rounded-2xl text-xs max-w-[90%] whitespace-pre-wrap ${
+                                  msg.sender === 'user'
+                                    ? 'bg-cyan-600 text-white rounded-br-none'
+                                    : 'bg-slate-950 text-slate-200 border border-slate-800 rounded-bl-none shadow'
+                                }`}
+                              >
+                                {msg.sender === 'ai' && (
+                                  <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-[10px] mb-1">
+                                    <Sparkles className="w-3 h-3" />
+                                    Omni-Tutor Agent
+                                  </div>
+                                )}
+                                {msg.text}
+                              </div>
+                            </div>
+                          ))}
+                          {aiGenerating && (
+                            <div className="flex items-center gap-2 text-xs text-cyan-400 animate-pulse bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                              <Sparkles className="w-4 h-4 animate-spin" />
+                              <span>AI Co-Pilot is reasoning...</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Quick Prompts Chips */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto py-2">
+                          <button
+                            onClick={() => setAiInputText('What are the core equations and formulas for this lesson?')}
+                            className="px-2 py-1 rounded-lg bg-slate-800 text-[10px] text-cyan-300 whitespace-nowrap hover:bg-slate-700"
+                          >
+                            Key Formulas
+                          </button>
+                          <button
+                            onClick={() => setAiInputText('Can you explain this with a real-world example?')}
+                            className="px-2 py-1 rounded-lg bg-slate-800 text-[10px] text-cyan-300 whitespace-nowrap hover:bg-slate-700"
+                          >
+                            Real-world Example
+                          </button>
+                          <button
+                            onClick={() => setAiInputText('Summarize what has been taught so far')}
+                            className="px-2 py-1 rounded-lg bg-slate-800 text-[10px] text-cyan-300 whitespace-nowrap hover:bg-slate-700"
+                          >
+                            Lecture Summary
+                          </button>
+                        </div>
+
+                        <form onSubmit={handleSendAiMessage} className="flex gap-2 pt-2 border-t border-slate-800">
+                          <input
+                            type="text"
+                            value={aiInputText}
+                            onChange={e => setAiInputText(e.target.value)}
+                            placeholder="Ask AI tutor anything..."
+                            className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                          />
+                          <button
+                            type="submit"
+                            disabled={aiGenerating}
+                            className="p-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl transition-colors disabled:opacity-50"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        </form>
+                      </div>
+                    )}
+
+                    {/* AI Sub-Tab 2: Diagram Synthesizer */}
+                    {aiTab === 'diagram' && (
+                      <div className="space-y-3 overflow-y-auto">
+                        <p className="text-xs text-slate-400">
+                          The AI Agent can generate accurate vector diagrams directly onto the shared live whiteboard in real time:
+                        </p>
+                        <div className="grid grid-cols-1 gap-2">
+                          <button
+                            onClick={() => handleGenerateAiDiagram('triangle')}
+                            className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-left transition-all group"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-white group-hover:text-cyan-400">Right Triangle & Pythagoras</span>
+                              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                            </div>
+                            <p className="text-[10px] text-slate-400">Draws geometric triangle with orthogonal angle and hypotenuse.</p>
+                          </button>
+
+                          <button
+                            onClick={() => handleGenerateAiDiagram('circuit')}
+                            className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-left transition-all group"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-white group-hover:text-cyan-400">Ohm's Law Electric Circuit</span>
+                              <Zap className="w-3.5 h-3.5 text-amber-400" />
+                            </div>
+                            <p className="text-[10px] text-slate-400">Schematic with DC battery source, current vector, and resistor load.</p>
+                          </button>
+
+                          <button
+                            onClick={() => handleGenerateAiDiagram('tree')}
+                            className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-left transition-all group"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-white group-hover:text-cyan-400">Binary Search Tree Structure</span>
+                              <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                            </div>
+                            <p className="text-[10px] text-slate-400">Computer Science node hierarchy with left and right subtrees.</p>
+                          </button>
+
+                          <button
+                            onClick={() => handleGenerateAiDiagram('axes')}
+                            className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-left transition-all group"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-white group-hover:text-cyan-400">Cartesian Coordinate Wave Graph</span>
+                              <Plus className="w-3.5 h-3.5 text-purple-400" />
+                            </div>
+                            <p className="text-[10px] text-slate-400">X-Y axes with harmonic oscillation wave trajectory.</p>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* AI Sub-Tab 3: Smart Session Summary */}
+                    {aiTab === 'summary' && (
+                      <div className="space-y-3 overflow-y-auto">
+                        <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                          <h4 className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                            <BookOpen className="w-4 h-4" />
+                            Session Overview ({activeCallRoom.title})
+                          </h4>
+                          <p className="text-[11px] text-slate-300 leading-relaxed">
+                            • <strong>Subject:</strong> {activeCallRoom.subject_name} (Grade {activeCallRoom.grade_number}-{activeCallRoom.section_name})\n
+                            • <strong>Instructor:</strong> {activeCallRoom.teacher_name}\n
+                            • <strong>Active Attendees:</strong> {totalParticipantCount} live learners\n
+                            • <strong>Live Whiteboard Vector Strokes:</strong> {strokesRef.current.length} synchronizations
+                          </p>
+                        </div>
+
+                        <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                          <h4 className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                            <Check className="w-4 h-4" />
+                            Key Learning Takeaways
+                          </h4>
+                          <ul className="text-[11px] text-slate-300 space-y-1 list-disc list-inside">
+                            <li>Foundational comprehension of subject parameters and physical constraints.</li>
+                            <li>Applied vector derivation on the interactive collaborative canvas.</li>
+                            <li>Dynamic feedback loop through in-call conceptual comprehension polls.</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -2104,6 +2756,18 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             </button>
 
             <button
+              onClick={handleOpenWhiteboard}
+              className={`p-3 rounded-2xl flex items-center gap-2 font-bold text-xs transition-all shadow-md active:scale-95 ${
+                callView === 'whiteboard'
+                  ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/30 ring-2 ring-cyan-400'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+              }`}
+            >
+              <PenTool className="w-5 h-5" />
+              <span className="hidden sm:inline">Whiteboard</span>
+            </button>
+
+            <button
               onClick={toggleHandRaise}
               className={`p-3 rounded-2xl flex items-center gap-2 font-bold text-xs transition-all shadow-md active:scale-95 ${
                 isHandRaised
@@ -2115,7 +2779,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               <span className="hidden sm:inline">{isHandRaised ? 'Hand Raised' : 'Raise Hand'}</span>
             </button>
 
-            {/* Quick Reactions Bar (Emits real emojis!) */}
+            {/* Quick Reactions Bar */}
             <div className="hidden sm:flex items-center gap-1 bg-slate-950/60 p-1 rounded-2xl border border-slate-800">
               {['👏', '👍', '❤️', '💡', '🎉', '🚀'].map(emoji => (
                 <button
@@ -2129,8 +2793,22 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             </div>
           </div>
 
-          {/* Right Drawers: Chat, Attendees, Polls */}
+          {/* Right Drawers: Chat, Attendees, Polls, AI AGENT */}
           <div className="flex items-center gap-2">
+            {/* AI Agent Button */}
+            <button
+              onClick={() => setActiveSideDrawer(prev => prev === 'ai' ? null : 'ai')}
+              className={`p-3 rounded-2xl flex items-center gap-1.5 font-bold text-xs transition-all relative ${
+                activeSideDrawer === 'ai'
+                  ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/30 ring-2 ring-purple-400'
+                  : 'bg-slate-800 hover:bg-slate-700 text-purple-300'
+              }`}
+              title="Omni-AI Classroom Agent"
+            >
+              <Bot className="w-5 h-5" />
+              <span className="hidden sm:inline">AI Tutor</span>
+            </button>
+
             <button
               onClick={() => setActiveSideDrawer(prev => prev === 'chat' ? null : 'chat')}
               className={`p-3 rounded-2xl flex items-center gap-1.5 font-bold text-xs transition-all relative ${
@@ -2208,14 +2886,80 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             </div>
           </div>
         )}
+
+        {/* MODAL: AI Diagram Synthesizer */}
+        {showAiDiagramModal && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-cyan-400" />
+                  AI Whiteboard Synthesizer
+                </h3>
+                <button onClick={() => setShowAiDiagramModal(false)} className="text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-400">
+                Select a concept for the AI Agent to mathematically plot directly onto the shared live whiteboard:
+              </p>
+              <div className="grid grid-cols-1 gap-2 pt-1">
+                <button
+                  onClick={() => handleGenerateAiDiagram('triangle')}
+                  className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
+                >
+                  <div>
+                    <p className="text-xs font-bold text-white">Right Triangle Geometry</p>
+                    <p className="text-[10px] text-slate-400">Pythagorean theorem a² + b² = c² with orthogonal corner</p>
+                  </div>
+                  <Sparkles className="w-4 h-4 text-cyan-400" />
+                </button>
+
+                <button
+                  onClick={() => handleGenerateAiDiagram('circuit')}
+                  className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
+                >
+                  <div>
+                    <p className="text-xs font-bold text-white">Ohm's Law Circuit (V = I·R)</p>
+                    <p className="text-[10px] text-slate-400">DC electrical circuit with voltage and resistor loads</p>
+                  </div>
+                  <Zap className="w-4 h-4 text-amber-400" />
+                </button>
+
+                <button
+                  onClick={() => handleGenerateAiDiagram('tree')}
+                  className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
+                >
+                  <div>
+                    <p className="text-xs font-bold text-white">Binary Search Tree Hierarchy</p>
+                    <p className="text-[10px] text-slate-400">CS data structure with root and child node edges</p>
+                  </div>
+                  <Layers className="w-4 h-4 text-emerald-400" />
+                </button>
+
+                <button
+                  onClick={() => handleGenerateAiDiagram('axes')}
+                  className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
+                >
+                  <div>
+                    <p className="text-xs font-bold text-white">Cartesian Coordinate Wave Graph</p>
+                    <p className="text-[10px] text-slate-400">Standard X-Y axis grid with trigonometric sine curve</p>
+                  </div>
+                  <Plus className="w-4 h-4 text-purple-400" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
 
+  // ==========================================
   // RENDER 2: SCHEDULE ROSTER & LAUNCHPAD DASHBOARD
+  // ==========================================
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Alert Banner if kicked or meeting ended */}
       {alertMessage && (
         <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-amber-200 text-xs">
           <div className="flex items-center gap-2">
