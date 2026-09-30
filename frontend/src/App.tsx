@@ -22,6 +22,7 @@ import { OrganizationsPage } from './pages/OrganizationsPage'
 import { CodingPage } from './pages/CodingPage'
 import { ClassroomPage } from './pages/ClassroomPage'
 import { AdminPage } from './pages/AdminPage'
+import { TimetablePage } from './pages/TimetablePage'
 
 export function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('lms_access_token'))
@@ -244,6 +245,7 @@ export function App() {
           {currentTab === 'overview' && (
             <DashboardPage user={user} summary={dashboardSummary} setCurrentTab={setCurrentTab} />
           )}
+          {currentTab === 'timetable' && <TimetablePage user={user} />}
           {currentTab === 'courses' && <CoursesPage user={user} />}
           {currentTab === 'assessments' && <AssessmentsPage user={user} />}
           {currentTab === 'assignments' && <AssignmentsPage user={user} />}

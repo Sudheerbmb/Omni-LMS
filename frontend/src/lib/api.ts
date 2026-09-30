@@ -155,3 +155,95 @@ export const rejectUser = (userId: string) =>
   request<{ id: string; status: string }>(`/api/v1/admin/users/${userId}/reject`, { method: 'POST' })
 export const getNotifications = () => request<Notification[]>('/api/v1/notifications')
 
+// ── Timetable Types & API ──────────────────────────────────────────────────
+export type TimetableSlot = {
+  id: string
+  day_of_week: string
+  period_number: number
+  start_time: string
+  end_time: string
+  slot_type: 'assembly' | 'lecture' | 'recess' | 'lunch' | 'sports' | 'lab' | 'dispersal'
+  room_or_venue: string
+  section_id: string
+  section_name?: string
+  grade_name?: string
+  subject_id?: string
+  subject_name?: string
+  subject_code?: string
+  subject_color?: string
+  teacher_id?: string
+  teacher_name?: string
+}
+
+export type SchoolSection = {
+  id: string
+  grade_id: string
+  name: string
+  room_number: string
+}
+
+export type SchoolGrade = {
+  id: string
+  grade_number: number
+  name: string
+  academic_year: string
+  sections: SchoolSection[]
+}
+
+export type TeacherProfile = {
+  id: string
+  user_id: string
+  display_name: string
+  email: string
+  employee_id: string
+  qualification: string
+  max_daily_periods: number
+  rating_avg: number
+  complaint_count: number
+  skills: string[]
+  active_restrictions: Array<{
+    id: string
+    section: string
+    subject: string
+    reason: string
+    is_active: boolean
+  }>
+}
+
+export type TimetableGenerationResult = {
+  status: string
+  academic_year: string
+  total_slots_scheduled: number
+  total_sections: number
+  ground_capacity_complied: boolean
+  autonomous_decisions: string[]
+  audit_summary: string
+}
+
+export const getGrades = () => request<SchoolGrade[]>('/api/v1/timetable/grades')
+export const getTimetableGrid = (params?: { section_id?: string; grade_id?: string; teacher_id?: string; day_of_week?: string }) => {
+  const query = new URLSearchParams()
+  if (params?.section_id) query.set('section_id', params.section_id)
+  if (params?.grade_id) query.set('grade_id', params.grade_id)
+  if (params?.teacher_id) query.set('teacher_id', params.teacher_id)
+  if (params?.day_of_week) query.set('day_of_week', params.day_of_week)
+  const qs = query.toString()
+  return request<TimetableSlot[]>(`/api/v1/timetable/grid${qs ? `?${qs}` : ''}`)
+}
+export const generateTimetable = () =>
+  request<TimetableGenerationResult>('/api/v1/timetable/generate', { method: 'POST' })
+export const seedTimetableDefaults = () =>
+  request<{ status: string; message: string; data: any }>('/api/v1/timetable/seed-defaults', { method: 'POST' })
+export const getTeachersWithFeedback = () => request<TeacherProfile[]>('/api/v1/timetable/teachers')
+export const submitTeacherFeedback = (payload: {
+  teacher_id: string
+  section_id: string
+  subject_id: string
+  rating: number
+  category?: string
+  comments: string
+}) => request<any>('/api/v1/timetable/feedback', { method: 'POST', body: JSON.stringify(payload) })
+export const toggleTeacherRestriction = (restrictionId: string) =>
+  request<{ status: string; restriction_id: string; is_active: boolean }>(`/api/v1/timetable/restrictions/${restrictionId}/toggle`, { method: 'POST' })
+
+

@@ -38,6 +38,8 @@ from app.platform.database import init_database
 from app.platform.errors import unhandled_exception_handler
 from app.platform.logging import configure_logging
 from app.tenancy.router import router as tenancy_router
+from app.timetable import models as timetable_models  # noqa: F401
+from app.timetable.router import router as timetable_router
 from app.vimeo import upload_zoom_recording
 from app.tenancy import models as tenancy_models  # noqa: F401
 
@@ -80,6 +82,7 @@ app.include_router(certification_router)
 app.include_router(classroom_router)
 app.include_router(coding_router)
 app.include_router(communication_router)
+app.include_router(timetable_router)
 
 ZOOM_SECRET_TOKEN = settings.zoom_secret_token or os.getenv("ZOOM_SECRET_TOKEN")
 

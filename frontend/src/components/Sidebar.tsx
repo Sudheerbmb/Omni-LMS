@@ -9,7 +9,8 @@ import {
   Code2, 
   Video, 
   Users, 
-  LogOut
+  LogOut,
+  CalendarDays
 } from 'lucide-react'
 
 type SidebarProps = {
@@ -27,6 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const navItems = [
     { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'timetable', label: 'AI Timetable (1-10)', icon: CalendarDays },
     { id: 'courses', label: 'Course Catalog', icon: BookOpen },
     { id: 'assessments', label: 'Assessments & Quizzes', icon: CheckSquare },
     { id: 'assignments', label: 'Assignments Desk', icon: FileText },

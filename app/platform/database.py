@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+﻿from collections.abc import AsyncIterator
 
 from sqlalchemy import Connection, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -7,7 +7,7 @@ from app.platform.config import settings
 from app.platform.models import Base
 
 
-# ── Engine & session factory ──────────────────────────────────────────────────
+# â”€â”€ Engine & session factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 _engine_kwargs: dict = {"pool_pre_ping": True}
 
@@ -29,7 +29,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
-# ── Schema initialisation (development only) ──────────────────────────────────
+# â”€â”€ Schema initialisation (development only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def init_database() -> None:
     """Create all tables and bootstrap the admin account (dev mode only)."""
@@ -48,6 +48,7 @@ async def init_database() -> None:
     import app.learning.models  # noqa: F401
     import app.notifications.models  # noqa: F401
     import app.tenancy.models  # noqa: F401
+    import app.timetable.models  # noqa: F401
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -137,3 +138,4 @@ async def _bootstrap_admin() -> None:
             email_verified=True,
         ))
         await session.commit()
+
