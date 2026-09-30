@@ -26,9 +26,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userRole = 'student',
   onLogout
 }) => {
+  const timetableLabel = userRole === 'admin' 
+    ? 'AI Timetable Engine' 
+    : userRole === 'teacher' 
+    ? 'My Teaching Timetable' 
+    : 'Class Timetable'
+
   const navItems = [
     { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'timetable', label: 'AI Timetable (1-10)', icon: CalendarDays },
+    { id: 'timetable', label: timetableLabel, icon: CalendarDays },
     { id: 'courses', label: 'Course Catalog', icon: BookOpen },
     { id: 'assessments', label: 'Assessments & Quizzes', icon: CheckSquare },
     { id: 'assignments', label: 'Assignments Desk', icon: FileText },
