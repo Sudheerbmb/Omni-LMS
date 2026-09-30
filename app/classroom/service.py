@@ -163,7 +163,16 @@ async def get_school_live_classes(
             target_grade = 9
 
     if user.role == "student":
-        query = query.where(LiveClass.grade_number == target_grade)
+        if grade_number is not None:
+            query = query.where(LiveClass.grade_number == grade_number)
+        else:
+            # Show scheduled classes for their grade + ALL currently LIVE active lectures school-wide
+            query = query.where(
+                or_(
+                    LiveClass.grade_number == target_grade,
+                    LiveClass.status == "live",
+                )
+            )
     elif user.role == "teacher":
         query = query.where(
             or_(
