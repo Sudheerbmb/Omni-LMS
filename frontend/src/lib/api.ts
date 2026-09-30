@@ -797,7 +797,11 @@ export interface ClassAiSummaryData {
   }>
 }
 
-export const askClassAiDoubt = (classId: string, question: string) =>
+export const askClassAiDoubt = (
+  classId: string,
+  question: string,
+  meta?: { title?: string; subject?: string; grade?: any }
+) =>
   request<{
     class_id: string
     question: string
@@ -806,7 +810,12 @@ export const askClassAiDoubt = (classId: string, question: string) =>
     grade: number
   }>(`/api/v1/classroom/classes/${classId}/ai-doubt`, {
     method: 'POST',
-    body: JSON.stringify({ question })
+    body: JSON.stringify({
+      question,
+      title: meta?.title,
+      subject: meta?.subject,
+      grade: meta?.grade
+    })
   })
 
 export const getClassAiSummary = (classId: string) =>

@@ -25,9 +25,12 @@ export interface ClassInfo {
   id?: string
   title?: string
   subject?: string
+  subject_name?: string
   grade?: string | number
+  grade_number?: number
   teacher_name?: string
   scheduled_start?: string
+  starts_at?: string
   [key: string]: any
 }
 
@@ -63,15 +66,81 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
 
   const classId = classInfo?.id || 'sample-class'
   const classTitle = classInfo?.title || 'Class Lecture Recording'
-  const classSubject = classInfo?.subject || 'Academic Lesson'
-  const classGrade = classInfo?.grade ? String(classInfo.grade) : 'General'
+  
+  // Extract Subject with high accuracy
+  let classSubject = classInfo?.subject || classInfo?.subject_name || ''
+  if (!classSubject) {
+    const tLower = classTitle.toLowerCase()
+    if (tLower.includes('math')) classSubject = 'Mathematics'
+    else if (/science|physics|chem|bio/.test(tLower)) classSubject = 'Science'
+    else if (/english|grammar|literature/.test(tLower)) classSubject = 'English'
+    else if (/history|social|geography/.test(tLower)) classSubject = 'Social Studies'
+    else if (/computer|code|python|java/.test(tLower)) classSubject = 'Computer Science'
+    else classSubject = 'Academic Lesson'
+  }
+
+  // Extract Grade number
+  let classGradeNum: number | null = null
+  if (classInfo?.grade_number !== undefined && classInfo?.grade_number !== null) {
+    classGradeNum = Number(classInfo.grade_number)
+  } else if (classInfo?.grade !== undefined && !isNaN(Number(classInfo.grade))) {
+    classGradeNum = Number(classInfo.grade)
+  } else {
+    const m = classTitle.match(/Grade\s*(\d+)/i)
+    if (m) classGradeNum = parseInt(m[1], 10)
+  }
+  const isPrimary = classGradeNum !== null && classGradeNum <= 3
+  const isMiddle = classGradeNum !== null && classGradeNum >= 4 && classGradeNum <= 8
+  const gradeDisplay = classGradeNum ? `Grade ${classGradeNum}` : (classInfo?.grade ? String(classInfo.grade) : 'All Grades')
+
+  // Generate localized intelligent answer in case of network interruption
+  const synthesizeLocalAnswer = (query: string): string => {
+    const qLower = query.toLowerCase()
+    const isAbout = /what is (the|this) video about|about|summary|recap|overview|what was covered|topics/i.test(qLower)
+    const isFormula = /formula|equation|rules|theorem|math|definition/i.test(qLower)
+    const isQuiz = /quiz|question|test|practice|exam/i.test(qLower)
+    
+    if (isPrimary) {
+      if (isAbout) {
+        return `🌟 **About this Lecture: ${classTitle}**\n\nThis video is a friendly, interactive **Grade ${classGradeNum || 1} ${classSubject}** lesson designed specifically for young learners!\n\nHere is what your teacher covers in this recording:\n• **Fun Basics & Numbers:** Learning numbers and core concepts using familiar objects (apples, balloons, and stars).\n• **Interactive Whiteboard Walkthrough:** The teacher writes and draws on the board step-by-step so you can easily follow along.\n• **Counting & Solving:** Easy practice questions to build your skills and boost your confidence!\n\n💡 *Have a doubt? Feel free to ask me anything about the video, or click the **Quick Quiz** tab to try 2 fun questions!*`
+      }
+      if (isFormula) {
+        return `📐 **Key Rules for Grade ${classGradeNum || 1} ${classSubject}:**\n\n• **Putting Groups Together (Addition +):** When you combine two sets, count them all up (e.g. 2 apples 🍎🍎 + 3 apples 🍎🍎🍎 = 5 apples 🍎🍎🍎🍎🍎)!\n• **Taking Away (Subtraction -):** Count what is left after taking some away!\n• **Counting Order:** Always count steadily: 1, 2, 3, 4, 5... You can use your fingers or draw dots on paper!`
+      }
+      if (isQuiz) {
+        return `🎈 **Fun Practice for Grade ${classGradeNum || 1} ${classSubject}:**\n\n*Question:* If you have 3 blue stars ⭐⭐⭐ and your teacher gives you 2 more ⭐⭐, how many stars do you have in total?\n\n• **A)** 4 stars\n• **B)** 5 stars [Correct! 🎉]\n• **C)** 6 stars\n\n*Explanation:* Count them together: 1, 2, 3... 4, 5! You have 5 stars!`
+      }
+      return `😊 **Hello Grade ${classGradeNum || 1} Learner!**\n\nFor your question: **"${query}"**\n\nIn this ${classSubject} lesson, your teacher showed that we can solve this by taking one easy step at a time! Think of it like building blocks—first see what numbers or pieces you have, follow the teacher's steps on the board, and count your result.\n\nWould you like to try another fun example together?`
+    }
+
+    if (isMiddle) {
+      if (isAbout) {
+        return `📚 **Lecture Overview: ${classTitle} (${gradeDisplay} ${classSubject})**\n\nIn this recorded session, your teacher focuses on establishing clear conceptual understanding and practical problem-solving:\n1. **Core Concept Introduction:** Systematic breakdown of the topic with real-world analogies.\n2. **Whiteboard Walkthrough:** Deriving key steps and solving standard textbook exercises.\n3. **Common Mistakes:** Highlighting tricky spots where students often lose marks in tests.\n4. **Practice Takeaways:** Key methods to remember when revising.`
+      }
+      if (isFormula) {
+        return `📐 **Key Formulas & Principles (${classSubject} - ${gradeDisplay}):**\n\n• **Primary Relationship:** Ensure you know how the primary variables connect and scale.\n• **Working Method:** (1) State knowns and unknowns, (2) Substitute into the core equation, (3) Double check your calculations and units.\n• Check the **AI Summary** tab for full whiteboard equations from this lecture!`
+      }
+      return `Great question regarding **"${query}"**!\n\nIn this ${gradeDisplay} ${classSubject} lecture, the key is understanding how each step follows logically from the previous one. Review the board notes around this section in the video, apply the standard method, and test yourself on the **Quick Quiz** tab!`
+    }
+
+    // High School / General
+    if (isAbout) {
+      return `**Executive Lecture Summary for ${classTitle}:**\n\n1. **Core Subject Focus:** This session explored key foundational principles of ${classSubject} structured for ${gradeDisplay}.\n2. **Theoretical Foundations:** Emphasis was placed on definitions, governing laws, and systemic behavior.\n3. **Worked Examples:** Step-by-step problem solving demonstrated on the board.\n4. **Key Takeaway:** Ensure you understand the underlying mechanisms and test your skills with practice questions.`
+    }
+    if (isFormula) {
+      return `**Key Formulas & Analytical Tools (${classSubject}):**\n\n• **Governing Principle:** State transitions are determined by initial conditions and external forces.\n• **Proportionality Rule:** Verify whether dependent variables scale directly or inversely.\n• **Methodology Tip:** Always write down given variables first, apply the standard formula, and check final units.`
+    }
+    return `Regarding **"${query}"**: In this ${classSubject} lecture for ${gradeDisplay}, the instructor highlighted that understanding how the concepts connect is key to solving test problems. Trace each step from cause to effect, and check the **AI Summary** tab for the step-by-step notes!`
+  }
 
   // Initialize initial welcome message
   useEffect(() => {
     const welcomeMsg: ChatMessage = {
       id: 'init-1',
       sender: 'ai',
-      text: `Hello! I am your AI Classroom Assistant for "${classTitle}".\n\nI have analyzed this recorded lecture. Ask me any doubt about topics covered in this video, formulas mentioned, or concepts you'd like explained step-by-step!`,
+      text: isPrimary
+        ? `👋 Hello! I am your AI Study Buddy for "${classTitle}".\n\nI have watched this recorded lesson with you! Ask me anything about numbers, shapes, or problems the teacher wrote on the board, and I will explain it simply!`
+        : `👋 Hello! I am your AI Classroom Assistant for "${classTitle}".\n\nI have analyzed this recorded lecture. Ask me any doubt about topics covered in this video, formulas mentioned, or concepts you'd like explained step-by-step!`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
     setMessages([welcomeMsg])
@@ -91,54 +160,105 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
       const data = await getClassAiSummary(classId)
       setSummaryData(data)
     } catch (err) {
-      console.warn('Could not load dynamic AI summary, using default synthesis:', err)
-      setSummaryData({
-        class_id: classId,
-        title: classTitle,
-        subject: classSubject,
-        grade: typeof classInfo?.grade === 'number' ? classInfo.grade : 10,
-        overview: `This recorded lecture covers the fundamental concepts, practical demonstrations, and core problem-solving methodologies for ${classTitle} (${classSubject}). Key focus was placed on building intuitive understanding, deriving essential principles, and solving high-frequency questions.`,
-        key_topics: [
-          'Core Concept Exploration & Theory',
-          'Worked Examples & Problem Solving',
-          'Interactive Whiteboard Derivations',
-          'Common Student Doubts & Clarifications'
-        ],
-        whiteboard_notes: [
-          'Definition of fundamental variables and equations',
-          'Step-by-step breakdown of example problem 1',
-          'Tips to avoid common calculation and reasoning mistakes'
-        ],
-        exam_takeaways: [
-          'Remember the primary formula and boundary conditions',
-          'Practice applying principles to multi-step exam questions',
-          'Review summary notes before the upcoming unit assessment'
-        ],
-        quiz: [
-          {
-            question: `What was the primary focus of this ${classSubject} lecture?`,
-            options: [
-              `Core principles and applications of ${classTitle}`,
-              'Unrelated general knowledge',
-              'Administrative notices only',
-              'Self-study reading session'
-            ],
-            correct_index: 0,
-            explanation: `The lecture focused directly on explaining and demonstrating the principles of ${classTitle}.`
-          },
-          {
-            question: 'What is the recommended next step after reviewing this recorded lecture?',
-            options: [
-              'Forget the notes immediately',
-              'Practice worked examples and verify formulas',
-              'Skip homework assignments',
-              'Avoid asking questions'
-            ],
-            correct_index: 1,
-            explanation: 'Active problem solving right after reviewing the video cements long-term memory.'
-          }
-        ]
-      })
+      console.warn('Could not load dynamic AI summary, using synthesized fallback:', err)
+      if (isPrimary) {
+        setSummaryData({
+          class_id: classId,
+          title: classTitle,
+          subject: classSubject,
+          grade: classGradeNum || 1,
+          overview: `This recorded video is a fun and interactive Grade ${classGradeNum || 1} ${classSubject} class! The teacher uses clear whiteboard demonstrations, friendly visual examples, and step-by-step counting to make learning enjoyable and easy to remember.`,
+          key_topics: [
+            `Introduction to Grade ${classGradeNum || 1} ${classSubject} Fundamentals`,
+            'Counting & Visual Problem Walkthroughs',
+            "Teacher's Interactive Whiteboard Drawings & Demonstrations",
+            'Fun Practice Questions with Immediate Teacher Feedback'
+          ],
+          whiteboard_notes: [
+            'Visual Counting: Count items one-by-one with dots or pictures.',
+            'Basic Operations: Putting groups together and finding total amounts.',
+            'Practice Tip: Say numbers out loud while writing them down.'
+          ],
+          exam_takeaways: [
+            'Practice counting objects around your house (toys, books, pencils).',
+            'Remember to write numbers carefully and clearly.',
+            'Try the 2 practice questions in the Quick Quiz tab!'
+          ],
+          quiz: [
+            {
+              question: `What was the main topic of this Grade ${classGradeNum || 1} ${classSubject} lesson?`,
+              options: [
+                `Foundational concepts and practice in ${classTitle}`,
+                'College physics',
+                'Silent study with no teacher',
+                'Recess and games only'
+              ],
+              correct_index: 0,
+              explanation: `The lecture focused on teaching and practicing core Grade ${classGradeNum || 1} ${classSubject}.`
+            },
+            {
+              question: 'What is the best way to practice what you learned in this video?',
+              options: [
+                'Never look at numbers again',
+                "Try practice problems and review the teacher's board notes",
+                'Skip homework completely',
+                'Close the notebook immediately'
+              ],
+              correct_index: 1,
+              explanation: "Reviewing the board notes and practicing helps remember the lesson!"
+            }
+          ]
+        })
+      } else {
+        setSummaryData({
+          class_id: classId,
+          title: classTitle,
+          subject: classSubject,
+          grade: classGradeNum || 9,
+          overview: `This recorded lecture for ${gradeDisplay} provides in-depth coverage of ${classSubject}, focusing on fundamental definitions, analytical derivations, and practical application.`,
+          key_topics: [
+            `Introduction to ${classSubject} Foundations`,
+            'Core Theoretical Frameworks & Whiteboard Derivations',
+            'Worked Problem Solving & Step-by-Step Methodology',
+            'Common Exam Pitfalls & How to Avoid Them',
+            'Interactive Summary & Key Homework Points'
+          ],
+          whiteboard_notes: [
+            'Governing Law: Fundamental equation and definitions demonstrated during presentation.',
+            'Boundary Conditions: How initial constraints determine the outcome.',
+            'Verification Step: Always check SI units and dimensions.'
+          ],
+          exam_takeaways: [
+            'Memorize the standard scientific / mathematical definitions.',
+            'Be prepared to explain the difference between related core concepts in test questions.',
+            'Practice at least three textbook numerical problems before the next quiz.'
+          ],
+          quiz: [
+            {
+              question: `What was the main analytical principle taught in this ${classSubject} lecture?`,
+              options: [
+                'Structured application of governing laws to solve problems',
+                'Rote memorization without understanding concepts',
+                'Ignoring standard units and dimensions',
+                'None of the above'
+              ],
+              correct_index: 0,
+              explanation: `The lecture emphasized using governing laws methodically to understand ${classSubject}.`
+            },
+            {
+              question: `When approaching questions on ${classSubject}, what was the recommended methodology?`,
+              options: [
+                'Guess the result directly',
+                'List given variables, select governing formula, and verify units',
+                'Skip reading the problem statement carefully',
+                'Omit intermediate steps'
+              ],
+              correct_index: 1,
+              explanation: 'Listing variables, choosing formulas, and checking units guarantees maximum accuracy.'
+            }
+          ]
+        })
+      }
     } finally {
       setIsLoadingSummary(false)
     }
@@ -160,7 +280,11 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
     setIsAsking(true)
 
     try {
-      const res = await askClassAiDoubt(classId, question)
+      const res = await askClassAiDoubt(classId, question, {
+        title: classTitle,
+        subject: classSubject,
+        grade: classGradeNum || gradeDisplay
+      })
       const aiMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
         sender: 'ai',
@@ -169,26 +293,32 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
       }
       setMessages(prev => [...prev, aiMsg])
     } catch (err: any) {
-      const errorMsg: ChatMessage = {
+      const localAnswer = synthesizeLocalAnswer(question)
+      const aiMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
         sender: 'ai',
-        text: `Based on this lecture "${classTitle}", here is the explanation:\n\n${question.includes('summary') || question.includes('summarize') 
-          ? `In this session on ${classTitle}, key principles were systematically broken down with real-time derivations and examples. Make sure to review the core formulas and test your understanding with the Quiz tab!` 
-          : `For "${question}": In ${classSubject}, this topic hinges on understanding the core definitions established in this lecture. Apply the standard formula step-by-step, check boundary conditions, and verify your answer with sample problems.`}`,
+        text: localAnswer,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
-      setMessages(prev => [...prev, errorMsg])
+      setMessages(prev => [...prev, aiMsg])
     } finally {
       setIsAsking(false)
     }
   }
 
-  const quickPrompts = [
-    'Explain the main concept in simple terms',
-    'What are the key formulas and definitions?',
-    'Give me 3 practice tips for exams',
-    'Summarize what was covered in this video'
-  ]
+  const quickPrompts = isPrimary
+    ? [
+        'What is this video about?',
+        'Can you show me a fun counting example?',
+        'What did the teacher write on the board?',
+        'Give me a fun practice puzzle'
+      ]
+    : [
+        'What is this video about?',
+        'Explain the key concept step-by-step',
+        'What are the key formulas and notes?',
+        'Give me 3 practice tips for exams'
+      ]
 
   const handleSelectQuizOption = (qIdx: number, optIdx: number) => {
     setSelectedAnswers(prev => ({ ...prev, [qIdx]: optIdx }))
@@ -207,7 +337,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  {classGrade !== 'General' ? `Grade ${classGrade}` : 'Recorded Class'}
+                  {gradeDisplay}
                 </span>
                 <span className="text-xs font-medium text-slate-400">
                   {classSubject}
@@ -277,10 +407,10 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                     Subject: <strong className="text-slate-200">{classSubject}</strong>
                   </span>
                 </div>
-                {classInfo?.scheduled_start && (
+                {(classInfo?.scheduled_start || classInfo?.starts_at) && (
                   <span className="flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-amber-400" />
-                    {new Date(classInfo.scheduled_start).toLocaleDateString()}
+                    {new Date(classInfo?.scheduled_start || classInfo?.starts_at!).toLocaleDateString()}
                   </span>
                 )}
               </div>
@@ -305,22 +435,22 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                   <button
                     onClick={() => {
                       setActiveTab('doubt')
-                      handleSendDoubt('Can you explain the most challenging part of this lecture step-by-step?')
+                      handleSendDoubt('What is this video about?')
                     }}
                     className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1.5 text-left"
                   >
                     <HelpCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Explain key concept step-by-step</span>
+                    <span>What is this video about?</span>
                   </button>
                   <button
                     onClick={() => {
                       setActiveTab('doubt')
-                      handleSendDoubt('What formulas, equations, or definitions are critical from this lecture?')
+                      handleSendDoubt(isPrimary ? 'What are the key counting rules?' : 'What formulas, equations, or definitions are critical from this lecture?')
                     }}
                     className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-1.5 text-left"
                   >
                     <FileText className="w-3.5 h-3.5 shrink-0" />
-                    <span>Key formulas & notes</span>
+                    <span>{isPrimary ? 'Key rules & examples' : 'Key formulas & notes'}</span>
                   </button>
                   <button
                     onClick={() => setActiveTab('quiz')}
@@ -446,7 +576,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                       type="text"
                       value={inputQuery}
                       onChange={(e) => setInputQuery(e.target.value)}
-                      placeholder="Ask any doubt about this video lecture..."
+                      placeholder={isPrimary ? "Ask any question about this fun lesson..." : "Ask any doubt about this video lecture..."}
                       disabled={isAsking}
                       className="flex-1 bg-slate-800/90 border border-slate-700/80 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-400 focus:outline-none transition"
                     />
@@ -503,7 +633,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                         <div className="rounded-xl bg-slate-800/60 border border-slate-700/60 p-4 space-y-2.5">
                           <div className="flex items-center gap-2 text-xs font-bold text-amber-300 uppercase tracking-wider">
                             <FileText className="w-4 h-4" />
-                            <span>Whiteboard Notes & Key Equations</span>
+                            <span>{isPrimary ? 'Teacher Whiteboard & Practice Notes' : 'Whiteboard Notes & Key Equations'}</span>
                           </div>
                           <div className="space-y-1.5">
                             {summaryData.whiteboard_notes.map((note, i) => (
@@ -521,7 +651,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                         <div className="rounded-xl bg-indigo-950/40 border border-indigo-500/30 p-4 space-y-2.5">
                           <div className="flex items-center gap-2 text-xs font-bold text-indigo-300 uppercase tracking-wider">
                             <CheckCircle2 className="w-4 h-4" />
-                            <span>Exam & Revision Takeaways</span>
+                            <span>{isPrimary ? 'Key Takeaways for Students' : 'Exam & Revision Takeaways'}</span>
                           </div>
                           <div className="space-y-1.5">
                             {summaryData.exam_takeaways.map((takeaway, i) => (

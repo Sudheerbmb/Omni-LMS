@@ -331,19 +331,65 @@ async def upload_class_recording_endpoint(
 class AiDoubtRequest(BaseModel):
     question: str
     timestamp_seconds: Optional[float] = None
+    title: Optional[str] = None
+    subject: Optional[str] = None
+    grade: Optional[Any] = None
 
 
 @router.post("/classes/{class_id}/ai-doubt")
 async def ask_class_ai_doubt(
-    class_id: UUID,
+    class_id: str,
     payload: AiDoubtRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    live_class = await session.scalar(select(LiveClass).where(LiveClass.id == class_id))
-    title = live_class.title if live_class else "Class Lecture"
-    subject = live_class.subject_name if live_class else "Academic Subject"
-    grade = live_class.grade_number or 9
+    live_class = None
+    try:
+        import uuid as _uuid_mod
+        c_uuid = _uuid_mod.UUID(class_id)
+        live_class = await session.scalar(select(LiveClass).where(LiveClass.id == c_uuid))
+    except Exception:
+        pass
+
+    title = payload.title or (live_class.title if live_class else "Class Lecture")
+    subject = payload.subject or (live_class.subject_name if live_class and live_class.subject_name else None)
+    
+    title_lower = title.lower()
+    if not subject:
+        if "math" in title_lower:
+            subject = "Mathematics"
+        elif any(k in title_lower for k in ["science", "physics", "chem", "bio"]):
+            subject = "Science"
+        elif any(k in title_lower for k in ["english", "grammar", "reading"]):
+            subject = "English"
+        elif any(k in title_lower for k in ["history", "social", "geography"]):
+            subject = "Social Studies"
+        elif any(k in title_lower for k in ["computer", "code", "python"]):
+            subject = "Computer Science"
+        else:
+            subject = "Academic Lesson"
+
+    grade_num = None
+    if payload.grade is not None:
+        try:
+            import re
+            m = re.search(r'\d+', str(payload.grade))
+            if m:
+                grade_num = int(m.group(0))
+        except Exception:
+            pass
+    if grade_num is None and live_class and live_class.grade_number:
+        grade_num = live_class.grade_number
+    if grade_num is None:
+        import re
+        m = re.search(r'grade\s*(\d+)', title_lower)
+        if m:
+            grade_num = int(m.group(1))
+        else:
+            grade_num = 1
+
+    is_primary = grade_num is not None and grade_num <= 3
+    is_middle = grade_num is not None and 4 <= grade_num <= 8
 
     question = payload.question.strip()
     answer = None
@@ -360,7 +406,11 @@ async def ask_class_ai_doubt(
                         "messages": [
                             {
                                 "role": "system",
-                                "content": f"You are an encouraging, world-class AI school tutor assisting a Grade {grade} student watching the recorded video lecture '{title}' on {subject}. Provide structured, clear, and step-by-step explanations.",
+                                "content": (
+                                    f"You are a friendly, encouraging school tutor assisting a Grade {grade_num} "
+                                    f"student watching the recorded video lecture '{title}' on {subject}. "
+                                    f"Adapt your tone, vocabulary, and examples specifically for Grade {grade_num} level."
+                                ),
                             },
                             {"role": "user", "content": question},
                         ],
@@ -374,43 +424,210 @@ async def ask_class_ai_doubt(
 
     if not answer:
         lower = question.lower()
-        if any(w in lower for w in ["summary", "recap", "overview", "what was covered", "about"]):
-            answer = f"**Executive Lecture Summary for {title}:**\n\n1. **Core Subject Focus:** This session explored key foundational principles of {subject} structured for Grade {grade}.\n2. **Theoretical Foundations:** Emphasis was placed on definitions, governing laws, and systemic behavior.\n3. **Worked Examples:** Step-by-step problem solving demonstrated on the board.\n4. **Key Takeaway:** Ensure you understand the underlying mechanisms and test your skills with practice questions."
-        elif any(w in lower for w in ["formula", "equation", "math", "theorem", "rule"]):
-            answer = f"**Key Formulas & Analytical Tools ({subject}):**\n\n• **Governing Principle:** State transitions are determined by initial conditions and external forces.\n• **Proportionality Rule:** Verify whether dependent variables scale directly or inversely.\n• **Methodology Tip:** Always write down given variables first, apply the standard formula, and check final units."
-        elif any(w in lower for w in ["quiz", "question", "test", "practice", "exam"]):
-            answer = f"**Practice Comprehension Check for {subject}:**\n\n*Question:* Based on this recorded lecture, what is the first step in solving analytical problems in {subject}?\n\n• **A)** Identify given constraints and apply the governing law [Correct]\n• **B)** Guess an arbitrary value\n• **C)** Skip dimensional verification\n\n*Explanation:* Grade {grade} {subject} requires structured problem identification before applying algebraic computation."
-        elif any(w in lower for w in ["simple", "grade", "child", "easy", "explain simply"]):
-            answer = f"Here is a simple way to think about it! Imagine {subject} as a set of rules for a game. When you change one piece, the other pieces react according to steady, predictable patterns. That is exactly what your teacher demonstrated during this lecture!"
+        is_about_query = any(w in lower for w in ["what is the video about", "what is this video about", "about", "summary", "recap", "overview", "what was covered", "topics"])
+        is_formula_query = any(w in lower for w in ["formula", "equation", "math", "theorem", "rule", "definition"])
+        is_quiz_query = any(w in lower for w in ["quiz", "question", "test", "practice", "exam"])
+        is_simple_query = any(w in lower for w in ["simple", "grade", "child", "easy", "explain simply", "explain"])
+
+        if is_primary:
+            if is_about_query:
+                answer = (
+                    f"🌟 **About this Lecture: {title}**\n\n"
+                    f"This video is a friendly, interactive **Grade {grade_num} {subject}** lesson!\n\n"
+                    f"Here is what your teacher covers in this recording:\n"
+                    f"• **Fun Basics & Numbers:** Learning numbers and core concepts using familiar objects (apples, balloons, and stars).\n"
+                    f"• **Interactive Whiteboard Walkthrough:** The teacher writes and draws on the board step-by-step so you can easily follow along.\n"
+                    f"• **Counting & Solving:** Easy practice questions to build your skills and boost your confidence.\n\n"
+                    f"💡 *Have a doubt? Feel free to ask me anything about the video, or click the **Quick Quiz** tab to try 2 fun questions!*"
+                )
+            elif is_formula_query:
+                answer = (
+                    f"📐 **Key Rules for Grade {grade_num} {subject}:**\n\n"
+                    f"• **Putting Groups Together (Addition +):** When you combine two sets, count them all up (e.g. 2 apples 🍎🍎 + 3 apples 🍎🍎🍎 = 5 apples 🍎🍎🍎🍎🍎)!\n"
+                    f"• **Taking Away (Subtraction -):** Count what is left after taking some away!\n"
+                    f"• **Counting Order:** Always count steadily: 1, 2, 3, 4, 5... You can use your fingers or draw dots on paper!"
+                )
+            elif is_quiz_query:
+                answer = (
+                    f"🎈 **Fun Practice for Grade {grade_num} {subject}:**\n\n"
+                    f"*Question:* If you have 3 blue stars ⭐⭐⭐ and your teacher gives you 2 more ⭐⭐, how many stars do you have in total?\n\n"
+                    f"• **A)** 4 stars\n"
+                    f"• **B)** 5 stars [Correct! 🎉]\n"
+                    f"• **C)** 6 stars\n\n"
+                    f"*Explanation:* Count them together: 1, 2, 3... 4, 5! You have 5 stars!"
+                )
+            else:
+                answer = (
+                    f"😊 **Hello Grade {grade_num} Learner!**\n\n"
+                    f"For your question: **'{question}'**\n\n"
+                    f"In this {subject} lesson, your teacher showed that we can solve this by taking one easy step at a time! "
+                    f"Think of it like building blocks—first see what numbers or pieces you have, follow the teacher's steps on the board, and count your result.\n\n"
+                    f"Would you like to try another fun example together?"
+                )
+        elif is_middle:
+            if is_about_query:
+                answer = (
+                    f"📚 **Lecture Overview: {title} (Grade {grade_num} {subject})**\n\n"
+                    f"In this recorded session, your teacher focuses on establishing clear conceptual understanding and practical problem-solving:\n"
+                    f"1. **Core Concept Introduction:** Systematic breakdown of the topic with real-world analogies.\n"
+                    f"2. **Whiteboard Walkthrough:** Deriving key steps and solving standard textbook exercises.\n"
+                    f"3. **Common Mistakes:** Highlighting tricky spots where students often lose marks in tests.\n"
+                    f"4. **Practice Takeaways:** Key methods to remember when revising."
+                )
+            elif is_formula_query:
+                answer = (
+                    f"📐 **Key Formulas & Principles ({subject} - Grade {grade_num}):**\n\n"
+                    f"• **Primary Relationship:** Ensure you know how the primary variables connect and scale.\n"
+                    f"• **Working Method:** (1) State knowns and unknowns, (2) Substitute into the core equation, (3) Double check your calculations and units.\n"
+                    f"• Check the **AI Summary** tab for full whiteboard equations from this lecture!"
+                )
+            else:
+                answer = (
+                    f"Great question regarding **'{question}'**!\n\n"
+                    f"In this Grade {grade_num} {subject} lecture, the key is understanding how each step follows logically from the previous one. "
+                    f"Review the board notes around this section in the video, apply the standard method, and test yourself on the **Quick Quiz** tab!"
+                )
         else:
-            answer = f"Great question regarding '{question}'! In this {subject} lecture, the instructor highlighted that understanding how the concepts connect is key to solving test problems. Trace each step from cause to effect, and let me know if you would like a practice problem or a step-by-step derivation!"
+            if is_about_query:
+                answer = (
+                    f"**Executive Lecture Summary for {title}:**\n\n"
+                    f"1. **Core Subject Focus:** This session explored key foundational principles of {subject} structured for Grade {grade_num}.\n"
+                    f"2. **Theoretical Foundations:** Emphasis was placed on definitions, governing laws, and systemic behavior.\n"
+                    f"3. **Worked Examples:** Step-by-step problem solving demonstrated on the board.\n"
+                    f"4. **Key Takeaway:** Ensure you understand the underlying mechanisms and test your skills with practice questions."
+                )
+            elif is_formula_query:
+                answer = (
+                    f"**Key Formulas & Analytical Tools ({subject}):**\n\n"
+                    f"• **Governing Principle:** State transitions are determined by initial conditions and external forces.\n"
+                    f"• **Proportionality Rule:** Verify whether dependent variables scale directly or inversely.\n"
+                    f"• **Methodology Tip:** Always write down given variables first, apply the standard formula, and check final units."
+                )
+            elif is_quiz_query:
+                answer = (
+                    f"**Practice Comprehension Check for {subject}:**\n\n"
+                    f"*Question:* Based on this recorded lecture, what is the first step in solving analytical problems in {subject}?\n\n"
+                    f"• **A)** Identify given constraints and apply the governing law [Correct]\n"
+                    f"• **B)** Guess an arbitrary value\n"
+                    f"• **C)** Skip dimensional verification\n\n"
+                    f"*Explanation:* Grade {grade_num} {subject} requires structured problem identification before applying algebraic computation."
+                )
+            else:
+                answer = (
+                    f"Regarding **'{question}'**: In this {subject} lecture for Grade {grade_num}, "
+                    f"the instructor highlighted that understanding how the concepts connect is key to solving test problems. "
+                    f"Trace each step from cause to effect, and let me know if you would like a practice problem or a step-by-step derivation!"
+                )
 
     return {
         "class_id": str(class_id),
         "question": question,
         "answer": answer,
         "subject": subject,
-        "grade": grade,
+        "grade": grade_num,
     }
 
 
 @router.get("/classes/{class_id}/ai-summary")
 async def get_class_ai_summary(
-    class_id: UUID,
+    class_id: str,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    live_class = await session.scalar(select(LiveClass).where(LiveClass.id == class_id))
+    live_class = None
+    try:
+        import uuid as _uuid_mod
+        c_uuid = _uuid_mod.UUID(class_id)
+        live_class = await session.scalar(select(LiveClass).where(LiveClass.id == c_uuid))
+    except Exception:
+        pass
+
     title = live_class.title if live_class else "Class Lecture"
-    subject = live_class.subject_name if live_class else "Academic Subject"
-    grade = live_class.grade_number or 9
+    subject = live_class.subject_name if live_class and live_class.subject_name else None
+    
+    title_lower = title.lower()
+    if not subject:
+        if "math" in title_lower:
+            subject = "Mathematics"
+        elif any(k in title_lower for k in ["science", "physics", "chem", "bio"]):
+            subject = "Science"
+        elif any(k in title_lower for k in ["english", "grammar", "reading"]):
+            subject = "English"
+        elif any(k in title_lower for k in ["history", "social", "geography"]):
+            subject = "Social Studies"
+        elif any(k in title_lower for k in ["computer", "code", "python"]):
+            subject = "Computer Science"
+        else:
+            subject = "Academic Lesson"
+
+    grade_num = live_class.grade_number if live_class and live_class.grade_number else None
+    if grade_num is None:
+        import re
+        m = re.search(r'grade\s*(\d+)', title_lower)
+        if m:
+            grade_num = int(m.group(1))
+        else:
+            grade_num = 1
+
+    if grade_num <= 3:
+        return {
+            "class_id": str(class_id),
+            "title": title,
+            "subject": subject,
+            "grade": grade_num,
+            "overview": (
+                f"This recorded video is a fun and interactive Grade {grade_num} {subject} class! "
+                f"The teacher uses clear whiteboard demonstrations, friendly visual examples, and step-by-step counting "
+                f"to make learning enjoyable and easy to remember."
+            ),
+            "key_topics": [
+                f"Introduction to Grade {grade_num} {subject} Fundamentals",
+                "Counting & Visual Problem Walkthroughs",
+                "Teacher's Interactive Whiteboard Drawings & Demonstrations",
+                "Fun Practice Questions with Immediate Teacher Feedback",
+            ],
+            "whiteboard_notes": [
+                "Visual Counting: Count items one-by-one with dots or pictures.",
+                "Basic Operations: Putting groups together and finding total amounts.",
+                "Practice Tip: Say numbers out loud while writing them down.",
+            ],
+            "exam_takeaways": [
+                "Practice counting objects around your house (toys, books, pencils).",
+                "Remember to write numbers carefully and clearly.",
+                "Try the 2 practice questions in the Quick Quiz tab!",
+            ],
+            "quiz": [
+                {
+                    "question": f"What was the main topic of this Grade {grade_num} {subject} lesson?",
+                    "options": [
+                        f"Foundational concepts and practice in {title}",
+                        "College physics",
+                        "Silent study with no teacher",
+                        "Recess and games only",
+                    ],
+                    "correct_index": 0,
+                    "explanation": f"The lecture focused on teaching and practicing core Grade {grade_num} {subject}.",
+                },
+                {
+                    "question": "What is the best way to practice what you learned in this video?",
+                    "options": [
+                        "Never look at numbers again",
+                        "Try practice problems and review the teacher's board notes",
+                        "Skip homework completely",
+                        "Close the notebook immediately",
+                    ],
+                    "correct_index": 1,
+                    "explanation": "Reviewing the board notes and practicing helps remember the lesson!",
+                },
+            ],
+        }
 
     return {
         "class_id": str(class_id),
         "title": title,
         "subject": subject,
-        "grade": grade,
-        "overview": f"This recorded lecture for Grade {grade} provides in-depth coverage of {subject}, focusing on fundamental definitions, analytical derivations, and practical application.",
+        "grade": grade_num,
+        "overview": f"This recorded lecture for Grade {grade_num} provides in-depth coverage of {subject}, focusing on fundamental definitions, analytical derivations, and practical application.",
         "key_topics": [
             f"Introduction to {subject} Foundations",
             "Core Theoretical Frameworks & Whiteboard Derivations",
