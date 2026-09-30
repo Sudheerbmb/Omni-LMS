@@ -91,6 +91,11 @@ class Settings(BaseSettings):
     # ── Vimeo Integration ─────────────────────────────────────────────────────
     vimeo_access_token: str | None = None
 
+    # Cloudinary Integration
+    cloudinary_cloud_name: str | None = 'zy4qhemm'
+    cloudinary_api_key: str | None = '348774342517364'
+    cloudinary_api_secret: str | None = 'iUM25wdg_Mzbi8dWq1oUMD8GTls'
+
     # ── AI / LLM Integration ──────────────────────────────────────────────────
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"

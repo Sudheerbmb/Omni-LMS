@@ -1,3 +1,16 @@
+import cloudinary
+import cloudinary.uploader
+from fastapi import File, UploadFile
+from app.classroom.service import attach_class_recording
+from app.platform.config import settings
+
+cloudinary.config(
+    cloud_name=settings.cloudinary_cloud_name or "zy4qhemm",
+    api_key=settings.cloudinary_api_key or "348774342517364",
+    api_secret=settings.cloudinary_api_secret or "iUM25wdg_Mzbi8dWq1oUMD8GTls",
+    secure=True
+)
+
 import urllib.parse
 from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
@@ -266,3 +279,49 @@ async def update_class_status_endpoint(
         })
 
     return {"id": str(updated.id), "status": updated.status}
+
+@router.get("/cloudinary-config")
+async def get_cloudinary_config_endpoint():
+    return {
+        "cloud_name": settings.cloudinary_cloud_name or "zy4qhemm",
+        "api_key": settings.cloudinary_api_key or "348774342517364"
+    }
+
+
+@router.post("/classes/{class_id}/recording")
+async def upload_class_recording_endpoint(
+    class_id: UUID,
+    file: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    if not file:
+        raise HTTPException(status_code=400, detail="Video file is required")
+
+    try:
+        # Read file bytes and stream to Cloudinary
+        file_bytes = await file.read()
+        import io
+        file_io = io.BytesIO(file_bytes)
+
+        upload_result = cloudinary.uploader.upload_large(
+            file_io,
+            resource_type="video",
+            folder="omni_live_classrooms",
+            public_id=f"lecture_{class_id}",
+            overwrite=True
+        )
+
+        recording_url = upload_result.get("secure_url") or upload_result.get("url")
+        if not recording_url:
+            raise HTTPException(status_code=500, detail="Failed to obtain secure URL from Cloudinary")
+
+        await attach_class_recording(session, class_id, recording_url)
+        return {
+            "id": str(class_id),
+            "recording_url": recording_url,
+            "duration": upload_result.get("duration"),
+            "format": upload_result.get("format")
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Cloudinary upload error: {str(exc)}") from exc

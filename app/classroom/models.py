@@ -20,6 +20,7 @@ class LiveClass(UUIDMixin, TimestampMixin, Base):
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     meeting_url: Mapped[str | None] = mapped_column(String(1000))
+    recording_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="scheduled", nullable=False)
 
     grade_number: Mapped[int | None] = mapped_column(Integer, nullable=True)

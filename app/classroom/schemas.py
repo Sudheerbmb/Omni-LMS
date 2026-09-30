@@ -10,6 +10,7 @@ class LiveClassCreate(BaseModel):
     starts_at: datetime
     ends_at: datetime
     meeting_url: Optional[str] = None
+    recording_url: Optional[str] = None
     course_id: Optional[UUID] = None
     grade_number: Optional[int] = None
     section_name: Optional[str] = "A"
@@ -31,6 +32,7 @@ class LiveClassRead(BaseModel):
     starts_at: datetime
     ends_at: datetime
     meeting_url: Optional[str] = None
+    recording_url: Optional[str] = None
     status: str
     grade_number: Optional[int] = None
     section_name: Optional[str] = None

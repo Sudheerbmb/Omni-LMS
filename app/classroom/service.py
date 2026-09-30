@@ -201,6 +201,7 @@ async def get_school_live_classes(
             "starts_at": c.starts_at,
             "ends_at": c.ends_at,
             "meeting_url": c.meeting_url,
+            "recording_url": getattr(c, "recording_url", None),
             "status": c.status,
             "grade_number": c.grade_number,
             "section_name": c.section_name,
@@ -220,6 +221,17 @@ async def update_live_class_status(
     live_class = await session.scalar(select(LiveClass).where(LiveClass.id == class_id))
     if live_class:
         live_class.status = new_status
+        await session.commit()
+        await session.refresh(live_class)
+    return live_class
+
+
+async def attach_class_recording(
+    session: AsyncSession, class_id: UUID, recording_url: str
+) -> Optional[LiveClass]:
+    live_class = await session.scalar(select(LiveClass).where(LiveClass.id == class_id))
+    if live_class:
+        live_class.recording_url = recording_url
         await session.commit()
         await session.refresh(live_class)
     return live_class
