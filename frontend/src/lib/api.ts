@@ -1,4 +1,24 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
+export const getApiBaseUrl = (): string => {
+  if (import.meta.env.VITE_API_URL && typeof import.meta.env.VITE_API_URL === 'string') {
+    return import.meta.env.VITE_API_URL
+  }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return 'https://omni-lms.onrender.com'
+  }
+  return 'http://127.0.0.1:8000'
+}
+
+export const getWsBaseUrl = (): string => {
+  const api = getApiBaseUrl()
+  try {
+    const parsed = new URL(api)
+    const wsProto = parsed.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${wsProto}//${parsed.host}`
+  } catch {
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${wsProto}//${window.location.host}`
+  }
+}
 
 export class ApiError extends Error {
   status: number
@@ -17,7 +37,8 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   }
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const baseUrl = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL
+  const apiBase = getApiBaseUrl()
+  const baseUrl = apiBase.endsWith('/') ? apiBase.slice(0, -1) : apiBase
   const response = await fetch(`${baseUrl}${path}`, { ...options, headers })
   const body = await response.json().catch(() => null)
   if (!response.ok) {

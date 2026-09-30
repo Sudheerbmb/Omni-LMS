@@ -140,14 +140,29 @@ async def classroom_websocket_endpoint(
             data = await websocket.receive_json()
             msg_type = data.get("type")
 
-            # Handle peer presence registration message if sent over connection
-            if msg_type in ("init", "peer_join", "peer_presence"):
+            # Handle heartbeat presence update (DO NOT re-trigger room_state or join offers)
+            if msg_type == "peer_presence":
                 pid = data.get("peerId", active_peer_id)
                 u_info = data.get("user", user_info)
                 active_peer_id = pid
                 user_info = u_info
-                # Update peer record in memory and notify other attendees
-                await room_manager.register_peer(room_id, active_peer_id, websocket, user_info)
+                if room_id in room_manager.rooms:
+                    room_manager.rooms[room_id][active_peer_id] = (websocket, user_info)
+                # Broadcast updated user state (mic, cam, hand) without resetting WebRTC mesh
+                await room_manager.broadcast(room_id, {
+                    "type": "peer_presence",
+                    "peerId": active_peer_id,
+                    "user": user_info
+                }, sender_peer_id=active_peer_id)
+
+            elif msg_type in ("init", "peer_join"):
+                pid = data.get("peerId", active_peer_id)
+                u_info = data.get("user", user_info)
+                active_peer_id = pid
+                user_info = u_info
+                # Only register if not already registered in room
+                if room_id not in room_manager.rooms or active_peer_id not in room_manager.rooms[room_id]:
+                    await room_manager.register_peer(room_id, active_peer_id, websocket, user_info)
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
