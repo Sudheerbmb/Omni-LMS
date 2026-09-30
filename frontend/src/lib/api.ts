@@ -797,26 +797,43 @@ export interface ClassAiSummaryData {
   }>
 }
 
+export interface AgentAction {
+  type: 'SEEK_VIDEO' | 'INTERACTIVE_QUIZ' | string
+  timestamp?: number
+  label?: string
+  question?: string
+  options?: string[]
+  correct_index?: number
+  explanation?: string
+}
+
+export interface AgentDoubtResponse {
+  class_id: string
+  question: string
+  answer: string
+  actions?: AgentAction[]
+  suggested_followups?: string[]
+  subject: string
+  grade: number
+  has_transcript: boolean
+}
+
 export const askClassAiDoubt = (
   classId: string,
   question: string,
-  meta?: { title?: string; subject?: string; grade?: any }
+  meta?: { title?: string; subject?: string; grade?: any; history?: Array<{ sender: string; text: string }> }
 ) =>
-  request<{
-    class_id: string
-    question: string
-    answer: string
-    subject: string
-    grade: number
-  }>(`/api/v1/classroom/classes/${classId}/ai-doubt`, {
+  request<AgentDoubtResponse>(`/api/v1/classroom/classes/${classId}/ai-doubt`, {
     method: 'POST',
     body: JSON.stringify({
       question,
       title: meta?.title,
       subject: meta?.subject,
-      grade: meta?.grade
+      grade: meta?.grade,
+      history: meta?.history
     })
   })
+
 
 export const getClassAiSummary = (classId: string) =>
   request<ClassAiSummaryData>(`/api/v1/classroom/classes/${classId}/ai-summary`)

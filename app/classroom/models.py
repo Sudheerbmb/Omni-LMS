@@ -31,3 +31,4 @@ class LiveClass(UUIDMixin, TimestampMixin, Base):
     room_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     transcript_text: Mapped[str | None] = mapped_column(String, nullable=True)
     summary_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    transcript_segments: Mapped[list | None] = mapped_column(JSON, nullable=True)

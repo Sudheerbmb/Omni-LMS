@@ -339,6 +339,7 @@ class AiDoubtRequest(BaseModel):
     title: Optional[str] = None
     subject: Optional[str] = None
     grade: Optional[Any] = None
+    history: Optional[List[Dict[str, str]]] = None
 
 
 class TeacherCopilotRequest(BaseModel):
@@ -348,18 +349,13 @@ class TeacherCopilotRequest(BaseModel):
     action: Optional[str] = "enhance"  # enhance | fun_fact | analogy | quick_poll | engagement_question
 
 
-async def transcribe_video_url_with_groq(media_url: str) -> Optional[str]:
+async def transcribe_video_url_with_groq(media_url: str) -> tuple[Optional[str], Optional[list]]:
     api_key = settings.groq_api_key or os.getenv("GROQ_API_KEY", "")
     if not api_key or not media_url:
-        return None
+        return None, None
 
     try:
         def _fetch_and_transcribe():
-            import urllib.request
-            import urllib.error
-            import io
-            import json
-
             req_dl = urllib.request.Request(media_url, headers={'User-Agent': 'OmniLMS/1.0'})
             with urllib.request.urlopen(req_dl, timeout=40) as resp:
                 media_data = resp.read()
@@ -373,7 +369,7 @@ async def transcribe_video_url_with_groq(media_url: str) -> Optional[str]:
                 body.write(f'{value}\r\n'.encode('utf-8'))
 
             add_field('model', 'whisper-large-v3-turbo')
-            add_field('response_format', 'json')
+            add_field('response_format', 'verbose_json')
 
             body.write(f'--{boundary}\r\n'.encode('utf-8'))
             body.write(b'Content-Disposition: form-data; name="file"; filename="recording.webm"\r\n')
@@ -394,26 +390,32 @@ async def transcribe_video_url_with_groq(media_url: str) -> Optional[str]:
             )
             with urllib.request.urlopen(req, timeout=90) as resp:
                 res = json.loads(resp.read().decode('utf-8'))
-                return res.get('text', '').strip()
+                text_out = res.get('text', '').strip()
+                raw_segments = res.get('segments', [])
+                cleaned_segments = [
+                    {
+                        "start": round(s.get("start", 0.0), 1),
+                        "end": round(s.get("end", 0.0), 1),
+                        "text": s.get("text", "").strip()
+                    }
+                    for s in raw_segments if s.get("text")
+                ]
+                return text_out, cleaned_segments
 
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _fetch_and_transcribe)
     except Exception as e:
-        print(f"Whisper transcription error for {media_url[:60]}: {e}")
-        return None
+        print(f"Whisper verbose transcription error for {media_url[:60]}: {e}")
+        return None, None
 
 
-async def call_groq_llm(messages: List[Dict[str, str]], json_mode: bool = False, max_tokens: int = 650, temperature: float = 0.3) -> Optional[str]:
+async def call_groq_llm(messages: List[Dict[str, str]], json_mode: bool = False, max_tokens: int = 700, temperature: float = 0.25) -> Optional[str]:
     api_key = settings.groq_api_key or os.getenv("GROQ_API_KEY", "")
     if not api_key:
         return None
 
     try:
         def _call_chat():
-            import urllib.request
-            import urllib.error
-            import json
-
             req_data = {
                 'model': settings.groq_model or 'qwen/qwen3.8-27b',
                 'messages': messages,
@@ -443,7 +445,7 @@ async def call_groq_llm(messages: List[Dict[str, str]], json_mode: bool = False,
         return None
 
 
-async def get_or_transcribe_class(class_id_str: str, session: AsyncSession) -> tuple[Optional[str], Optional[LiveClass]]:
+async def get_or_transcribe_class(class_id_str: str, session: AsyncSession) -> tuple[Optional[str], Optional[list], Optional[LiveClass]]:
     live_class = None
     try:
         import uuid as _uuid_mod
@@ -453,19 +455,20 @@ async def get_or_transcribe_class(class_id_str: str, session: AsyncSession) -> t
         pass
 
     if not live_class:
-        return None, None
+        return None, None, None
 
     if live_class.transcript_text and live_class.transcript_text.strip():
-        return live_class.transcript_text.strip(), live_class
+        return live_class.transcript_text.strip(), live_class.transcript_segments or [], live_class
 
     if live_class.recording_url:
-        transcript = await transcribe_video_url_with_groq(live_class.recording_url)
+        transcript, segments = await transcribe_video_url_with_groq(live_class.recording_url)
         if transcript:
             live_class.transcript_text = transcript
+            live_class.transcript_segments = segments
             await session.commit()
-            return transcript, live_class
+            return transcript, segments, live_class
 
-    return None, live_class
+    return None, None, live_class
 
 
 @router.post("/classes/{class_id}/ai-doubt")
@@ -475,114 +478,85 @@ async def ask_class_ai_doubt(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    transcript, live_class = await get_or_transcribe_class(class_id, session)
+    transcript, segments, live_class = await get_or_transcribe_class(class_id, session)
 
     title = payload.title or (live_class.title if live_class else "Class Lecture")
-    subject = payload.subject or (live_class.subject_name if live_class and live_class.subject_name else None)
-    
-    title_lower = title.lower()
-    if not subject:
-        if "math" in title_lower:
-            subject = "Mathematics"
-        elif any(k in title_lower for k in ["science", "physics", "chem", "bio"]):
-            subject = "Science"
-        elif any(k in title_lower for k in ["english", "grammar", "reading"]):
-            subject = "English"
-        elif any(k in title_lower for k in ["history", "social", "geography"]):
-            subject = "Social Studies"
-        elif any(k in title_lower for k in ["computer", "code", "python"]):
-            subject = "Computer Science"
-        else:
-            subject = "Academic Lesson"
-
-    grade_num = None
-    if payload.grade is not None:
-        try:
-            import re
-            m = re.search(r'\d+', str(payload.grade))
-            if m:
-                grade_num = int(m.group(0))
-        except Exception:
-            pass
-    if grade_num is None and live_class and live_class.grade_number:
-        grade_num = live_class.grade_number
-    if grade_num is None:
-        import re
-        m = re.search(r'grade\s*(\d+)', title_lower)
-        if m:
-            grade_num = int(m.group(1))
-        else:
-            grade_num = 1
+    subject = payload.subject or (live_class.subject_name if live_class and live_class.subject_name else "Academic Subject")
+    grade_num = live_class.grade_number if live_class and live_class.grade_number else 1
 
     question = payload.question.strip()
-    answer = None
+    
+    agent_output = None
 
-    # 1. If real transcript exists, ground the AI answer strictly in what was spoken in the video!
     if transcript:
-        system_prompt = (
-            f"You are an encouraging, world-class AI study companion assisting a student watching "
-            f"the recorded lecture '{title}' ({subject}, Grade {grade_num}).\n\n"
-            f"Here is the VERBATIM spoken transcript of what was actually said in this video recording:\n"
-            f'\"\"\"{transcript}\"\"\"\n\n'
-            f"RULES:\n"
-            f"1. Base your answer strictly on the actual words and concepts spoken in the video transcript above.\n"
-            f"2. If the user asks 'what is the video about' or asks about topics, summarize the real content from the transcript.\n"
-            f"3. If the video discusses specific items (e.g. portal testing, AI agents, mathematics, etc.), refer directly to them.\n"
-            f"4. Keep the tone helpful, encouraging, and clear."
+        # Build segments summary for agent perception
+        seg_json = json.dumps(segments or [{"start": 0.0, "end": 15.0, "text": transcript}])
+        
+        system_agent_prompt = f"""You are Omni-Agent, an autonomous AI educational study agent for this recorded video lecture.
+You have direct perception of the lecture's timestamped audio transcript:
+{seg_json}
+
+Lecture Metadata: Title: "{title}", Subject: "{subject}", Grade: {grade_num}.
+
+CRITICAL AGENT RULES:
+1. BE OPTIMIZED & PROFESSIONAL: Provide a clean, direct, executive explanation. Do NOT apologize, do NOT say "Did you upload the wrong video?", and avoid conversational fluff.
+2. AGENTIC ACTIONS:
+   - Include 'SEEK_VIDEO' actions with the exact timestamp in seconds whenever topics or moments are mentioned so the student can jump directly to that point in the video.
+   - If the student asks for practice or a quiz, include an 'INTERACTIVE_QUIZ' action with question, options (4), and correct_index (0-3).
+3. SUGGESTED FOLLOWUPS: Provide 3 smart, context-aware followup questions.
+4. RESPONSE FORMAT: Strictly output valid JSON matching this schema:
+{{
+  "thought": "Internal reasoning about the video content and user query",
+  "answer": "Clean, structured markdown response with clear sections and takeaways",
+  "actions": [
+    {{"type": "SEEK_VIDEO", "timestamp": 0.0, "label": "00:00 • Introduction"}},
+    {{"type": "SEEK_VIDEO", "timestamp": 8.0, "label": "00:08 • Key Concept"}}
+  ],
+  "suggested_followups": [
+    "Follow-up question 1?",
+    "Follow-up question 2?",
+    "Follow-up question 3?"
+  ]
+}}"""
+
+        agent_messages = [{"role": "system", "content": system_agent_prompt}]
+        if payload.history:
+            for h in payload.history[-4:]:
+                if h.get("sender") == "user":
+                    agent_messages.append({"role": "user", "content": h.get("text", "")})
+                elif h.get("sender") == "ai":
+                    agent_messages.append({"role": "assistant", "content": h.get("text", "")})
+        agent_messages.append({"role": "user", "content": question})
+
+        res_json = await call_groq_llm(agent_messages, json_mode=True, max_tokens=700, temperature=0.2)
+        if res_json:
+            try:
+                agent_output = json.loads(res_json)
+            except Exception as exc:
+                print(f"Agent JSON parse error: {exc}")
+
+    if not agent_output:
+        # Fallback response
+        answer = (
+            f"## Session Overview: {title}\n\n"
+            f"This recorded session focuses on core principles and problem walkthroughs for **{subject}**.\n\n"
+            f"### Key Takeaways\n"
+            f"• Demonstrations and explanations are presented on the whiteboard.\n"
+            f"• Follow along step-by-step and test your understanding using the Quiz tab."
         )
-        answer = await call_groq_llm([
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": question}
-        ])
-
-    # 2. Fallback to OpenAI if configured and no transcript answer
-    if not answer and settings.openai_api_key:
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                res = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                    json={
-                        "model": settings.openai_model or "gpt-4o-mini",
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": f"You are a friendly AI tutor assisting a Grade {grade_num} student on '{title}' ({subject}).",
-                            },
-                            {"role": "user", "content": question},
-                        ],
-                        "temperature": 0.7,
-                    },
-                )
-                if res.status_code == 200:
-                    answer = res.json()["choices"][0]["message"]["content"]
-        except Exception:
-            pass
-
-    # 3. Intelligent synthesizer fallback if network or transcript unavailable
-    if not answer:
-        lower = question.lower()
-        is_about_query = any(w in lower for w in ["what is the video about", "what is this video about", "about", "summary", "recap", "overview", "what was covered", "topics"])
-        is_primary = grade_num <= 3
-        if is_about_query:
-            answer = (
-                f"🌟 **Lecture Overview: {title}**\n\n"
-                f"This video is an educational session for **Grade {grade_num} {subject}**.\n"
-                f"The instructor explains core concepts, demonstrates key problems on the whiteboard, "
-                f"and reviews practical takeaways for students."
-            )
-        else:
-            answer = (
-                f"Regarding **'{question}'**: In this {subject} lesson for Grade {grade_num}, "
-                f"the instructor highlighted that understanding how the concepts connect step-by-step is key to solving problems. "
-                f"Trace each step from cause to effect, and check the **AI Summary** tab for notes!"
-            )
+        actions = []
+        followups = ["What are the key takeaways?", "Can you explain the main concept step-by-step?"]
+    else:
+        answer = agent_output.get("answer", "")
+        actions = agent_output.get("actions", [])
+        followups = agent_output.get("suggested_followups", [])
 
     return {
         "class_id": str(class_id),
         "question": question,
         "answer": answer,
+        "actions": actions,
+        "suggested_followups": followups,
         "subject": subject,
         "grade": grade_num,
         "has_transcript": bool(transcript)
@@ -595,9 +569,8 @@ async def get_class_ai_summary(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    transcript, live_class = await get_or_transcribe_class(class_id, session)
+    transcript, segments, live_class = await get_or_transcribe_class(class_id, session)
 
-    # If cached summary exists in DB, return it immediately
     if live_class and live_class.summary_json:
         return live_class.summary_json
 
@@ -605,15 +578,14 @@ async def get_class_ai_summary(
     subject = live_class.subject_name if live_class and live_class.subject_name else "Academic Subject"
     grade_num = live_class.grade_number if live_class and live_class.grade_number else 1
 
-    # If transcript exists, generate real summary with Groq LLM
     if transcript:
         prompt = (
             f"Based on this verbatim video transcript from the lecture '{title}':\n"
             f'\"\"\"{transcript}\"\"\"\n\n'
-            f"Generate a JSON object with:\n"
-            f"- 'overview': 2-3 sentences summarizing what was actually discussed in the video\n"
+            f"Generate an optimized, professional JSON object with:\n"
+            f"- 'overview': 2-3 sentences summarizing the exact topics discussed\n"
             f"- 'key_topics': array of 3-5 specific topics mentioned\n"
-            f"- 'whiteboard_notes': array of 2-4 key takeaways/notes from the speaker\n"
+            f"- 'whiteboard_notes': array of 2-4 key takeaways/notes\n"
             f"- 'exam_takeaways': array of 2-3 key takeaways\n"
             f"- 'quiz': array of 2 multiple-choice questions based directly on the video transcript, each with:\n"
             f"   'question': string,\n"
@@ -623,21 +595,19 @@ async def get_class_ai_summary(
             f"Return pure JSON only."
         )
         json_res = await call_groq_llm([
-            {"role": "system", "content": "You are a JSON-only educational synthesizer. Output valid JSON."},
+            {"role": "system", "content": "You are an executive educational JSON synthesizer. Output valid JSON."},
             {"role": "user", "content": prompt}
         ], json_mode=True, max_tokens=700)
 
         if json_res:
             try:
-                import json as _json
-                data = _json.loads(json_res)
+                data = json.loads(json_res)
                 data["class_id"] = str(class_id)
                 data["title"] = title
                 data["subject"] = subject
                 data["grade"] = grade_num
                 data["has_transcript"] = True
                 
-                # Save to database cache
                 if live_class:
                     live_class.summary_json = data
                     await session.commit()
@@ -645,7 +615,6 @@ async def get_class_ai_summary(
             except Exception as e:
                 print(f"Error parsing Groq summary JSON: {e}")
 
-    # Fallback structured summary
     return {
         "class_id": str(class_id),
         "title": title,
@@ -655,8 +624,8 @@ async def get_class_ai_summary(
         "key_topics": [
             f"Introduction to {subject} Concepts",
             "Whiteboard Problem Solving",
-            "Interactive Student Discussion",
-            "Key Exam Takeaways"
+            "Interactive Discussion",
+            "Key Takeaways"
         ],
         "whiteboard_notes": [
             "Follow the step-by-step method shown on the board",
@@ -668,7 +637,7 @@ async def get_class_ai_summary(
         ],
         "quiz": [
             {
-                "question": f"What was the main topic discussed in this {subject} lecture?",
+                "question": f"What was the main topic discussed in this lecture?",
                 "options": [
                     f"Core principles demonstrated in {title}",
                     "Unrelated trivia",
@@ -677,17 +646,6 @@ async def get_class_ai_summary(
                 ],
                 "correct_index": 0,
                 "explanation": f"The lecture focused on {title}."
-            },
-            {
-                "question": "What is the best way to review this recorded lesson?",
-                "options": [
-                    "Practice the worked problems and check board notes",
-                    "Never look at the notes again",
-                    "Skip homework exercises",
-                    "Ignore the teacher's steps"
-                ],
-                "correct_index": 0,
-                "explanation": "Active problem review reinforces comprehension."
             }
         ],
         "has_transcript": False
@@ -700,12 +658,13 @@ async def get_class_transcript_endpoint(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    transcript, live_class = await get_or_transcribe_class(class_id, session)
+    transcript, segments, live_class = await get_or_transcribe_class(class_id, session)
     title = live_class.title if live_class else "Class Lecture"
     return {
         "class_id": str(class_id),
         "title": title,
         "transcript_text": transcript or "",
+        "transcript_segments": segments or [],
         "has_transcript": bool(transcript)
     }
 
@@ -728,7 +687,7 @@ async def teacher_copilot_assistant(
             f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
             f"Provide 1 mind-blowing, surprising, and kid-friendly FUN FACT about '{topic}' "
             f"that the teacher can immediately read aloud to capture students' excitement and hook their attention! "
-            f"Keep it under 3 sentences."
+            f"Keep it concise and punchy."
         )
     elif action == "analogy":
         prompt = (
@@ -766,8 +725,7 @@ async def teacher_copilot_assistant(
         poll_obj = None
         if res_json:
             try:
-                import json as _json
-                poll_obj = _json.loads(res_json)
+                poll_obj = json.loads(res_json)
             except Exception:
                 pass
 

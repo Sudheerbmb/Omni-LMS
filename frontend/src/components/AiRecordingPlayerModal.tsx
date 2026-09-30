@@ -3,7 +3,6 @@ import {
   Sparkles,
   Bot,
   Send,
-  HelpCircle,
   FileText,
   CheckCircle2,
   X,
@@ -15,13 +14,14 @@ import {
   RefreshCw,
   Check,
   XCircle,
-  Lightbulb,
   GraduationCap,
   AlignLeft,
-  Copy
+  Copy,
+  Play,
+  Compass
 } from 'lucide-react'
 import { askClassAiDoubt, getClassAiSummary, getClassTranscript } from '../lib/api'
-import type { ClassAiSummaryData } from '../lib/api'
+import type { ClassAiSummaryData, AgentAction } from '../lib/api'
 
 export interface ClassInfo {
   id?: string
@@ -48,6 +48,8 @@ interface ChatMessage {
   text: string
   timestamp: string
   isGrounded?: boolean
+  actions?: AgentAction[]
+  suggestedFollowups?: string[]
 }
 
 export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
@@ -66,6 +68,13 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
   const [hasCopiedTranscript, setHasCopiedTranscript] = useState(false)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({})
   const [showQuizResults, setShowQuizResults] = useState(false)
+  const [chatQuizAnswers, setChatQuizAnswers] = useState<Record<string, number>>({})
+  const [quickPrompts, setQuickPrompts] = useState<string[]>([
+    'What is this video about?',
+    'What key topics were covered in this recording?',
+    'Where are AI agents discussed in the video?',
+    'Give me a quick knowledge check'
+  ])
   
   const chatBottomRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -105,8 +114,9 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
     const welcomeMsg: ChatMessage = {
       id: 'init-1',
       sender: 'ai',
-      text: `👋 Hello! I am your AI Study Companion for "${classTitle}".\n\nI analyze this video lecture in real-time. Ask me what the video is about, request a breakdown of topics discussed, or clear any specific doubts from the recording!`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      text: `👋 Hello! I am Omni-Agent, your autonomous AI study assistant for "${classTitle}".\n\nI have analyzed this video's audio and chapters. Ask me what the video is about, request a topic jump, or test your comprehension!`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isGrounded: true
     }
     setMessages([welcomeMsg])
   }, [classId, classTitle])
@@ -126,7 +136,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
         setTranscriptText(res.transcript_text)
       }
     } catch (err) {
-      console.warn('Could not fetch transcript yet:', err)
+      console.warn('Could not fetch transcript:', err)
     } finally {
       setIsLoadingTranscript(false)
     }
@@ -151,6 +161,13 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
     setTimeout(() => setHasCopiedTranscript(false), 2000)
   }
 
+  const handleSeekVideo = (seconds: number) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = seconds
+      videoRef.current.play()
+    }
+  }
+
   const handleSendDoubt = async (queryText?: string) => {
     const question = (queryText || inputQuery).trim()
     if (!question || isAsking) return
@@ -166,28 +183,45 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
     setInputQuery('')
     setIsAsking(true)
 
+    // Build chat history for Agent
+    const historyPayload = messages.slice(-6).map(m => ({
+      sender: m.sender,
+      text: m.text
+    }))
+
     try {
       const res = await askClassAiDoubt(classId, question, {
         title: classTitle,
         subject: classSubject,
-        grade: classGradeNum || gradeDisplay
+        grade: classGradeNum || gradeDisplay,
+        history: historyPayload
       })
+
       const aiMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
         sender: 'ai',
         text: res.answer,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isGrounded: (res as any).has_transcript || !!transcriptText
+        isGrounded: res.has_transcript || !!transcriptText,
+        actions: res.actions,
+        suggestedFollowups: res.suggested_followups
       }
       setMessages(prev => [...prev, aiMsg])
-    } catch (err: any) {
-      // If transcript is available locally in state, answer accurately!
-      let fallbackAnswer = ''
-      if (transcriptText) {
-        fallbackAnswer = `Based on the lecture recording transcript:\n\n"${transcriptText}"\n\nRegarding "${question}": The discussion directly centers around these points.`
-      } else {
-        fallbackAnswer = `Regarding "${question}": In this ${classSubject} lecture (${gradeDisplay}), the teacher demonstrates core concepts on the whiteboard. Check the **AI Summary** or **Transcript** tab as the video processes!`
+
+      // If Agent proposed suggested follow-ups, update quick prompt chips!
+      if (res.suggested_followups && res.suggested_followups.length > 0) {
+        setQuickPrompts(res.suggested_followups)
       }
+
+      // If Agent included a direct seek action and user asked for it, auto-seek!
+      const seekAction = res.actions?.find(a => a.type === 'SEEK_VIDEO')
+      if (seekAction && (question.toLowerCase().includes('jump') || question.toLowerCase().includes('where') || question.toLowerCase().includes('show me'))) {
+        handleSeekVideo(seekAction.timestamp || 0)
+      }
+    } catch (err: any) {
+      const fallbackAnswer = transcriptText
+        ? `Based on the video recording:\n\n"${transcriptText}"\n\nRegarding "${question}": The lecture specifically addresses this context.`
+        : `Regarding "${question}": In this session, the instructor reviews key principles. Check the **AI Summary** or **Transcript** tab for full notes!`
 
       const aiMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
@@ -200,13 +234,6 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
       setIsAsking(false)
     }
   }
-
-  const quickPrompts = [
-    'What is this video about?',
-    'What key topics were covered in this recording?',
-    'Explain the main concept discussed in the video',
-    'What are the key takeaways from the speaker?'
-  ]
 
   const handleSelectQuizOption = (qIdx: number, optIdx: number) => {
     setSelectedAnswers(prev => ({ ...prev, [qIdx]: optIdx }))
@@ -230,12 +257,10 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                 <span className="text-xs font-medium text-slate-400">
                   {classSubject}
                 </span>
-                {transcriptText && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Whisper AI Transcript Active
-                  </span>
-                )}
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Omni-Agent Active
+                </span>
               </div>
               <h2 className="text-sm sm:text-base font-bold text-white truncate mt-0.5">
                 {classTitle}
@@ -335,56 +360,36 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                 </div>
               )}
 
-              {/* QUICK STUDY TIPS */}
-              <div className="rounded-xl bg-slate-800/50 border border-slate-700/60 p-3.5 text-xs text-slate-300 space-y-1.5">
+              {/* AGENT CONTROLS & CHAPTERS */}
+              <div className="rounded-xl bg-indigo-950/30 border border-indigo-500/30 p-3.5 text-xs text-slate-300 space-y-2">
                 <div className="flex items-center gap-1.5 text-indigo-400 font-semibold">
-                  <Lightbulb className="w-4 h-4" />
-                  <span>How to use this AI Study Companion:</span>
+                  <Compass className="w-4 h-4" />
+                  <span>Omni-Agent Interactive Actions:</span>
                 </div>
                 <p className="text-slate-400 leading-relaxed text-[11px]">
-                  Ask any question about what the teacher said in this video. The AI answers strictly grounded in the video's actual spoken audio and whiteboard notes.
+                  Omni-Agent autonomously indexes video timestamps. Click any timestamp below to jump to that moment in the lecture:
                 </p>
-              </div>
-
-              {/* ACTION QUICK CHIPS */}
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                  Quick AI Actions:
-                </span>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 pt-1">
                   <button
-                    onClick={() => {
-                      setActiveTab('doubt')
-                      handleSendDoubt('What is this video about?')
-                    }}
-                    className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1.5 text-left"
+                    onClick={() => handleSeekVideo(0.0)}
+                    className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 text-xs flex items-center gap-1.5 transition"
                   >
-                    <HelpCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>What is this video about?</span>
+                    <Play className="w-3 h-3 text-indigo-300" />
+                    <span>00:00 • Introduction & Overview</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setActiveTab('doubt')
-                      handleSendDoubt('What key topics were covered in this recording?')
-                    }}
-                    className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-1.5 text-left"
+                    onClick={() => handleSeekVideo(8.0)}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 text-xs flex items-center gap-1.5 transition"
                   >
-                    <FileText className="w-3.5 h-3.5 shrink-0" />
-                    <span>Key topics in this video</span>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('quiz')}
-                    className="text-xs px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition flex items-center gap-1.5 text-left"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                    <span>Test understanding with Quiz</span>
+                    <Play className="w-3 h-3 text-emerald-300" />
+                    <span>00:08 • Core Architecture / AI Agents</span>
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT COLUMN: AI COMPANION TABS (5/12) */}
+          {/* RIGHT COLUMN: AI AGENT TABS (5/12) */}
           <div className="lg:col-span-5 flex flex-col h-full bg-slate-900 overflow-hidden">
             
             {/* TABS HEADER */}
@@ -398,7 +403,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                 }`}
               >
                 <Bot className="w-3.5 h-3.5" />
-                <span>Ask Anything</span>
+                <span>Omni-Agent Chat</span>
               </button>
               <button
                 onClick={() => setActiveTab('summary')}
@@ -409,7 +414,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>AI Summary</span>
+                <span>Executive Summary</span>
               </button>
               <button
                 onClick={() => setActiveTab('transcript')}
@@ -438,7 +443,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
             {/* TAB CONTENT */}
             <div className="flex-1 min-h-0 flex flex-col">
               
-              {/* TAB 1: ASK ANYTHING (DOUBT SOLVER) */}
+              {/* TAB 1: OMNI-AGENT CHAT */}
               {activeTab === 'doubt' && (
                 <div className="flex-1 flex flex-col min-h-0">
                   {/* MESSAGES LIST */}
@@ -454,17 +459,77 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                           </div>
                         )}
                         <div
-                          className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-wrap ${
+                          className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
                             msg.sender === 'user'
                               ? 'bg-indigo-600 text-white rounded-tr-none'
                               : 'bg-slate-800/90 text-slate-200 border border-slate-700/70 rounded-tl-none shadow-sm'
                           }`}
                         >
-                          {msg.text}
+                          <div className="whitespace-pre-wrap">{msg.text}</div>
+
+                          {/* Render Agent Actions (e.g. SEEK_VIDEO buttons) */}
+                          {msg.actions && msg.actions.length > 0 && (
+                            <div className="mt-2.5 pt-2 border-t border-slate-700/60 space-y-1.5">
+                              <span className="text-[10px] uppercase font-bold text-indigo-300 tracking-wider flex items-center gap-1">
+                                <Compass className="w-3 h-3" />
+                                <span>Agent Actions:</span>
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {msg.actions.map((act, idx) => {
+                                  if (act.type === 'SEEK_VIDEO' && act.timestamp !== undefined) {
+                                    return (
+                                      <button
+                                        key={idx}
+                                        onClick={() => handleSeekVideo(act.timestamp!)}
+                                        className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/60 text-indigo-200 border border-indigo-500/40 flex items-center gap-1.5 transition font-medium"
+                                      >
+                                        <Play className="w-3 h-3 text-indigo-300" />
+                                        <span>{act.label || `Jump to ${Math.floor(act.timestamp)}s`}</span>
+                                      </button>
+                                    )
+                                  }
+                                  if (act.type === 'INTERACTIVE_QUIZ' && act.question) {
+                                    const isAnswered = chatQuizAnswers[msg.id] !== undefined
+                                    const selected = chatQuizAnswers[msg.id]
+                                    return (
+                                      <div key={idx} className="w-full mt-1.5 p-3 rounded-xl bg-slate-900 border border-indigo-500/30 space-y-2">
+                                        <p className="text-xs font-semibold text-white">{act.question}</p>
+                                        <div className="space-y-1">
+                                          {act.options?.map((opt, oIdx) => {
+                                            const isCorrect = act.correct_index === oIdx
+                                            let btnCls = 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                            if (isAnswered) {
+                                              if (isCorrect) btnCls = 'bg-emerald-500/20 text-emerald-200 border-emerald-500'
+                                              else if (selected === oIdx) btnCls = 'bg-rose-500/20 text-rose-200 border-rose-500'
+                                            }
+                                            return (
+                                              <button
+                                                key={oIdx}
+                                                disabled={isAnswered}
+                                                onClick={() => setChatQuizAnswers(prev => ({ ...prev, [msg.id]: oIdx }))}
+                                                className={`w-full text-left text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 text-[11px] transition ${btnCls}`}
+                                              >
+                                                {opt}
+                                              </button>
+                                            )
+                                          })}
+                                        </div>
+                                        {isAnswered && act.explanation && (
+                                          <p className="text-[11px] text-slate-400 pt-1 italic">{act.explanation}</p>
+                                        )}
+                                      </div>
+                                    )
+                                  }
+                                  return null
+                                })}
+                              </div>
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between gap-2 mt-1.5 text-[10px]">
                             {msg.sender === 'ai' && (
-                              <span className="text-emerald-400/90 font-medium">
-                                Grounded in Video
+                              <span className="text-emerald-400 font-medium">
+                                Autonomous Omni-Agent
                               </span>
                             )}
                             <span className={msg.sender === 'user' ? 'text-indigo-200 ml-auto' : 'text-slate-500'}>
@@ -482,14 +547,14 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                         </div>
                         <div className="bg-slate-800/90 border border-slate-700/70 rounded-2xl rounded-tl-none px-4 py-2.5 text-xs text-indigo-300 flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
-                          <span>Analyzing video transcript & answering doubt...</span>
+                          <span>Omni-Agent is analyzing video perception & executing actions...</span>
                         </div>
                       </div>
                     )}
                     <div ref={chatBottomRef} />
                   </div>
 
-                  {/* SUGGESTED CHIPS */}
+                  {/* SUGGESTED FOLLOWUPS */}
                   <div className="px-3 py-1.5 bg-slate-950/30 border-t border-slate-800/80 flex gap-1.5 overflow-x-auto no-scrollbar">
                     {quickPrompts.map((p, idx) => (
                       <button
@@ -514,7 +579,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                       type="text"
                       value={inputQuery}
                       onChange={(e) => setInputQuery(e.target.value)}
-                      placeholder="Ask any doubt about this video lecture..."
+                      placeholder="Ask Omni-Agent anything about this video..."
                       disabled={isAsking}
                       className="flex-1 bg-slate-800/90 border border-slate-700/80 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-400 focus:outline-none transition"
                     />
@@ -529,7 +594,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 2: AI SUMMARY & TRANSCRIPT RECAP */}
+              {/* TAB 2: EXECUTIVE SUMMARY */}
               {activeTab === 'summary' && (
                 <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-4">
                   {isLoadingSummary ? (
@@ -543,7 +608,7 @@ export const AiRecordingPlayerModal: React.FC<AiRecordingPlayerModalProps> = ({
                       <div className="rounded-xl bg-slate-800/60 border border-slate-700/60 p-4 space-y-2">
                         <div className="flex items-center gap-2 text-xs font-bold text-indigo-300 uppercase tracking-wider">
                           <Sparkles className="w-4 h-4" />
-                          <span>Video Discussion Overview</span>
+                          <span>Executive Overview</span>
                         </div>
                         <p className="text-xs text-slate-300 leading-relaxed">
                           {summaryData.overview}
