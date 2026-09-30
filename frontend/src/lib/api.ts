@@ -286,9 +286,22 @@ export const getClassroomSessions = () => request<ClassroomSession[]>('/api/v1/c
 
 export const getAnnouncements = () => request<Announcement[]>('/api/v1/communication/announcements')
 
-export const createAnnouncement = (orgId: string, payload: { title: string; body: string; audience_role?: string }) =>
-
-  request<Announcement>(`/api/v1/communication/organizations/${orgId}/announcements`, { method: 'POST', body: JSON.stringify(payload) })
+export const createAnnouncement = (
+  payload: { title: string; body: string; audience_role?: string } | string,
+  extra?: { title: string; body: string; audience_role?: string }
+) => {
+  if (typeof payload === 'string' && extra) {
+    return request<Announcement>(`/api/v1/communication/organizations/${payload}/announcements`, {
+      method: 'POST',
+      body: JSON.stringify(extra)
+    })
+  }
+  const body = typeof payload === 'object' ? payload : extra!
+  return request<Announcement>('/api/v1/communication/announcements', {
+    method: 'POST',
+    body: JSON.stringify(body)
+  })
+}
 
 // Dashboard & Admin & Notifications
 

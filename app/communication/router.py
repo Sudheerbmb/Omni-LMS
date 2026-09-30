@@ -7,13 +7,69 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.communication.models import Announcement, DirectMessage
 from app.communication.schemas import AnnouncementCreate, AnnouncementRead, MessageCreate, MessageRead
 from app.identity.auth import get_current_user
-from app.identity.models import OrganizationMembership, User
+from app.identity.models import Organization, OrganizationMembership, User
 from app.identity.permissions import require_permission
 from app.notifications.models import Notification
 from app.platform.database import get_session
 
 
 router = APIRouter(prefix="/api/v1/communication", tags=["communication"])
+
+
+@router.get("/announcements", response_model=list[AnnouncementRead])
+async def list_announcements(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[AnnouncementRead]:
+    query = select(Announcement)
+    if current_user.role != "admin":
+        query = query.where(or_(Announcement.audience_role == "all", Announcement.audience_role == current_user.role))
+    query = query.order_by(Announcement.created_at.desc()).limit(20)
+    announcements = (await session.scalars(query)).all()
+    return list(announcements)
+
+
+@router.post("/announcements", response_model=AnnouncementRead, status_code=status.HTTP_201_CREATED)
+async def create_school_announcement(
+    data: AnnouncementCreate,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AnnouncementRead:
+    if current_user.role not in ("admin", "teacher"):
+        raise HTTPException(status_code=403, detail="Only faculty and administrators can broadcast announcements")
+
+    # Find organization membership or default org
+    membership = await session.scalar(select(OrganizationMembership).where(
+        OrganizationMembership.user_id == current_user.id
+    ))
+    org_id = membership.organization_id if membership else None
+    if not org_id:
+        org = await session.scalar(select(Organization).limit(1))
+        if org:
+            org_id = org.id
+        else:
+            new_org = Organization(name="Omni International Academy", slug="omni-academy")
+            session.add(new_org)
+            await session.flush()
+            org_id = new_org.id
+
+    announcement = Announcement(organization_id=org_id, author_id=current_user.id, **data.model_dump())
+    session.add(announcement)
+
+    # Broadcast notification to users
+    users = (await session.scalars(select(User))).all()
+    for user in users:
+        if data.audience_role != "all" and user.role != data.audience_role:
+            continue
+        session.add(Notification(
+            user_id=user.id,
+            notification_type="announcement",
+            title=data.title,
+            body=data.body,
+        ))
+    await session.commit()
+    await session.refresh(announcement)
+    return announcement
 
 
 @router.post("/organizations/{organization_id}/announcements", response_model=AnnouncementRead, status_code=status.HTTP_201_CREATED)
