@@ -917,6 +917,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
   const [filterGrade, setFilterGrade] = useState<number | 'all'>('all')
+  const [filterRecordingOnly, setFilterRecordingOnly] = useState(false)
 
   const isTeacher = user.role === 'teacher'
 
@@ -5926,56 +5927,42 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
       </div>
 
-      {/* Grade Selector Tabs */}
-
+            {/* Grade Selector & Recordings Filter Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
-
         <button
-
-          onClick={() => setFilterGrade('all')}
-
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-
-            filterGrade === 'all'
-
+          onClick={() => { setFilterGrade('all'); setFilterRecordingOnly(false); }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            filterGrade === 'all' && !filterRecordingOnly
               ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-
               : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-
           }`}
-
         >
-
           All Grades
-
         </button>
-
-        {[9, 10, 11, 12].map(g => (
-
+        <button
+          onClick={() => setFilterRecordingOnly(prev => !prev)}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+            filterRecordingOnly
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-2 ring-purple-400'
+              : 'bg-slate-900 text-purple-300 hover:text-white border border-purple-500/30'
+          }`}
+        >
+          <Video className="w-3.5 h-3.5 text-purple-300" />
+          <span>Watch Recordings ({classes.filter(c => !!c.recording_url).length})</span>
+        </button>
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(g => (
           <button
-
             key={g}
-
-            onClick={() => setFilterGrade(g)}
-
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-
-              filterGrade === g
-
+            onClick={() => { setFilterGrade(g); setFilterRecordingOnly(false); }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+              filterGrade === g && !filterRecordingOnly
                 ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-
                 : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-
             }`}
-
           >
-
             Grade {g}
-
           </button>
-
         ))}
-
       </div>
 
       {/* Live & Scheduled Classes Grid */}
@@ -6014,7 +6001,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
         ) : (
 
-          classes.map(cls => {
+          classes.filter(cls => filterRecordingOnly ? !!cls.recording_url : true).map(cls => {
 
             const isLive = cls.status === 'live'
 
