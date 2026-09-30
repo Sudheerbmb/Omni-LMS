@@ -33,7 +33,8 @@ import {
   BookOpen,
   Radio,
   CheckCircle,
-  Eye
+  Eye,
+  Volume2
 } from 'lucide-react'
 
 type ClassroomPageProps = {
@@ -95,6 +96,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const remoteScreenVideoRef = useRef<HTMLVideoElement | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
   const screenStreamRef = useRef<MediaStream | null>(null)
+
+  // Remote WebRTC Media Streams (Audio & Video for each peer)
+  const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({})
 
   // Remote Screen Share State (Received from Presenter)
   const [remoteScreenInfo, setRemoteScreenInfo] = useState<{
@@ -169,7 +173,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' }
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' }
     ]
   }
 
@@ -218,6 +224,202 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     return () => clearInterval(interval)
   }, [activeCallRoom])
 
+  // ── Camera and Microphone Local Media Handling with Graceful Fallbacks ────────
+  const startCameraStream = async () => {
+    let stream: MediaStream | null = null
+
+    // Attempt 1: Full High-Definition Video + Audio with Echo Cancellation
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        })
+        console.log('[Media] Acquired HD video + audio successfully')
+      }
+    } catch (err1) {
+      console.warn('[Media] HD Video+Audio failed, attempting standard video+audio:', err1)
+      try {
+        // Attempt 2: Standard video + audio
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        })
+        console.log('[Media] Acquired standard video + audio')
+      } catch (err2) {
+        console.warn('[Media] Combined audio+video failed, attempting audio-only:', err2)
+        try {
+          // Attempt 3: Audio only (e.g. desktop with mic but no webcam)
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          console.log('[Media] Acquired audio-only stream')
+        } catch (err3) {
+          console.warn('[Media] Audio-only failed, attempting video-only:', err3)
+          try {
+            // Attempt 4: Video only (e.g. webcam with no mic)
+            stream = await navigator.mediaDevices.getUserMedia({ video: true })
+            console.log('[Media] Acquired video-only stream')
+          } catch (err4) {
+            console.warn('[Media] No media devices accessible:', err4)
+          }
+        }
+      }
+    }
+
+    if (stream) {
+      localStreamRef.current = stream
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream
+        localVideoRef.current.play().catch(e => console.warn('Local play error:', e))
+      }
+      const hasVideo = stream.getVideoTracks().length > 0
+      const hasAudio = stream.getAudioTracks().length > 0
+      setIsCameraOn(hasVideo)
+      setIsMicOn(hasAudio)
+
+      // Add local tracks to all existing peer connections
+      Object.entries(peerConnectionsRef.current).forEach(([peerId, pc]) => {
+        stream!.getTracks().forEach(track => {
+          pc.addTrack(track, stream!)
+        })
+        createPeerOffer(peerId, pc)
+      })
+    } else {
+      setIsCameraOn(false)
+      setIsMicOn(false)
+    }
+  }
+
+  const stopCameraStream = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop())
+      localStreamRef.current = null
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop())
+      screenStreamRef.current = null
+    }
+    if (screenFrameIntervalRef.current) {
+      clearInterval(screenFrameIntervalRef.current)
+      screenFrameIntervalRef.current = null
+    }
+  }
+
+  const toggleMic = () => {
+    const next = !isMicOn
+    setIsMicOn(next)
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach(track => {
+        track.enabled = next
+      })
+    }
+    sendWsMessage({
+      type: 'media_state_change',
+      peerId: myPeerIdRef.current,
+      isMicOn: next,
+      isCameraOn
+    })
+  }
+
+  const toggleCamera = () => {
+    const next = !isCameraOn
+    setIsCameraOn(next)
+    if (localStreamRef.current) {
+      localStreamRef.current.getVideoTracks().forEach(track => {
+        track.enabled = next
+      })
+    }
+    sendWsMessage({
+      type: 'media_state_change',
+      peerId: myPeerIdRef.current,
+      isMicOn,
+      isCameraOn: next
+    })
+  }
+
+  // ── WebRTC Peer Connection Factory ───────────────────────────────────────────
+  const getOrCreatePeerConnection = (targetPeerId: string): RTCPeerConnection => {
+    if (peerConnectionsRef.current[targetPeerId]) {
+      return peerConnectionsRef.current[targetPeerId]
+    }
+
+    console.log('[WebRTC] Creating new RTCPeerConnection for peer:', targetPeerId)
+    const pc = new RTCPeerConnection(rtcConfig)
+    peerConnectionsRef.current[targetPeerId] = pc
+
+    // Attach local camera / mic tracks if available
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => {
+        pc.addTrack(track, localStreamRef.current!)
+      })
+    }
+
+    // Attach screen share tracks if currently sharing
+    if (screenStreamRef.current && isScreenSharing) {
+      screenStreamRef.current.getTracks().forEach(track => {
+        pc.addTrack(track, screenStreamRef.current!)
+      })
+    }
+
+    // Listen for incoming remote audio & video tracks from this peer
+    pc.ontrack = (event) => {
+      console.log('[WebRTC] Received remote track from peer:', targetPeerId, event.track.kind, event.streams)
+      if (event.streams && event.streams[0]) {
+        const stream = event.streams[0]
+        setRemoteStreams(prev => ({
+          ...prev,
+          [targetPeerId]: stream
+        }))
+      }
+    }
+
+    // Exchange ICE candidates with peer
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendWsMessage({
+          type: 'webrtc_ice',
+          targetPeerId,
+          senderPeerId: myPeerIdRef.current,
+          candidate: event.candidate
+        })
+      }
+    }
+
+    pc.onconnectionstatechange = () => {
+      console.log(`[WebRTC] Peer ${targetPeerId} state:`, pc.connectionState)
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        setRemoteStreams(prev => {
+          const next = { ...prev }
+          delete next[targetPeerId]
+          return next
+        })
+      }
+    }
+
+    return pc
+  }
+
+  // ── WebRTC: Create Offer to Target Peer ──────────────────────────────────────
+  const createPeerOffer = async (targetPeerId: string, pc?: RTCPeerConnection) => {
+    try {
+      const peerConn = pc || getOrCreatePeerConnection(targetPeerId)
+      const offer = await peerConn.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      })
+      await peerConn.setLocalDescription(offer)
+
+      sendWsMessage({
+        type: 'webrtc_offer',
+        targetPeerId,
+        senderPeerId: myPeerIdRef.current,
+        sharerName: user.display_name || user.email || 'Peer',
+        offer
+      })
+    } catch (err) {
+      console.error('[WebRTC] Error creating offer for peer:', targetPeerId, err)
+    }
+  }
+
   // ── WebRTC / WebSocket Room Connection Lifecycle ─────────────────────────────
   useEffect(() => {
     if (!activeCallRoom) {
@@ -232,6 +434,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       Object.values(peerConnectionsRef.current).forEach(pc => pc.close())
       peerConnectionsRef.current = {}
       setConnectedPeers({})
+      setRemoteStreams({})
       setRemoteScreenInfo({ active: false, sharerName: '', sharerId: '' })
       setRemoteScreenFrame(null)
       setHasRemoteWebRTCStream(false)
@@ -243,7 +446,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     const myDisplayName = user.display_name || user.email || (isTeacher ? 'Instructor' : 'Student')
     const myRole = user.role || 'student'
 
-    // Form connection URL: if frontend is on Vercel and backend on Railway, connect directly to backend:
+    // Form connection URL: if frontend is on Vercel and backend on Railway/Render, connect directly to backend:
     let wsBase = ''
     const apiUrl = import.meta.env.VITE_API_URL
     if (apiUrl && typeof apiUrl === 'string' && apiUrl.startsWith('http')) {
@@ -273,14 +476,13 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
     socket.onopen = () => {
       console.log('[Classroom WS] Connected to live room:', roomId)
-      // Announce initial presence payload
       socket.send(JSON.stringify({
         type: 'peer_join',
         peerId: myPeerId,
         user: myUserPayload
       }))
 
-      // Heartbeat presence ping every 2.5s to guarantee 100% presence
+      // Heartbeat presence ping every 2.5s
       heartbeatIntervalRef.current = window.setInterval(() => {
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({
@@ -313,6 +515,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               data.peers.forEach((p: any) => {
                 if (p.peerId && p.peerId !== myPeerId) {
                   peerMap[p.peerId] = p.user
+                  // Initiate WebRTC peer connection to existing peer
+                  const pc = getOrCreatePeerConnection(p.peerId)
+                  createPeerOffer(p.peerId, pc)
                 }
               })
             }
@@ -330,10 +535,29 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                 [data.peerId]: data.user
               }))
 
-              // If WE are sharing screen, initiate WebRTC offer to this peer
-              if (screenStreamRef.current && isScreenSharing) {
-                createPeerOfferForStream(data.peerId, screenStreamRef.current)
+              // Ensure WebRTC peer connection exists
+              if (!peerConnectionsRef.current[data.peerId]) {
+                const pc = getOrCreatePeerConnection(data.peerId)
+                createPeerOffer(data.peerId, pc)
               }
+            }
+            break
+          }
+
+          // ── Media State Change (Mute / Video Toggle) ────────────────────────
+          case 'media_state_change': {
+            if (data.peerId && data.peerId !== myPeerId) {
+              setConnectedPeers(prev => {
+                if (!prev[data.peerId]) return prev
+                return {
+                  ...prev,
+                  [data.peerId]: {
+                    ...prev[data.peerId],
+                    isMicOn: data.isMicOn,
+                    isCameraOn: data.isCameraOn
+                  }
+                }
+              })
             }
             break
           }
@@ -342,6 +566,11 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
           case 'peer_leave': {
             if (data.peerId) {
               setConnectedPeers(prev => {
+                const next = { ...prev }
+                delete next[data.peerId]
+                return next
+              })
+              setRemoteStreams(prev => {
                 const next = { ...prev }
                 delete next[data.peerId]
                 return next
@@ -473,14 +702,25 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // ── WebRTC Signaling ────────────────────────────────────────────────
+          // ── WebRTC Signaling: Incoming Offer ────────────────────────────────
           case 'webrtc_offer': {
             if (data.targetPeerId === myPeerId && data.offer) {
-              await handleIncomingPeerOffer(data.senderPeerId, data.offer, data.sharerName)
+              const pc = getOrCreatePeerConnection(data.senderPeerId)
+              await pc.setRemoteDescription(new RTCSessionDescription(data.offer))
+              const answer = await pc.createAnswer()
+              await pc.setLocalDescription(answer)
+
+              sendWsMessage({
+                type: 'webrtc_answer',
+                targetPeerId: data.senderPeerId,
+                senderPeerId: myPeerId,
+                answer
+              })
             }
             break
           }
 
+          // ── WebRTC Signaling: Incoming Answer ───────────────────────────────
           case 'webrtc_answer': {
             if (data.targetPeerId === myPeerId && data.answer) {
               const pc = peerConnectionsRef.current[data.senderPeerId]
@@ -491,6 +731,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
+          // ── WebRTC Signaling: Incoming ICE Candidate ────────────────────────
           case 'webrtc_ice': {
             if (data.targetPeerId === myPeerId && data.candidate) {
               const pc = peerConnectionsRef.current[data.senderPeerId]
@@ -527,148 +768,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     }
   }, [activeCallRoom])
 
-  // ── WebRTC Presenter: Create Offer to Broadcast Screen Track ──────────────────
-  const createPeerOfferForStream = async (targetPeerId: string, stream: MediaStream) => {
-    try {
-      const pc = new RTCPeerConnection(rtcConfig)
-      peerConnectionsRef.current[targetPeerId] = pc
-
-      stream.getTracks().forEach(track => {
-        pc.addTrack(track, stream)
-      })
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendWsMessage({
-            type: 'webrtc_ice',
-            targetPeerId,
-            senderPeerId: myPeerIdRef.current,
-            candidate: event.candidate
-          })
-        }
-      }
-
-      const offer = await pc.createOffer()
-      await pc.setLocalDescription(offer)
-
-      sendWsMessage({
-        type: 'webrtc_offer',
-        targetPeerId,
-        senderPeerId: myPeerIdRef.current,
-        sharerName: user.display_name || 'Presenter',
-        offer
-      })
-    } catch (err) {
-      console.error('[WebRTC] Failed to create offer for peer:', targetPeerId, err)
-    }
-  }
-
-  // ── WebRTC Attendee: Handle Incoming Offer & Render Remote Stream ──────────────
-  const handleIncomingPeerOffer = async (senderPeerId: string, offer: RTCSessionDescriptionInit, sharerName?: string) => {
-    try {
-      const pc = new RTCPeerConnection(rtcConfig)
-      peerConnectionsRef.current[senderPeerId] = pc
-
-      pc.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-          const remoteStream = event.streams[0]
-          if (remoteScreenVideoRef.current) {
-            remoteScreenVideoRef.current.srcObject = remoteStream
-            remoteScreenVideoRef.current.play().catch(() => {})
-          }
-          setHasRemoteWebRTCStream(true)
-          setRemoteScreenInfo({
-            active: true,
-            sharerName: sharerName || 'Presenter',
-            sharerId: senderPeerId
-          })
-          setCallView('spotlight')
-        }
-      }
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendWsMessage({
-            type: 'webrtc_ice',
-            targetPeerId: senderPeerId,
-            senderPeerId: myPeerIdRef.current,
-            candidate: event.candidate
-          })
-        }
-      }
-
-      await pc.setRemoteDescription(new RTCSessionDescription(offer))
-      const answer = await pc.createAnswer()
-      await pc.setLocalDescription(answer)
-
-      sendWsMessage({
-        type: 'webrtc_answer',
-        targetPeerId: senderPeerId,
-        senderPeerId: myPeerIdRef.current,
-        answer
-      })
-    } catch (err) {
-      console.error('[WebRTC] Failed to answer incoming offer:', err)
-    }
-  }
-
-  // ── Camera and Microphone Local Media Handling ─────────────────────────────────
-  const startCameraStream = async () => {
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-          audio: true
-        })
-        localStreamRef.current = stream
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream
-        }
-        setIsCameraOn(true)
-        setIsMicOn(true)
-      }
-    } catch (err) {
-      console.warn('Media devices camera/mic permission not granted:', err)
-      setIsCameraOn(false)
-      setIsMicOn(false)
-    }
-  }
-
-  const stopCameraStream = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop())
-      localStreamRef.current = null
-    }
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach(track => track.stop())
-      screenStreamRef.current = null
-    }
-    if (screenFrameIntervalRef.current) {
-      clearInterval(screenFrameIntervalRef.current)
-      screenFrameIntervalRef.current = null
-    }
-  }
-
-  const toggleMic = () => {
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0]
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled
-      }
-    }
-    setIsMicOn(!isMicOn)
-  }
-
-  const toggleCamera = () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0]
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled
-      }
-    }
-    setIsCameraOn(!isCameraOn)
-  }
-
   // ── Screen Sharing with Dual WebRTC + High-Speed Frame Broadcaster ─────────────
   const toggleScreenShare = async () => {
     if (!isScreenSharing) {
@@ -694,9 +793,12 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             sharerName: user.display_name || (isTeacher ? 'Dr. Sarah Connor' : 'Presenter')
           })
 
-          // Create WebRTC Offer for each peer in the room
-          Object.keys(connectedPeers).forEach(peerId => {
-            createPeerOfferForStream(peerId, screenStream)
+          // Add screen tracks to all peer connections
+          Object.entries(peerConnectionsRef.current).forEach(([peerId, pc]) => {
+            screenStream.getTracks().forEach(track => {
+              pc.addTrack(track, screenStream)
+            })
+            createPeerOffer(peerId, pc)
           })
 
           // Real-time canvas snapshot broadcaster
@@ -1185,9 +1287,8 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                       className="w-full h-full object-contain bg-black"
                     />
                   ) : remoteScreenInfo.active ? (
-                    /* REMOTE ATTENDEE: Viewing Teacher / Presenter's Screen */
+                    /* REMOTE ATTENDEE: Viewing Presenter's Screen */
                     <div className="w-full h-full relative bg-black flex items-center justify-center">
-                      {/* WebRTC Video Element (High-framerate video stream) */}
                       <video
                         ref={remoteScreenVideoRef}
                         autoPlay
@@ -1195,7 +1296,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                         className={`w-full h-full object-contain ${hasRemoteWebRTCStream ? 'block' : 'hidden'}`}
                       />
 
-                      {/* Fallback Screen Frame Broadcaster (Instant snapshot image) */}
                       {!hasRemoteWebRTCStream && remoteScreenFrame && (
                         <img
                           src={remoteScreenFrame}
@@ -1235,7 +1335,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
                 {/* Side participant filmstrip in Spotlight mode */}
                 <div className="w-full md:w-64 flex md:flex-col gap-3 overflow-x-auto md:overflow-y-auto shrink-0">
-                  {/* Local camera preview */}
+                  {/* Local preview */}
                   <div className="h-36 rounded-2xl bg-slate-900 border border-slate-800 p-3 relative overflow-hidden flex flex-col justify-between shrink-0 shadow-lg">
                     <div className="w-full h-full flex items-center justify-center">
                       <video
@@ -1243,9 +1343,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                         autoPlay
                         playsInline
                         muted
-                        className={`w-full h-full object-cover rounded-xl ${isCameraOn && localStreamRef.current ? 'block' : 'hidden'}`}
+                        className={`w-full h-full object-cover rounded-xl ${isCameraOn && localStreamRef.current && localStreamRef.current.getVideoTracks().length > 0 ? 'block' : 'hidden'}`}
                       />
-                      {(!isCameraOn || !localStreamRef.current) && (
+                      {(!isCameraOn || !localStreamRef.current || localStreamRef.current.getVideoTracks().length === 0) && (
                         <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-base font-bold text-white shadow-md">
                           {user.display_name?.charAt(0) || 'U'}
                         </div>
@@ -1258,22 +1358,46 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   </div>
 
                   {/* Connected remote peers filmstrip */}
-                  {Object.entries(connectedPeers).map(([pId, peer]) => (
-                    <div key={pId} className="h-36 rounded-2xl bg-slate-900 border border-slate-800 p-3 relative overflow-hidden flex flex-col justify-between shrink-0 shadow-lg animate-in fade-in duration-300">
-                      <div className="w-full h-full flex flex-col items-center justify-center">
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border border-cyan-400 flex items-center justify-center text-base font-bold text-white shadow-md">
-                          {peer.avatar || peer.display_name.charAt(0)}
+                  {Object.entries(connectedPeers).map(([pId, peer]) => {
+                    const rStream = remoteStreams[pId]
+                    const rHasVideo = rStream && rStream.getVideoTracks().length > 0 && rStream.getVideoTracks().some(t => t.enabled)
+                    return (
+                      <div key={pId} className="h-36 rounded-2xl bg-slate-900 border border-slate-800 p-3 relative overflow-hidden flex flex-col justify-between shrink-0 shadow-lg animate-in fade-in duration-300">
+                        <div className="w-full h-full flex items-center justify-center relative">
+                          <video
+                            ref={el => {
+                              if (el && rStream && el.srcObject !== rStream) {
+                                el.srcObject = rStream
+                                el.play().catch(e => console.warn('Play error:', e))
+                              }
+                            }}
+                            autoPlay
+                            playsInline
+                            className={`w-full h-full object-cover rounded-xl ${rHasVideo ? 'block' : 'hidden'}`}
+                          />
+                          <audio
+                            ref={el => {
+                              if (el && rStream && el.srcObject !== rStream) {
+                                el.srcObject = rStream
+                                el.play().catch(e => console.warn('Audio error:', e))
+                              }
+                            }}
+                            autoPlay
+                          />
+                          {!rHasVideo && (
+                            <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border border-cyan-400 flex items-center justify-center text-base font-bold text-white shadow-md">
+                              {peer.avatar || peer.display_name.charAt(0)}
+                            </div>
+                          )}
                         </div>
-                        <span className="text-[11px] font-semibold text-slate-200 mt-2 truncate max-w-[140px]">
-                          {peer.display_name}
-                        </span>
+                        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-slate-950/80 text-[10px] font-bold text-slate-300 flex items-center gap-1">
+                          <span>{peer.display_name}</span>
+                          <span className="text-[9px] text-cyan-400 font-normal">({peer.role})</span>
+                          {peer.isMicOn === false && <MicOff className="w-2.5 h-2.5 text-red-400" />}
+                        </div>
                       </div>
-                      <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-slate-950/80 text-[10px] font-bold text-slate-300 flex items-center gap-1">
-                        <span>{peer.display_name}</span>
-                        <span className="text-[9px] text-cyan-400 font-normal">({peer.role})</span>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             ) : (
@@ -1287,9 +1411,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                       autoPlay
                       playsInline
                       muted
-                      className={`w-full h-full object-cover ${isCameraOn && localStreamRef.current ? 'block' : 'hidden'}`}
+                      className={`w-full h-full object-cover ${isCameraOn && localStreamRef.current && localStreamRef.current.getVideoTracks().length > 0 ? 'block' : 'hidden'}`}
                     />
-                    {(!isCameraOn || !localStreamRef.current) && (
+                    {(!isCameraOn || !localStreamRef.current || localStreamRef.current.getVideoTracks().length === 0) && (
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 border-2 border-cyan-400 flex items-center justify-center text-3xl font-black text-white shadow-2xl">
                           {user.display_name?.charAt(0) || 'U'}
@@ -1312,24 +1436,59 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   )}
                 </div>
 
-                {/* 2. Connected Remote Peers Tiles */}
-                {Object.entries(connectedPeers).map(([pId, peer]) => (
-                  <div key={pId} className="rounded-3xl bg-slate-900 border border-slate-800 relative overflow-hidden shadow-xl flex flex-col min-h-[240px] animate-in zoom-in-95 duration-300">
-                    <div className="flex-1 flex flex-col items-center justify-center bg-gradient-to-tr from-slate-900 to-slate-950">
-                      <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border-2 border-cyan-400 flex items-center justify-center text-3xl font-black text-white shadow-2xl">
-                        {peer.avatar || peer.display_name.charAt(0)}
+                {/* 2. Connected Remote Peers Tiles with Full WebRTC Audio & Video */}
+                {Object.entries(connectedPeers).map(([pId, peer]) => {
+                  const rStream = remoteStreams[pId]
+                  const rHasVideo = rStream && rStream.getVideoTracks().length > 0 && rStream.getVideoTracks().some(t => t.enabled)
+                  return (
+                    <div key={pId} className="rounded-3xl bg-slate-900 border border-slate-800 relative overflow-hidden shadow-xl flex flex-col min-h-[240px] animate-in zoom-in-95 duration-300">
+                      <div className="flex-1 flex items-center justify-center relative bg-gradient-to-tr from-slate-900 to-slate-950">
+                        {/* Remote Video Element */}
+                        <video
+                          ref={el => {
+                            if (el && rStream && el.srcObject !== rStream) {
+                              el.srcObject = rStream
+                              el.play().catch(e => console.warn('Play error:', e))
+                            }
+                          }}
+                          autoPlay
+                          playsInline
+                          className={`w-full h-full object-cover ${rHasVideo ? 'block' : 'hidden'}`}
+                        />
+                        {/* Remote Audio Element */}
+                        <audio
+                          ref={el => {
+                            if (el && rStream && el.srcObject !== rStream) {
+                              el.srcObject = rStream
+                              el.play().catch(e => console.warn('Audio play error:', e))
+                            }
+                          }}
+                          autoPlay
+                        />
+                        {!rHasVideo && (
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border-2 border-cyan-400 flex items-center justify-center text-3xl font-black text-white shadow-2xl">
+                              {peer.avatar || peer.display_name.charAt(0)}
+                            </div>
+                            <h4 className="text-base font-bold text-white mt-1">{peer.display_name}</h4>
+                            <p className="text-xs text-slate-400 capitalize">{peer.role}</p>
+                          </div>
+                        )}
                       </div>
-                      <h4 className="text-base font-bold text-white mt-3">{peer.display_name}</h4>
-                      <p className="text-xs text-slate-400 capitalize">{peer.role}</p>
+                      <div className="absolute bottom-3 left-3 px-3 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-white flex items-center gap-2">
+                        <span>{peer.display_name}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                          {peer.role}
+                        </span>
+                        {peer.isMicOn === false ? (
+                          <MicOff className="w-3 h-3 text-red-400 ml-1" />
+                        ) : (
+                          <Volume2 className="w-3 h-3 text-emerald-400 ml-1" />
+                        )}
+                      </div>
                     </div>
-                    <div className="absolute bottom-3 left-3 px-3 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-white flex items-center gap-2">
-                      <span>{peer.display_name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
-                        {peer.role}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
 
                 {/* Fallback tile only if alone */}
                 {totalParticipantCount === 1 && (
@@ -1339,7 +1498,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                     </div>
                     <h4 className="font-bold text-sm text-slate-300">Waiting for others to join...</h4>
                     <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                      When attendees join this Grade {activeCallRoom.grade_number}-{activeCallRoom.section_name} session, their video tiles will appear right here automatically.
+                      When attendees join this Grade {activeCallRoom.grade_number}-{activeCallRoom.section_name} session, their video and audio tiles will appear right here automatically.
                     </p>
                   </div>
                 )}
