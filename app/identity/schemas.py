@@ -13,6 +13,7 @@ class UserCreate(BaseModel):
     phone_number: str | None = Field(default=None, max_length=32)
     timezone: str = "UTC"
     locale: str = "en"
+    role: str = "student"
 
 
 class LoginRequest(BaseModel):
