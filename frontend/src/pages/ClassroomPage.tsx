@@ -1688,12 +1688,19 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
   const handleEndMeetingForAll = async () => {
     if (!activeCallRoom) return
+    const roomId = activeCallRoom.id
     try {
+      // 1. Send WebSocket notification to all attendees
       sendWsMessage({
         type: 'meeting_ended',
         reason: 'The instructor has ended the live session for all participants.'
       })
-      await updateLiveClassStatus(activeCallRoom.id, 'ended')
+      // 2. Call backend PUT endpoint to mark status="ended" and trigger server-side broadcast
+      await updateLiveClassStatus(roomId, 'ended').catch(err => {
+        console.warn('Status update API error:', err)
+      })
+      // 3. Grace period pause (400ms) to ensure WebSocket frame is dispatched before socket teardown
+      await new Promise(resolve => setTimeout(resolve, 400))
     } catch (err) {
       console.warn('End class error:', err)
     } finally {

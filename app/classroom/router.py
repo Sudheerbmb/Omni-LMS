@@ -167,6 +167,23 @@ async def classroom_websocket_endpoint(
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
 
+            elif msg_type == "meeting_ended":
+                reason = data.get("reason") or "The instructor has ended the live session for all participants."
+                # Broadcast to ALL attendees in the room
+                await room_manager.broadcast(room_id, {
+                    "type": "meeting_ended",
+                    "reason": reason
+                })
+
+            elif msg_type == "kick_peer":
+                target_pid = data.get("targetPeerId")
+                if target_pid:
+                    await room_manager.broadcast(room_id, {
+                        "type": "kick_peer",
+                        "targetPeerId": target_pid,
+                        "reason": data.get("reason", "You have been removed from this live class by the instructor.")
+                    })
+
             else:
                 # Forward all other messages (chat, whiteboard, screen frames, reactions, polls, webrtc)
                 sender = data.get("senderPeerId") or active_peer_id
@@ -240,4 +257,12 @@ async def update_class_status_endpoint(
     updated = await update_live_class_status(session, class_id, new_status)
     if not updated:
         raise HTTPException(status_code=404, detail="Live class not found")
+
+    # If status is set to ended, broadcast meeting_ended to all students in room!
+    if new_status == "ended":
+        await room_manager.broadcast(str(class_id), {
+            "type": "meeting_ended",
+            "reason": "The instructor has ended this live class session for all participants."
+        })
+
     return {"id": str(updated.id), "status": updated.status}
