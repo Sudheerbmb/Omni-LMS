@@ -858,6 +858,13 @@ export interface TeacherCopilotData {
     correct_index: number
     explanation?: string
   } | null
+  diagram_data?: {
+    title: string
+    diagram_ascii: string
+    key_concepts: string[]
+    pedagogical_explanation: string
+    whiteboard_text?: string
+  } | null
 }
 
 export const getTeacherCopilotAssistance = (
@@ -866,10 +873,40 @@ export const getTeacherCopilotAssistance = (
     current_topic: string
     grade?: any
     subject?: string
-    action: 'enhance' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question'
+    action: 'enhance' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question' | 'diagram'
+    live_transcript?: string
+    elapsed_seconds?: number
   }
 ) =>
   request<TeacherCopilotData>(`/api/v1/classroom/classes/${classId}/teacher-copilot`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+
+export interface StudentTutorData {
+  action: 'doubt' | 'summary' | 'milestones'
+  result: string
+  milestones?: Array<{
+    timestamp: string
+    title: string
+    summary: string
+  }>
+  key_points?: string[]
+}
+
+export const getStudentTutorAssistance = (
+  classId: string,
+  payload: {
+    action: 'doubt' | 'summary' | 'milestones'
+    query?: string
+    live_transcript?: string
+    elapsed_seconds?: number
+    grade?: any
+    subject?: string
+    topic?: string
+  }
+) =>
+  request<StudentTutorData>(`/api/v1/classroom/classes/${classId}/student-tutor`, {
     method: 'POST',
     body: JSON.stringify(payload)
   })

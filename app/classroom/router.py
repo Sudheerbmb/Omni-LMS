@@ -346,7 +346,19 @@ class TeacherCopilotRequest(BaseModel):
     current_topic: str
     grade: Optional[Any] = None
     subject: Optional[str] = None
-    action: Optional[str] = "enhance"  # enhance | fun_fact | analogy | quick_poll | engagement_question
+    action: Optional[str] = "enhance"  # enhance | fun_fact | analogy | quick_poll | engagement_question | diagram
+    live_transcript: Optional[str] = None
+    elapsed_seconds: Optional[int] = None
+
+
+class StudentTutorRequest(BaseModel):
+    action: str = "doubt"  # doubt | summary | milestones
+    query: Optional[str] = None
+    live_transcript: Optional[str] = None
+    elapsed_seconds: Optional[int] = None
+    grade: Optional[Any] = None
+    subject: Optional[str] = None
+    topic: Optional[str] = None
 
 
 async def transcribe_video_url_with_groq(media_url: str) -> tuple[Optional[str], Optional[list]]:
@@ -680,42 +692,120 @@ async def teacher_copilot_assistant(
     grade = payload.grade or "General"
     subject = payload.subject or "Classroom Lesson"
     action = payload.action or "enhance"
+    live_transcript = (payload.live_transcript or "").strip()
+    elapsed_sec = payload.elapsed_seconds or 0
+    elapsed_min_str = f"{elapsed_sec // 60:02d}:{elapsed_sec % 60:02d}"
 
-    if action == "fun_fact":
+    transcript_context = ""
+    if live_transcript:
+        transcript_context = (
+            f"\n\nLIVE LECTURE TRANSCRIPTION UP TO MINUTE {elapsed_min_str}:\n"
+            f"--- START TRANSCRIPT ---\n{live_transcript}\n--- END TRANSCRIPT ---\n"
+            "IMPORTANT: Ground your output dynamically in what the teacher has actually explained up to this exact second in class!\n"
+        )
+
+    if action == "diagram":
+        prompt = (
+            f"You are an expert visual diagram architect and teacher copilot assisting a live teacher in real-time.\n"
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n"
+            f"{transcript_context}\n"
+            "The teacher wants a clear, visually structured concept diagram that explains the concept being taught (e.g. if teaching OOPS, illustrate Classes, Objects, Inheritance, or Encapsulation based on what was taught up to this minute).\n\n"
+            "Output a valid JSON object with the following schema:\n"
+            "- 'title': concise, descriptive title for the diagram\n"
+            "- 'diagram_ascii': a clean, beautifully formatted ASCII / text box diagram with boxes, dividers, and arrows (using +, -, |, v, ->) illustrating the concept architecture or workflow\n"
+            "- 'key_concepts': an array of 3-4 bullet strings explaining the components in the diagram\n"
+            "- 'pedagogical_explanation': 2-3 sentences explaining how the teacher can walk students through this diagram on the whiteboard\n"
+            "- 'whiteboard_text': concise summary lines ready to be transferred to the classroom whiteboard\n"
+            "Return ONLY valid JSON."
+        )
+        res_json = await call_groq_llm([
+            {"role": "system", "content": "You are a JSON-only visual diagram generator for teachers. Output valid JSON."},
+            {"role": "user", "content": prompt}
+        ], json_mode=True, max_tokens=650, temperature=0.4)
+
+        diagram_obj = None
+        if res_json:
+            try:
+                diagram_obj = json.loads(res_json)
+            except Exception:
+                pass
+
+        if not diagram_obj:
+            diagram_obj = {
+                "title": f"Concept Architecture: {topic}",
+                "diagram_ascii": (
+                    "+-------------------------------------------------------+\n"
+                    f"|                 {topic.upper()}                       |\n"
+                    "+-------------------------------------------------------+\n"
+                    "       |                               |\n"
+                    "       v                               v\n"
+                    "+--------------+               +----------------+\n"
+                    "| Components   |               | Implementation |\n"
+                    "| - State/Data | -----(uses)-->| - Methods/Logic|\n"
+                    "+--------------+               +----------------+\n"
+                    "       |                               |\n"
+                    "       +-------------[ Execution ]-----+                \n"
+                    "                             v                          \n"
+                    "               +-----------------------+                \n"
+                    "               | Output / Verified Goal|                \n"
+                    "               +-----------------------+"
+                ),
+                "key_concepts": [
+                    f"Core definition and foundations of {topic}",
+                    "Relationship between data structures and algorithmic operations",
+                    "Real-world application and error prevention"
+                ],
+                "pedagogical_explanation": f"Walk students through {topic} starting from the high-level system boundary down into individual functional components.",
+                "whiteboard_text": f"TOPIC: {topic}\n- Key Concept 1: Foundation\n- Key Concept 2: Flow of control\n- Key Concept 3: Verification"
+            }
+
+        return {
+            "action": "diagram",
+            "topic": topic,
+            "result": diagram_obj.get("pedagogical_explanation", ""),
+            "diagram_data": diagram_obj,
+            "poll_data": None
+        }
+
+    elif action == "fun_fact":
         prompt = (
             f"You are an inspiring AI teaching assistant in a live virtual classroom.\n"
-            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n"
+            f"{transcript_context}\n"
             f"Provide 1 mind-blowing, surprising, and kid-friendly FUN FACT about '{topic}' "
-            f"that the teacher can immediately read aloud to capture students' excitement and hook their attention! "
-            f"Keep it concise and punchy."
+            "that the teacher can immediately read aloud to capture students' excitement and hook their attention! "
+            "Keep it concise and punchy."
         )
     elif action == "analogy":
         prompt = (
             f"You are an inspiring AI teaching assistant in a live virtual classroom.\n"
-            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n"
+            f"{transcript_context}\n"
             f"Provide an intuitive, memorable, everyday REAL-WORLD ANALOGY to explain '{topic}' "
             f"so that students in Grade {grade} can visualize and understand it instantly! "
-            f"Keep it concise, relatable, and fun."
+            "Keep it concise, relatable, and fun."
         )
     elif action == "engagement_question":
         prompt = (
             f"You are an inspiring AI teaching assistant in a live virtual classroom.\n"
-            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n"
+            f"{transcript_context}\n"
             f"Provide 1 thought-provoking, interactive question for the teacher to ask the students right now "
-            f"to spark lively discussion and check their understanding! "
-            f"Include a brief hint on what to look for in their answers."
+            "to spark lively discussion and check their understanding! "
+            "Include a brief hint on what to look for in their answers."
         )
     elif action == "quick_poll":
         prompt = (
             f"You are an inspiring AI teaching assistant in a live virtual classroom.\n"
-            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
-            f"Generate a quick 1-question multiple choice poll for the teacher to launch to the class right now.\n"
-            f"Output a JSON object with:\n"
-            f"- 'question': string,\n"
-            f"- 'options': array of 3 or 4 choices,\n"
-            f"- 'correct_index': integer 0-3,\n"
-            f"- 'explanation': 1 sentence explaining why that choice is correct.\n"
-            f"Return valid JSON only."
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n"
+            f"{transcript_context}\n"
+            "Generate a quick 1-question multiple choice poll for the teacher to launch to the class right now based on what was just taught.\n"
+            "Output a JSON object with:\n"
+            "- 'question': string,\n"
+            "- 'options': array of 3 or 4 choices,\n"
+            "- 'correct_index': integer 0-3,\n"
+            "- 'explanation': 1 sentence explaining why that choice is correct.\n"
+            "Return valid JSON only."
         )
         res_json = await call_groq_llm([
             {"role": "system", "content": "You are a JSON-only poll generator for teachers. Output valid JSON."},
@@ -733,17 +823,19 @@ async def teacher_copilot_assistant(
             "action": "quick_poll",
             "topic": topic,
             "result": poll_obj.get("question") if poll_obj else "What is the key takeaway?",
-            "poll_data": poll_obj
+            "poll_data": poll_obj,
+            "diagram_data": None
         }
     else:  # "enhance" - Teaching tips
         prompt = (
             f"You are an expert AI teaching copilot assisting a live teacher in real-time.\n"
-            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n\n"
-            f"Provide:\n"
-            f"1. 💡 **Teaching Tip:** A high-impact pedagogical trick to explain this topic effectively.\n"
-            f"2. ⚠️ **Common Pitfall:** What students often misunderstand and how to steer them right.\n"
-            f"3. 🎯 **Quick Activity:** A 1-minute interactive challenge to keep the class active and engaged.\n"
-            f"Format with clean bullet points and clear emojis."
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n"
+            f"{transcript_context}\n"
+            "Provide:\n"
+            "1. 💡 **Teaching Tip:** A high-impact pedagogical trick to explain this topic effectively.\n"
+            "2. ⚠️ **Common Pitfall:** What students often misunderstand and how to steer them right.\n"
+            "3. 🎯 **Quick Activity:** A 1-minute interactive challenge to keep the class active and engaged.\n"
+            "Format with clean bullet points and clear emojis."
         )
 
     res_text = await call_groq_llm([
@@ -754,14 +846,138 @@ async def teacher_copilot_assistant(
     if not res_text:
         res_text = (
             f"💡 **Teaching Tips for {topic}:**\n\n"
-            f"• Break the concept down into two simple steps before solving examples on the board.\n"
-            f"• Ask students to raise their hands or type their thoughts in the chat to keep them active!\n"
-            f"• Use the Quick Poll button to test understanding before moving to the next section."
+            "• Break the concept down into two simple steps before solving examples on the board.\n"
+            "• Ask students to raise their hands or type their thoughts in the chat to keep them active!\n"
+            "• Use the Quick Poll button to test understanding before moving to the next section."
         )
 
     return {
         "action": action,
         "topic": topic,
         "result": res_text,
-        "poll_data": None
+        "poll_data": None,
+        "diagram_data": None
     }
+
+
+@router.post("/classes/{class_id}/student-tutor")
+async def student_tutor_assistant(
+    class_id: str,
+    payload: StudentTutorRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    action = payload.action or "doubt"
+    query = (payload.query or "").strip()
+    topic = (payload.topic or "Current Lesson").strip()
+    grade = payload.grade or "General"
+    subject = payload.subject or "Classroom Lesson"
+    transcript = (payload.live_transcript or "").strip()
+    elapsed_sec = payload.elapsed_seconds or 0
+    min_str = f"{elapsed_sec // 60:02d}:{elapsed_sec % 60:02d}"
+
+    transcript_context = (
+        f"Live Transcription of the lecture up to {min_str}:\n"
+        f"--- START TRANSCRIPT ---\n{transcript if transcript else 'The teacher is explaining foundational concepts of ' + topic}\n--- END TRANSCRIPT ---\n"
+    )
+
+    if action == "doubt":
+        prompt = (
+            f"You are a friendly, patient, and highly intelligent AI Classroom Tutor assisting a student during a live class.\n"
+            f"Subject: {subject} | Grade: {grade} | Topic: {topic}\n"
+            f"{transcript_context}\n"
+            f"Student's Doubt / Question: '{query}'\n\n"
+            "Instructions:\n"
+            f"1. Explain the answer warmly, clearly, and step-by-step, referencing what the teacher has just taught up to {min_str}.\n"
+            "2. Provide a quick concrete analogy or short example to cement their understanding.\n"
+            "3. Keep the tone encouraging, supportive, and student friendly."
+        )
+        res_text = await call_groq_llm([
+            {"role": "system", "content": "You are a warm, expert AI student tutor for live classrooms."},
+            {"role": "user", "content": prompt}
+        ], max_tokens=450, temperature=0.5)
+
+        return {
+            "action": "doubt",
+            "result": res_text or f"Great question! Based on what your teacher has covered so far in {topic}, remember to break the problem into smaller steps. Feel free to ask more!",
+            "milestones": None,
+            "key_points": None
+        }
+
+    elif action == "summary":
+        prompt = (
+            f"You are an expert educational AI Tutor.\n"
+            f"Subject: {subject} | Grade: {grade} | Topic: {topic}\n"
+            f"{transcript_context}\n"
+            f"The student wants a concise live recap of everything taught from the start of class up to minute {min_str}.\n"
+            "Provide:\n"
+            f"📌 **Key Takeaways Covered So Far ({min_str}):**\n"
+            "• 3-4 bullet points highlighting the core concepts taught up to now.\n"
+            "💡 **Important Definitions & Rules:**\n"
+            "• Key terms or formulas introduced by the teacher.\n"
+            "🚀 **What to Focus On Next:**\n"
+            "• A 1-sentence tip on what to watch for as the lecture continues.\n"
+            "Keep it beautifully formatted with markdown and emojis."
+        )
+        res_text = await call_groq_llm([
+            {"role": "system", "content": "You are a live classroom AI Tutor providing structured lecture recaps."},
+            {"role": "user", "content": prompt}
+        ], max_tokens=500, temperature=0.4)
+
+        return {
+            "action": "summary",
+            "result": res_text or f"📌 **Class Recap up to {min_str}:**\n• The class is actively studying {topic}.\n• Follow along with the teacher's whiteboard notes!",
+            "milestones": None,
+            "key_points": None
+        }
+
+    elif action == "milestones":
+        prompt = (
+            f"You are an AI Tutor creating an interactive chronological milestone timeline of the lecture.\n"
+            f"Subject: {subject} | Topic: {topic}\n"
+            f"{transcript_context}\n"
+            f"Extract key chronological milestones/phases from 00:00 up to {min_str}.\n"
+            "Output a valid JSON object with:\n"
+            "- 'milestones': array of objects with:\n"
+            "    - 'timestamp': string like '01:30' or '05:15'\n"
+            "    - 'title': concise topic title (e.g. 'Introduction & Objectives', 'Class Definition', 'Live Demonstration')\n"
+            "    - 'summary': 1 sentence explaining what was covered\n"
+            "- 'key_points': array of 3 summary takeaways\n"
+            "Return ONLY valid JSON."
+        )
+        res_json = await call_groq_llm([
+            {"role": "system", "content": "You are a JSON-only timeline generator. Output valid JSON."},
+            {"role": "user", "content": prompt}
+        ], json_mode=True, max_tokens=500, temperature=0.3)
+
+        milestones_obj = None
+        if res_json:
+            try:
+                milestones_obj = json.loads(res_json)
+            except Exception:
+                pass
+
+        if not milestones_obj or not milestones_obj.get("milestones"):
+            half_min = f"{(elapsed_sec // 2) // 60:02d}:{(elapsed_sec // 2) % 60:02d}"
+            milestones_obj = {
+                "milestones": [
+                    {"timestamp": "00:00", "title": f"Class Kickoff: {topic}", "summary": "Teacher welcomed the class and introduced core objectives."},
+                    {"timestamp": half_min if elapsed_sec > 60 else "01:00", "title": "Concept Explanation & Principles", "summary": f"Discussion on foundational principles and mechanics of {topic}."},
+                    {"timestamp": min_str, "title": "Current Live Progress", "summary": "Interactive discussion and real-time conceptual examples."}
+                ],
+                "key_points": [
+                    f"Understanding {topic} fundamentals",
+                    "Connecting theoretical concepts with practical usage",
+                    "Active participation in the live lecture"
+                ]
+            }
+
+        return {
+            "action": "milestones",
+            "result": f"Generated {len(milestones_obj.get('milestones', []))} milestones up to {min_str}.",
+            "milestones": milestones_obj.get("milestones", []),
+            "key_points": milestones_obj.get("key_points", [])
+        }
+
+    return {"error": "Invalid action"}
+
