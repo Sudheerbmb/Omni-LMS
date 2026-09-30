@@ -54,9 +54,9 @@ import {
   ShieldCheck,
   Cpu,
   Check,
-  Loader2,
-  Download
+  Loader2
 } from 'lucide-react'
+import { AiRecordingPlayerModal } from '../components/AiRecordingPlayerModal'
 
 type DashboardPageProps = {
   user: User
@@ -80,6 +80,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
   const [selectedRecordingUrl, setSelectedRecordingUrl] = useState<string | null>(null)
+  const [selectedRecordingClass, setSelectedRecordingClass] = useState<any | null>(null)
   const [userFilter, setUserFilter] = useState<'all' | 'pending' | 'student' | 'teacher'>('all')
 
   // Announcement Modal State
@@ -964,7 +965,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
                     <div className="shrink-0 flex items-center gap-2">
                       {cls.recording_url ? (
                         <button
-                          onClick={() => setSelectedRecordingUrl(cls.recording_url!)}
+                          onClick={() => { setSelectedRecordingUrl(cls.recording_url!); setSelectedRecordingClass(cls); }}
                           className="px-3 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 font-bold text-xs flex items-center gap-1.5 transition-colors"
                         >
                           <Video className="w-3.5 h-3.5 text-purple-300" />
@@ -1050,7 +1051,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
 
                   <div className="pt-4">
                     <button
-                      onClick={() => setSelectedRecordingUrl(cls.recording_url!)}
+                      onClick={() => { setSelectedRecordingUrl(cls.recording_url!); setSelectedRecordingClass(cls); }}
                       className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95"
                     >
                       <Play className="w-3.5 h-3.5 fill-white" />
@@ -1296,49 +1297,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
         </div>
       </div>
 
-      {/* ── MODAL: CLOUDINARY CLASS RECORDING PLAYER ───────────────────────── */}
+      {/* ── MODAL: CLOUDINARY CLASS RECORDING PLAYER WITH AI DOUBT SOLVER ───── */}
       {selectedRecordingUrl && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/30">
-                  <Video className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white">Class Lecture Recording</h3>
-                  <p className="text-[11px] text-slate-400">High-Definition replay powered by Cloudinary</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={selectedRecordingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-slate-700"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download</span>
-                </a>
-                <button
-                  onClick={() => setSelectedRecordingUrl(null)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            <div className="bg-black aspect-video flex items-center justify-center relative">
-              <video
-                src={selectedRecordingUrl}
-                controls
-                autoPlay
-                className="w-full h-full object-contain"
-              />
-            </div>
-          </div>
-        </div>
+        <AiRecordingPlayerModal
+          recordingUrl={selectedRecordingUrl}
+          classInfo={selectedRecordingClass}
+          onClose={() => {
+            setSelectedRecordingUrl(null)
+            setSelectedRecordingClass(null)
+          }}
+        />
       )}
 
       {/* ── MODAL: BROADCAST SCHOOL ANNOUNCEMENT ─────────────────────────────── */}

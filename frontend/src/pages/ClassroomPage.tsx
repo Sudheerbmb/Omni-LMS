@@ -99,6 +99,7 @@ import {
 } from '../lib/api'
 
 import type { SchoolLiveClass, TeacherTimetableSlot } from '../lib/api'
+import { AiRecordingPlayerModal } from '../components/AiRecordingPlayerModal'
 
 interface PeerUser {
 
@@ -457,6 +458,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const [recordingUploadProgress, setRecordingUploadProgress] = useState<string | null>(null)
 
   const [selectedRecordingUrl, setSelectedRecordingUrl] = useState<string | null>(null)
+  const [selectedRecordingClass, setSelectedRecordingClass] = useState<SchoolLiveClass | null>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 
@@ -6099,7 +6101,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
                       <button
 
-                        onClick={() => setSelectedRecordingUrl(cls.recording_url!)}
+                        onClick={() => { setSelectedRecordingUrl(cls.recording_url!); setSelectedRecordingClass(cls); }}
 
                         className="flex-1 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/20 transition-all hover:scale-[1.02] active:scale-95"
 
@@ -6331,92 +6333,16 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
       )}
 
-      {/* MODAL: Watch Class Recording (Cloudinary Replay) */}
-
+      {/* MODAL: Watch Class Recording with AI Doubt Solver & Summary */}
       {selectedRecordingUrl && (
-
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
-
-              <div className="flex items-center gap-2.5">
-
-                <div className="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/30">
-
-                  <Video className="w-4 h-4" />
-
-                </div>
-
-                <div>
-
-                  <h3 className="text-sm font-bold text-white">Class Lecture Recording</h3>
-
-                  <p className="text-[11px] text-slate-400">High-Definition replay powered by Cloudinary</p>
-
-                </div>
-
-              </div>
-
-              <div className="flex items-center gap-2">
-
-                <a
-
-                  href={selectedRecordingUrl}
-
-                  target="_blank"
-
-                  rel="noopener noreferrer"
-
-                  download
-
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-slate-700"
-
-                >
-
-                  <Download className="w-3.5 h-3.5" />
-
-                  <span>Download</span>
-
-                </a>
-
-                <button
-
-                  onClick={() => setSelectedRecordingUrl(null)}
-
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-
-                >
-
-                  <X className="w-5 h-5" />
-
-                </button>
-
-              </div>
-
-            </div>
-
-            <div className="bg-black aspect-video flex items-center justify-center relative">
-
-              <video
-
-                src={selectedRecordingUrl}
-
-                controls
-
-                autoPlay
-
-                className="w-full h-full object-contain"
-
-              />
-
-            </div>
-
-          </div>
-
-        </div>
-
+        <AiRecordingPlayerModal
+          recordingUrl={selectedRecordingUrl}
+          classInfo={selectedRecordingClass}
+          onClose={() => {
+            setSelectedRecordingUrl(null)
+            setSelectedRecordingClass(null)
+          }}
+        />
       )}
 
       {/* RECORDING UPLOAD PROGRESS TOAST */}

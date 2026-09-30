@@ -780,3 +780,35 @@ export const uploadClassRecording = (classId: string, videoBlob: Blob) => {
   )
 }
 
+export interface ClassAiSummaryData {
+  class_id: string
+  title: string
+  subject: string
+  grade: number
+  overview: string
+  key_topics: string[]
+  whiteboard_notes: string[]
+  exam_takeaways: string[]
+  quiz: Array<{
+    question: string
+    options: string[]
+    correct_index: number
+    explanation: string
+  }>
+}
+
+export const askClassAiDoubt = (classId: string, question: string) =>
+  request<{
+    class_id: string
+    question: string
+    answer: string
+    subject: string
+    grade: number
+  }>(`/api/v1/classroom/classes/${classId}/ai-doubt`, {
+    method: 'POST',
+    body: JSON.stringify({ question })
+  })
+
+export const getClassAiSummary = (classId: string) =>
+  request<ClassAiSummaryData>(`/api/v1/classroom/classes/${classId}/ai-summary`)
+
