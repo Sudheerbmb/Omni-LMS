@@ -38,7 +38,8 @@ async def get_teacher_timetable_slots_for_scheduling(
         profile = await session.scalar(
             select(TeacherProfile)
             .options(selectinload(TeacherProfile.skills).selectinload(TeacherSubjectSkill.subject))
-            .where(TeacherProfile.email == teacher_user.email)
+            .join(User, TeacherProfile.user_id == User.id)
+            .where(User.email == teacher_user.email)
         )
     if not profile:
         profile = (await session.scalars(select(TeacherProfile).options(selectinload(TeacherProfile.skills).selectinload(TeacherSubjectSkill.subject)))).first()

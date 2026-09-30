@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.communication.models import Announcement, DirectMessage
 from app.communication.schemas import AnnouncementCreate, AnnouncementRead, MessageCreate, MessageRead
 from app.identity.auth import get_current_user
-from app.identity.models import Organization, OrganizationMembership, User
+from app.identity.models import OrganizationMembership, User
+from app.tenancy.models import Organization
 from app.identity.permissions import require_permission
 from app.notifications.models import Notification
 from app.platform.database import get_session
