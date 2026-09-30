@@ -239,14 +239,23 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     }
 
     const roomId = activeCallRoom.id
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
     const myPeerId = myPeerIdRef.current
     const myDisplayName = user.display_name || user.email || (isTeacher ? 'Instructor' : 'Student')
     const myRole = user.role || 'student'
 
-    // Form connection URL with query params for instant identification
-    const wsUrl = `${protocol}//${host}/api/v1/classroom/ws/${roomId}?peer_id=${encodeURIComponent(myPeerId)}&name=${encodeURIComponent(myDisplayName)}&role=${encodeURIComponent(myRole)}`
+    // Form connection URL: if frontend is on Vercel and backend on Railway, connect directly to backend:
+    let wsBase = ''
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (apiUrl && typeof apiUrl === 'string' && apiUrl.startsWith('http')) {
+      const parsed = new URL(apiUrl)
+      const wsProto = parsed.protocol === 'https:' ? 'wss:' : 'ws:'
+      wsBase = `${wsProto}//${parsed.host}`
+    } else {
+      const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      wsBase = `${wsProto}//${window.location.host}`
+    }
+
+    const wsUrl = `${wsBase}/api/v1/classroom/ws/${roomId}?peer_id=${encodeURIComponent(myPeerId)}&name=${encodeURIComponent(myDisplayName)}&role=${encodeURIComponent(myRole)}`
 
     console.log('[Classroom WS] Connecting to:', wsUrl)
     const socket = new WebSocket(wsUrl)
