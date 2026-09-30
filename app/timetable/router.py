@@ -48,6 +48,7 @@ from app.timetable.service import (
     toggle_timetable_rule,
     update_slot,
     update_timetable_rule,
+    get_school_courses_and_syllabus,
 )
 
 router = APIRouter(prefix="/api/v1/timetable", tags=["timetable"])
@@ -315,3 +316,25 @@ async def toggle_restriction_endpoint(
         "restriction_id": str(restriction.id),
         "is_active": restriction.is_active,
     }
+
+@router.get("/courses", response_model=List[Dict[str, Any]])
+async def get_school_courses_endpoint(
+    grade_number: Optional[int] = Query(None),
+    teacher_id: Optional[UUID] = Query(None),
+    user_email: Optional[str] = Query(None),
+    user_role: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Returns role-filtered academic courses and detailed chapter syllabi.
+    - Students see all subjects for their grade with full chapter breakdown.
+    - Teachers see the courses they teach across grades according to timetable allocations.
+    - Admins see the master curriculum across all grades.
+    """
+    return await get_school_courses_and_syllabus(
+        session=session,
+        grade_number=grade_number,
+        teacher_id=teacher_id,
+        user_email=user_email,
+        user_role=user_role,
+    )

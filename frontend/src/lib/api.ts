@@ -300,3 +300,39 @@ export const getTeacherLeaves = () => request<any[]>('/api/v1/timetable/leaves')
 
 
 
+
+export interface CurriculumChapter {
+  num: number
+  title: string
+  duration_weeks: number
+  topics: string[]
+  outcomes: string
+}
+
+export interface SchoolCourse {
+  id: string
+  title: string
+  subject_code: string
+  subject_name: string
+  category: string
+  color: string
+  grade_number: number
+  grade_name: string
+  academic_year: string
+  periods_per_week: number
+  instructor_name: string
+  instructor_email: string
+  instructor_id: string | null
+  total_chapters: number
+  estimated_weeks: number
+  chapters: CurriculumChapter[]
+}
+
+export const getSchoolCourses = (params?: { grade_number?: number; teacher_id?: string; user_email?: string; user_role?: string }) => {
+  const query = new URLSearchParams()
+  if (params?.grade_number) query.set('grade_number', params.grade_number.toString())
+  if (params?.teacher_id) query.set('teacher_id', params.teacher_id)
+  if (params?.user_email) query.set('user_email', params.user_email)
+  if (params?.user_role) query.set('user_role', params.user_role)
+  return request<SchoolCourse[]>(`/api/v1/timetable/courses?${query.toString()}`)
+}

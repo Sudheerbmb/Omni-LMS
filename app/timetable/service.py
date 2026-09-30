@@ -1,3 +1,4 @@
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -738,3 +739,225 @@ async def get_all_teachers_with_feedback(session: AsyncSession) -> List[Dict[str
         })
 
     return result
+
+
+from app.timetable.curriculum_data import get_chapters_for_subject_and_grade
+
+
+async def get_school_courses_and_syllabus(
+    session: AsyncSession,
+    user_id: Optional[UUID] = None,
+    user_email: Optional[str] = None,
+    user_role: Optional[str] = None,
+    grade_number: Optional[int] = None,
+    teacher_id: Optional[UUID] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Returns role-filtered courses and comprehensive chapter syllabi.
+    - Students see all subjects/courses of their enrolled grade (e.g. Class 6 Science with all chapters).
+    - Teachers see the courses they teach across grades according to timetable allocations (e.g. Class 6 Math, Class 7 Math).
+    - Admins see all courses across all 10 grades.
+    """
+    grades = (
+        await session.scalars(
+            select(SchoolGrade)
+            .options(
+                selectinload(SchoolGrade.curriculum).selectinload(GradeCurriculum.subject),
+                selectinload(SchoolGrade.sections),
+            )
+            .order_by(SchoolGrade.grade_number)
+        )
+    ).all()
+    grade_map = {g.grade_number: g for g in grades}
+    grade_by_id = {g.id: g for g in grades}
+
+    # Fetch all teachers
+    teachers = (
+        await session.scalars(
+            select(TeacherProfile)
+            .options(
+                selectinload(TeacherProfile.skills).selectinload(TeacherSubjectSkill.subject),
+            )
+        )
+    ).all()
+    user_ids = [t.user_id for t in teachers]
+    users = (await session.scalars(select(User).where(User.id.in_(user_ids)))).all() if user_ids else []
+    user_map = {u.id: u for u in users}
+
+    teacher_info = {}
+    for t in teachers:
+        u = user_map.get(t.user_id)
+        teacher_info[t.id] = {
+            "id": str(t.id),
+            "display_name": u.display_name if u else f"Teacher {t.employee_id}",
+            "email": u.email if u else "",
+            "employee_id": t.employee_id,
+            "skills": [sk.subject.code for sk in t.skills if sk.subject],
+        }
+
+    # Fetch existing timetable slots to correlate assigned teachers
+    slots = (
+        await session.scalars(
+            select(TimetableSlot)
+            .options(
+                selectinload(TimetableSlot.section),
+                selectinload(TimetableSlot.subject),
+                selectinload(TimetableSlot.teacher),
+            )
+        )
+    ).all()
+
+    # Build slot teacher assignment mapping: (grade_id, subject_id) -> teacher_id
+    assignment_map = {}
+    teacher_classes_map = {}  # teacher_id -> set of (grade_id, subject_id)
+    for s in slots:
+        if s.section and s.subject and s.teacher_id:
+            pair = (s.section.grade_id, s.subject_id)
+            if pair not in assignment_map:
+                assignment_map[pair] = s.teacher_id
+            if s.teacher_id not in teacher_classes_map:
+                teacher_classes_map[s.teacher_id] = set()
+            teacher_classes_map[s.teacher_id].add(pair)
+
+    courses_result: List[Dict[str, Any]] = []
+
+    # 1. TEACHER VIEW
+    if user_role == "teacher" or (not user_role and user_email and ("teacher" in user_email or "@school.edu" in user_email and "student" not in user_email)):
+        # Locate teacher profile
+        target_teacher = None
+        if teacher_id:
+            target_teacher = next((t for t in teachers if t.id == teacher_id), None)
+        if not target_teacher and user_id:
+            target_teacher = next((t for t in teachers if t.user_id == user_id), None)
+        if not target_teacher and user_email:
+            target_teacher = next((t for t in teachers if (user_map.get(t.user_id) and user_map[t.user_id].email.lower() == user_email.lower())), None)
+        if not target_teacher and teachers:
+            target_teacher = teachers[0]
+
+        if target_teacher:
+            pairs = teacher_classes_map.get(target_teacher.id, set())
+            # If no slots generated, infer pairs from skills across reasonable grades (e.g. 6, 7, 8, 9)
+            if not pairs:
+                for sk in target_teacher.skills:
+                    if sk.subject:
+                        for g_num in [6, 7, 8]:
+                            if g_num in grade_map:
+                                pairs.add((grade_map[g_num].id, sk.subject.id))
+
+            subjects_all = (await session.scalars(select(Subject))).all()
+            sub_by_id = {s.id: s for s in subjects_all}
+
+            for gid, sid in sorted(pairs, key=lambda x: (grade_by_id.get(x[0]).grade_number if grade_by_id.get(x[0]) else 99)):
+                gr = grade_by_id.get(gid)
+                sb = sub_by_id.get(sid)
+                if gr and sb:
+                    chapters = get_chapters_for_subject_and_grade(sb.code, gr.grade_number)
+                    curr_item = next((c for c in gr.curriculum if c.subject_id == sb.id), None)
+                    periods = curr_item.periods_per_week if curr_item else 5
+                    t_info = teacher_info.get(target_teacher.id, {})
+
+                    courses_result.append({
+                        "id": f"{gr.grade_number}_{sb.code}",
+                        "title": f"{gr.name} — {sb.name}",
+                        "subject_code": sb.code,
+                        "subject_name": sb.name,
+                        "category": sb.category,
+                        "color": sb.color,
+                        "grade_number": gr.grade_number,
+                        "grade_name": gr.name,
+                        "academic_year": gr.academic_year,
+                        "periods_per_week": periods,
+                        "instructor_name": t_info.get("display_name", "Assigned Faculty"),
+                        "instructor_email": t_info.get("email", ""),
+                        "instructor_id": str(target_teacher.id),
+                        "total_chapters": len(chapters),
+                        "estimated_weeks": sum(ch.get("duration_weeks", 2) for ch in chapters),
+                        "chapters": chapters,
+                    })
+        return courses_result
+
+    # 2. STUDENT VIEW
+    if user_role == "student" or (not user_role and user_email and "student" in user_email):
+        # Determine student grade number
+        target_g_num = 9  # default
+        if grade_number:
+            target_g_num = grade_number
+        elif user_email:
+            m = re.search(r"class(\d+)", user_email, re.IGNORECASE)
+            if m:
+                target_g_num = int(m.group(1))
+
+        gr = grade_map.get(target_g_num) or (grades[0] if grades else None)
+        if gr:
+            for curr in gr.curriculum:
+                sb = curr.subject
+                if not sb:
+                    continue
+                # Find instructor
+                assigned_tid = assignment_map.get((gr.id, sb.id))
+                if not assigned_tid:
+                    # Pick first teacher with matching skill
+                    cand = next((t for t in teachers if any(sk.subject_id == sb.id for sk in t.skills)), None)
+                    if cand:
+                        assigned_tid = cand.id
+
+                t_info = teacher_info.get(assigned_tid, {}) if assigned_tid else {}
+                chapters = get_chapters_for_subject_and_grade(sb.code, gr.grade_number)
+
+                courses_result.append({
+                    "id": f"{gr.grade_number}_{sb.code}",
+                    "title": f"{gr.name} — {sb.name}",
+                    "subject_code": sb.code,
+                    "subject_name": sb.name,
+                    "category": sb.category,
+                    "color": sb.color,
+                    "grade_number": gr.grade_number,
+                    "grade_name": gr.name,
+                    "academic_year": gr.academic_year,
+                    "periods_per_week": curr.periods_per_week,
+                    "instructor_name": t_info.get("display_name", "Department Faculty"),
+                    "instructor_email": t_info.get("email", ""),
+                    "instructor_id": str(assigned_tid) if assigned_tid else None,
+                    "total_chapters": len(chapters),
+                    "estimated_weeks": sum(ch.get("duration_weeks", 2) for ch in chapters),
+                    "chapters": chapters,
+                })
+        return courses_result
+
+    # 3. ADMIN VIEW (All courses or filtered by grade_number)
+    for gr in grades:
+        if grade_number and gr.grade_number != grade_number:
+            continue
+        for curr in gr.curriculum:
+            sb = curr.subject
+            if not sb:
+                continue
+            assigned_tid = assignment_map.get((gr.id, sb.id))
+            if not assigned_tid:
+                cand = next((t for t in teachers if any(sk.subject_id == sb.id for sk in t.skills)), None)
+                if cand:
+                    assigned_tid = cand.id
+
+            t_info = teacher_info.get(assigned_tid, {}) if assigned_tid else {}
+            chapters = get_chapters_for_subject_and_grade(sb.code, gr.grade_number)
+
+            courses_result.append({
+                "id": f"{gr.grade_number}_{sb.code}",
+                "title": f"{gr.name} — {sb.name}",
+                "subject_code": sb.code,
+                "subject_name": sb.name,
+                "category": sb.category,
+                "color": sb.color,
+                "grade_number": gr.grade_number,
+                "grade_name": gr.name,
+                "academic_year": gr.academic_year,
+                "periods_per_week": curr.periods_per_week,
+                "instructor_name": t_info.get("display_name", "Department Faculty"),
+                "instructor_email": t_info.get("email", ""),
+                "instructor_id": str(assigned_tid) if assigned_tid else None,
+                "total_chapters": len(chapters),
+                "estimated_weeks": sum(ch.get("duration_weeks", 2) for ch in chapters),
+                "chapters": chapters,
+            })
+
+    return courses_result

@@ -34,8 +34,8 @@ export function App() {
 
   // Auth Form State
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
-  const [authEmail, setAuthEmail] = useState('admin@example.com')
-  const [authPassword, setAuthPassword] = useState('ChangeMe123!')
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
   const [authName, setAuthName] = useState('')
   const [authPhone, setAuthPhone] = useState('')
   const [authRole, setAuthRole] = useState<'student' | 'teacher'>('student')
@@ -133,6 +133,92 @@ export function App() {
           {authError && (
             <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs text-center">
               {authError}
+            </div>
+          )}
+
+          {/* Quick 1-Click Login Selector for instant access */}
+          {authMode === 'login' && (
+            <div className="space-y-2.5 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                <span>⚡ Instant One-Click Login</span>
+                <span className="text-[10px] text-cyan-400 font-mono">100% Fail-Proof</span>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Administrator:</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { setAuthEmail('admin@example.com'); setAuthPassword('ChangeMe123!'); setAuthError(''); }}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold transition-all"
+                    >
+                      🛡️ Admin (System)
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Faculty Teachers:</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { setAuthEmail('sarah.connor@school.edu'); setAuthPassword('Teacher123!'); setAuthError(''); }}
+                      className="px-2 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 text-[11px] font-semibold transition-all"
+                    >
+                      👩‍🏫 Dr. Sarah (Math)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthEmail('alan.turing@school.edu'); setAuthPassword('Teacher123!'); setAuthError(''); }}
+                      className="px-2 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 text-[11px] font-semibold transition-all"
+                    >
+                      👨‍🏫 Prof. Turing (CS)
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Enrolled Students (Classes 1 - 10):</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { setAuthEmail('student.class1@school.edu'); setAuthPassword('Student123!'); setAuthError(''); }}
+                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
+                    >
+                      🎒 Class 1-A
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthEmail('student.class4@school.edu'); setAuthPassword('Student123!'); setAuthError(''); }}
+                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
+                    >
+                      🎒 Class 4-A
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthEmail('student.class6@school.edu'); setAuthPassword('Student123!'); setAuthError(''); }}
+                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
+                    >
+                      🎒 Class 6-A
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthEmail('student.class9@school.edu'); setAuthPassword('Student123!'); setAuthError(''); }}
+                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
+                    >
+                      🎒 Class 9-A
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthEmail('student.class10@school.edu'); setAuthPassword('Student123!'); setAuthError(''); }}
+                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
+                    >
+                      🎒 Class 10-A
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
