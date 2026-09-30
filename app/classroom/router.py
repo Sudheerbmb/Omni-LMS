@@ -1,3 +1,4 @@
+import urllib.parse
 from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
 
@@ -21,59 +22,146 @@ from app.platform.database import get_session
 router = APIRouter(prefix="/api/v1/classroom", tags=["classroom"])
 
 
-# ── In-Memory Real-Time Room WebSocket Manager ─────────────────────────────────
+# ── Authoritative Real-Time Room & Peer Presence Manager ───────────────────────
 class RoomConnectionManager:
     def __init__(self):
-        self.active_rooms: Dict[str, Set[WebSocket]] = {}
+        # room_id -> { peer_id: (WebSocket, user_dict) }
+        self.rooms: Dict[str, Dict[str, tuple[WebSocket, dict]]] = {}
 
-    async def connect(self, room_id: str, websocket: WebSocket):
-        await websocket.accept()
-        if room_id not in self.active_rooms:
-            self.active_rooms[room_id] = set()
-        self.active_rooms[room_id].add(websocket)
-        print(f"[WS] Peer joined room {room_id}. Total peers in room: {len(self.active_rooms[room_id])}")
+    async def register_peer(self, room_id: str, peer_id: str, websocket: WebSocket, user_info: dict):
+        if room_id not in self.rooms:
+            self.rooms[room_id] = {}
 
-    def disconnect(self, room_id: str, websocket: WebSocket):
-        if room_id in self.active_rooms:
-            self.active_rooms[room_id].discard(websocket)
-            if not self.active_rooms[room_id]:
-                del self.active_rooms[room_id]
-        print(f"[WS] Peer disconnected from room {room_id}")
+        # 1. Gather all other peers currently in this room
+        current_peers = [
+            {"peerId": pid, "user": info}
+            for pid, (ws, info) in self.rooms[room_id].items()
+            if pid != peer_id
+        ]
 
-    async def broadcast(self, room_id: str, message: dict, sender: Optional[WebSocket] = None):
-        if room_id in self.active_rooms:
-            for connection in list(self.active_rooms[room_id]):
-                if connection != sender:
-                    try:
-                        await connection.send_json(message)
-                    except Exception:
-                        pass
+        # 2. Add or update this peer
+        self.rooms[room_id][peer_id] = (websocket, user_info)
+        print(f"[WS] Peer '{user_info.get('display_name', peer_id)}' (id={peer_id}) registered in room {room_id}. Total peers: {len(self.rooms[room_id])}")
+
+        # 3. Immediately send the newly connected peer the full list of existing attendees
+        try:
+            await websocket.send_json({
+                "type": "room_state",
+                "peers": current_peers,
+                "roomId": room_id
+            })
+        except Exception as err:
+            print(f"[WS] Error sending room_state to {peer_id}: {err}")
+
+        # 4. Broadcast to all other peers that this new attendee has joined
+        join_broadcast = {
+            "type": "peer_join",
+            "peerId": peer_id,
+            "user": user_info
+        }
+        await self.broadcast(room_id, join_broadcast, sender_peer_id=peer_id)
+
+    async def unregister_peer(self, room_id: str, peer_id: str):
+        if room_id in self.rooms and peer_id in self.rooms[room_id]:
+            del self.rooms[room_id][peer_id]
+            print(f"[WS] Peer {peer_id} removed from room {room_id}. Remaining: {len(self.rooms[room_id])}")
+            if not self.rooms[room_id]:
+                del self.rooms[room_id]
+
+            # Notify remaining attendees that this peer has left
+            leave_broadcast = {
+                "type": "peer_leave",
+                "peerId": peer_id
+            }
+            await self.broadcast(room_id, leave_broadcast)
+
+    async def broadcast(self, room_id: str, message: dict, sender_peer_id: Optional[str] = None):
+        if room_id in self.rooms:
+            target_peer_id = message.get("targetPeerId")
+            for pid, (ws, _) in list(self.rooms[room_id].items()):
+                # If message specifies a single recipient peer, send only to them
+                if target_peer_id:
+                    if pid == target_peer_id:
+                        try:
+                            await ws.send_json(message)
+                        except Exception:
+                            pass
+                else:
+                    # Broadcast to everyone except the sender
+                    if pid != sender_peer_id:
+                        try:
+                            await ws.send_json(message)
+                        except Exception:
+                            pass
 
 
 room_manager = RoomConnectionManager()
 
 
 @router.websocket("/ws/{room_id}")
-async def classroom_websocket_endpoint(websocket: WebSocket, room_id: str):
+async def classroom_websocket_endpoint(
+    websocket: WebSocket,
+    room_id: str,
+    peer_id: Optional[str] = Query(None),
+    name: Optional[str] = Query(None),
+    role: Optional[str] = Query(None),
+):
     """
-    High-speed real-time WebSocket channel for:
-    - Real-time whiteboard vector synchronization
-    - Cross-browser in-call chat
-    - Live polls broadcasting & voting
-    - Floating reaction emojis
-    - WebRTC signaling (SDP offer/answer, ICE candidates)
+    Real-Time WebSocket channel for:
+    - Authoritative instantaneous peer presence roster
+    - Cross-browser in-call chat with zero delay
+    - Live collaborative whiteboard vector synchronization
+    - Screen share broadcast notifications & high-speed frame snapshots
+    - WebRTC signaling (offers, answers, ICE candidates)
+    - Interactive live polls & floating animated reactions
     """
-    await room_manager.connect(room_id, websocket)
+    await websocket.accept()
+
+    # Determine peer identifier and display info from query params
+    active_peer_id = peer_id or f"peer_{id(websocket)}"
+    display_name = urllib.parse.unquote(name) if name else ("Teacher" if role == "teacher" else "Student")
+    user_role = role or "student"
+
+    user_info = {
+        "id": active_peer_id,
+        "display_name": display_name,
+        "role": user_role,
+        "avatar": display_name[:1].upper() if display_name else "U",
+        "isMicOn": True,
+        "isCameraOn": True,
+        "isHandRaised": False,
+    }
+
+    # Register peer in room and send initial room roster
+    await room_manager.register_peer(room_id, active_peer_id, websocket, user_info)
+
     try:
         while True:
             data = await websocket.receive_json()
-            # Broadcast the signal/message to all other peers in this room
-            await room_manager.broadcast(room_id, data, sender=websocket)
+            msg_type = data.get("type")
+
+            # Handle peer presence registration message if sent over connection
+            if msg_type in ("init", "peer_join", "peer_presence"):
+                pid = data.get("peerId", active_peer_id)
+                u_info = data.get("user", user_info)
+                active_peer_id = pid
+                user_info = u_info
+                # Update peer record in memory and notify other attendees
+                await room_manager.register_peer(room_id, active_peer_id, websocket, user_info)
+
+            elif msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+
+            else:
+                # Forward all other messages (chat, whiteboard, screen frames, reactions, polls, webrtc)
+                sender = data.get("senderPeerId") or active_peer_id
+                await room_manager.broadcast(room_id, data, sender_peer_id=sender)
+
     except WebSocketDisconnect:
-        room_manager.disconnect(room_id, websocket)
-    except Exception as e:
-        print(f"[WS ERROR] {e}")
-        room_manager.disconnect(room_id, websocket)
+        await room_manager.unregister_peer(room_id, active_peer_id)
+    except Exception as exc:
+        print(f"[WS Exception] {exc}")
+        await room_manager.unregister_peer(room_id, active_peer_id)
 
 
 @router.get("/teacher-slots", response_model=List[TeacherTimetableSlotRead])
@@ -81,10 +169,6 @@ async def get_teacher_slots_endpoint(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> List[Dict[str, Any]]:
-    """
-    Retrieves the allowed timetable periods for this teacher according to the master schedule.
-    Filters strictly to subjects and classes assigned to this teacher.
-    """
     return await get_teacher_timetable_slots_for_scheduling(session, current_user)
 
 
@@ -94,10 +178,6 @@ async def create_school_live_class_endpoint(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    """
-    Schedules or launches an instant live classroom session.
-    Automatically links to grade, section, subject, and period from timetable.
-    """
     try:
         live_class = await schedule_school_live_class(session, data, current_user)
         return {
@@ -127,12 +207,6 @@ async def get_school_live_classes_endpoint(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> List[Dict[str, Any]]:
-    """
-    Returns live classroom sessions:
-    - Students see active/scheduled classes for their grade.
-    - Teachers see sessions they lead.
-    - Admins see all sessions.
-    """
     return await get_school_live_classes(
         session=session,
         user=current_user,
@@ -144,11 +218,10 @@ async def get_school_live_classes_endpoint(
 @router.put("/classes/{class_id}/status")
 async def update_class_status_endpoint(
     class_id: UUID,
-    new_status: str = Query(..., regex="^(scheduled|live|ended)$"),
+    new_status: str = Query(..., pattern="^(scheduled|live|ended)$"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    """Updates the status of a live class (start live session or end meeting)."""
     updated = await update_live_class_status(session, class_id, new_status)
     if not updated:
         raise HTTPException(status_code=404, detail="Live class not found")

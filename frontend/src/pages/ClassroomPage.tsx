@@ -96,7 +96,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const localStreamRef = useRef<MediaStream | null>(null)
   const screenStreamRef = useRef<MediaStream | null>(null)
 
-  // Remote Screen Share State (Received from Teacher or Presenter)
+  // Remote Screen Share State (Received from Presenter)
   const [remoteScreenInfo, setRemoteScreenInfo] = useState<{
     active: boolean
     sharerName: string
@@ -114,6 +114,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const myPeerIdRef = useRef<string>(`peer_${user.id ? user.id.substring(0, 8) : Math.random().toString(36).substring(2, 8)}_${Math.random().toString(36).substring(2, 6)}`)
   const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({})
   const screenFrameIntervalRef = useRef<number | null>(null)
+  const heartbeatIntervalRef = useRef<number | null>(null)
 
   // Whiteboard Canvas State
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -155,7 +156,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
   const isTeacher = user.role === 'teacher'
   const isAdmin = user.role === 'admin'
-  
+
   // ── Helper to send WebSocket message safely ───────────────────────────────────
   const sendWsMessage = (msg: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -220,10 +221,13 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   // ── WebRTC / WebSocket Room Connection Lifecycle ─────────────────────────────
   useEffect(() => {
     if (!activeCallRoom) {
-      // Disconnect WS and Peer Connections when leaving room
       if (wsRef.current) {
         wsRef.current.close()
         wsRef.current = null
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current)
+        heartbeatIntervalRef.current = null
       }
       Object.values(peerConnectionsRef.current).forEach(pc => pc.close())
       peerConnectionsRef.current = {}
@@ -237,90 +241,90 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
     const roomId = activeCallRoom.id
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const wsUrl = `${protocol}//${host}/api/v1/classroom/ws/${roomId}`
+    const myPeerId = myPeerIdRef.current
+    const myDisplayName = user.display_name || user.email || (isTeacher ? 'Instructor' : 'Student')
+    const myRole = user.role || 'student'
+
+    // Form connection URL with query params for instant identification
+    const wsUrl = `${protocol}//${host}/api/v1/classroom/ws/${roomId}?peer_id=${encodeURIComponent(myPeerId)}&name=${encodeURIComponent(myDisplayName)}&role=${encodeURIComponent(myRole)}`
 
     console.log('[Classroom WS] Connecting to:', wsUrl)
     const socket = new WebSocket(wsUrl)
     wsRef.current = socket
 
+    const myUserPayload: PeerUser = {
+      id: myPeerId,
+      display_name: myDisplayName,
+      role: myRole,
+      avatar: myDisplayName.charAt(0).toUpperCase(),
+      isMicOn,
+      isCameraOn,
+      isHandRaised
+    }
+
     socket.onopen = () => {
       console.log('[Classroom WS] Connected to live room:', roomId)
-      // Announce presence to all peers in this room
-      const myUserPayload: PeerUser = {
-        id: user.id || myPeerIdRef.current,
-        display_name: user.display_name || user.email || (isTeacher ? 'Instructor' : 'Student'),
-        role: user.role || 'student',
-        avatar: (user.display_name || user.email || 'U').charAt(0).toUpperCase(),
-        isMicOn: true,
-        isCameraOn: true,
-        isHandRaised: false
-      }
+      // Announce initial presence payload
       socket.send(JSON.stringify({
         type: 'peer_join',
-        peerId: myPeerIdRef.current,
+        peerId: myPeerId,
         user: myUserPayload
       }))
+
+      // Heartbeat presence ping every 2.5s to guarantee 100% presence
+      heartbeatIntervalRef.current = window.setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
+            type: 'peer_presence',
+            peerId: myPeerId,
+            user: {
+              id: myPeerId,
+              display_name: myDisplayName,
+              role: myRole,
+              avatar: myDisplayName.charAt(0).toUpperCase(),
+              isMicOn,
+              isCameraOn,
+              isHandRaised
+            }
+          }))
+        }
+      }, 2500)
     }
 
     socket.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data)
-        const myPeerId = myPeerIdRef.current
 
         switch (data.type) {
-          // ── Real-Time Chat Message ──────────────────────────────────────────
-          case 'chat': {
-            if (data.payload) {
-              setChatMessages(prev => {
-                // Deduplicate by message ID
-                if (prev.some(m => m.id === data.payload.id)) return prev
-                return [...prev, data.payload]
+          // ── Authoritative Room State from Server ────────────────────────────
+          case 'room_state': {
+            console.log('[Classroom WS] Received authoritative room_state:', data.peers)
+            const peerMap: Record<string, PeerUser> = {}
+            if (Array.isArray(data.peers)) {
+              data.peers.forEach((p: any) => {
+                if (p.peerId && p.peerId !== myPeerId) {
+                  peerMap[p.peerId] = p.user
+                }
               })
-              if (activeSideDrawer !== 'chat') {
-                setUnreadChatCount(prev => prev + 1)
-              }
             }
+            setConnectedPeers(peerMap)
             break
           }
 
-          // ── Peer Join Announcement ──────────────────────────────────────────
-          case 'peer_join': {
-            if (data.peerId && data.peerId !== myPeerId) {
+          // ── Peer Joined / Presence Update ───────────────────────────────────
+          case 'peer_join':
+          case 'peer_presence':
+          case 'peer_announce': {
+            if (data.peerId && data.peerId !== myPeerId && data.user) {
               setConnectedPeers(prev => ({
                 ...prev,
                 [data.peerId]: data.user
               }))
-              // Greet the newcomer back so they register our presence
-              socket.send(JSON.stringify({
-                type: 'peer_announce',
-                targetPeerId: data.peerId,
-                peerId: myPeerId,
-                user: {
-                  id: user.id || myPeerId,
-                  display_name: user.display_name || (isTeacher ? 'Instructor' : 'Student'),
-                  role: user.role || 'student',
-                  avatar: (user.display_name || 'U').charAt(0).toUpperCase(),
-                  isMicOn,
-                  isCameraOn,
-                  isHandRaised
-                }
-              }))
 
-              // If WE are currently sharing screen, send WebRTC offer to newcomer
+              // If WE are sharing screen, initiate WebRTC offer to this peer
               if (screenStreamRef.current && isScreenSharing) {
                 createPeerOfferForStream(data.peerId, screenStreamRef.current)
               }
-            }
-            break
-          }
-
-          // ── Peer Announce Response ──────────────────────────────────────────
-          case 'peer_announce': {
-            if ((!data.targetPeerId || data.targetPeerId === myPeerId) && data.peerId !== myPeerId) {
-              setConnectedPeers(prev => ({
-                ...prev,
-                [data.peerId]: data.user
-              }))
             }
             break
           }
@@ -342,6 +346,20 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                 setRemoteScreenFrame(null)
                 setHasRemoteWebRTCStream(false)
                 setCallView('gallery')
+              }
+            }
+            break
+          }
+
+          // ── Real-Time Chat Message ──────────────────────────────────────────
+          case 'chat': {
+            if (data.payload) {
+              setChatMessages(prev => {
+                if (prev.some(m => m.id === data.payload.id)) return prev
+                return [...prev, data.payload]
+              })
+              if (activeSideDrawer !== 'chat') {
+                setUnreadChatCount(prev => prev + 1)
               }
             }
             break
@@ -411,7 +429,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             if (data.sharerId !== myPeerId) {
               setRemoteScreenInfo({
                 active: true,
-                sharerName: data.sharerName || 'Teacher',
+                sharerName: data.sharerName || 'Presenter',
                 sharerId: data.sharerId
               })
               setCallView('spotlight')
@@ -437,7 +455,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               if (!remoteScreenInfo.active) {
                 setRemoteScreenInfo({
                   active: true,
-                  sharerName: data.sharerName || 'Teacher',
+                  sharerName: data.sharerName || 'Presenter',
                   sharerId: data.sharerId
                 })
                 setCallView('spotlight')
@@ -446,7 +464,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             break
           }
 
-          // ── WebRTC Signaling (Offer, Answer, ICE Candidates) ─────────────────
+          // ── WebRTC Signaling ────────────────────────────────────────────────
           case 'webrtc_offer': {
             if (data.targetPeerId === myPeerId && data.offer) {
               await handleIncomingPeerOffer(data.senderPeerId, data.offer, data.sharerName)
@@ -484,11 +502,18 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       }
     }
 
+    socket.onerror = (e) => {
+      console.error('[Classroom WS] Socket error:', e)
+    }
+
     socket.onclose = () => {
       console.log('[Classroom WS] Disconnected')
     }
 
     return () => {
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current)
+      }
       socket.close()
     }
   }, [activeCallRoom])
@@ -536,7 +561,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
       peerConnectionsRef.current[senderPeerId] = pc
 
       pc.ontrack = (event) => {
-        console.log('[WebRTC] Received remote screen track:', event.streams)
         if (event.streams && event.streams[0]) {
           const remoteStream = event.streams[0]
           if (remoteScreenVideoRef.current) {
@@ -546,7 +570,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
           setHasRemoteWebRTCStream(true)
           setRemoteScreenInfo({
             active: true,
-            sharerName: sharerName || 'Teacher',
+            sharerName: sharerName || 'Presenter',
             sharerId: senderPeerId
           })
           setCallView('spotlight')
@@ -658,7 +682,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
           sendWsMessage({
             type: 'screen_share_start',
             sharerId: myPeerIdRef.current,
-            sharerName: user.display_name || 'Presenter'
+            sharerName: user.display_name || (isTeacher ? 'Dr. Sarah Connor' : 'Presenter')
           })
 
           // Create WebRTC Offer for each peer in the room
@@ -666,7 +690,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             createPeerOfferForStream(peerId, screenStream)
           })
 
-          // Real-time canvas snapshot broadcaster (Fallback for 100% cross-browser sync)
+          // Real-time canvas snapshot broadcaster
           const hiddenCanvas = document.createElement('canvas')
           hiddenCanvas.width = 960
           hiddenCanvas.height = 540
@@ -679,7 +703,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               sendWsMessage({
                 type: 'screen_frame',
                 sharerId: myPeerIdRef.current,
-                sharerName: user.display_name || 'Presenter',
+                sharerName: user.display_name || (isTeacher ? 'Dr. Sarah Connor' : 'Presenter'),
                 frameData
               })
             }
@@ -1210,10 +1234,10 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                         autoPlay
                         playsInline
                         muted
-                        className={`w-full h-full object-cover rounded-xl ${isCameraOn ? 'block' : 'hidden'}`}
+                        className={`w-full h-full object-cover rounded-xl ${isCameraOn && localStreamRef.current ? 'block' : 'hidden'}`}
                       />
-                      {!isCameraOn && (
-                        <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-sm font-bold text-slate-300">
+                      {(!isCameraOn || !localStreamRef.current) && (
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-base font-bold text-white shadow-md">
                           {user.display_name?.charAt(0) || 'U'}
                         </div>
                       )}
@@ -1226,12 +1250,12 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
                   {/* Connected remote peers filmstrip */}
                   {Object.entries(connectedPeers).map(([pId, peer]) => (
-                    <div key={pId} className="h-36 rounded-2xl bg-slate-900 border border-slate-800 p-3 relative overflow-hidden flex flex-col justify-between shrink-0 shadow-lg">
+                    <div key={pId} className="h-36 rounded-2xl bg-slate-900 border border-slate-800 p-3 relative overflow-hidden flex flex-col justify-between shrink-0 shadow-lg animate-in fade-in duration-300">
                       <div className="w-full h-full flex flex-col items-center justify-center">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-sm font-bold text-white shadow-md">
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border border-cyan-400 flex items-center justify-center text-base font-bold text-white shadow-md">
                           {peer.avatar || peer.display_name.charAt(0)}
                         </div>
-                        <span className="text-[11px] font-semibold text-slate-300 mt-2 truncate max-w-[120px]">
+                        <span className="text-[11px] font-semibold text-slate-200 mt-2 truncate max-w-[140px]">
                           {peer.display_name}
                         </span>
                       </div>
@@ -1245,20 +1269,23 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               </div>
             ) : (
               /* VIEW MODE C: GALLERY GRID VIEW (Equal video tiles for all participants) */
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 overflow-y-auto pr-1">
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-4 overflow-y-auto pr-1">
                 {/* 1. Local User Tile */}
-                <div className="rounded-3xl bg-slate-900 border border-slate-800 relative overflow-hidden shadow-xl flex flex-col min-h-[220px]">
+                <div className="rounded-3xl bg-slate-900 border border-slate-800 relative overflow-hidden shadow-xl flex flex-col min-h-[240px]">
                   <div className="flex-1 flex items-center justify-center relative bg-gradient-to-tr from-slate-900 to-slate-950">
                     <video
                       ref={localVideoRef}
                       autoPlay
                       playsInline
                       muted
-                      className={`w-full h-full object-cover ${isCameraOn ? 'block' : 'hidden'}`}
+                      className={`w-full h-full object-cover ${isCameraOn && localStreamRef.current ? 'block' : 'hidden'}`}
                     />
-                    {!isCameraOn && (
-                      <div className="w-20 h-20 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-2xl font-black text-cyan-400 shadow-xl">
-                        {user.display_name?.charAt(0) || 'U'}
+                    {(!isCameraOn || !localStreamRef.current) && (
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 border-2 border-cyan-400 flex items-center justify-center text-3xl font-black text-white shadow-2xl">
+                          {user.display_name?.charAt(0) || 'U'}
+                        </div>
+                        <span className="text-sm font-bold text-slate-300">{user.display_name || user.email}</span>
                       </div>
                     )}
                   </div>
@@ -1278,12 +1305,12 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
                 {/* 2. Connected Remote Peers Tiles */}
                 {Object.entries(connectedPeers).map(([pId, peer]) => (
-                  <div key={pId} className="rounded-3xl bg-slate-900 border border-slate-800 relative overflow-hidden shadow-xl flex flex-col min-h-[220px]">
+                  <div key={pId} className="rounded-3xl bg-slate-900 border border-slate-800 relative overflow-hidden shadow-xl flex flex-col min-h-[240px] animate-in zoom-in-95 duration-300">
                     <div className="flex-1 flex flex-col items-center justify-center bg-gradient-to-tr from-slate-900 to-slate-950">
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border-2 border-cyan-400 flex items-center justify-center text-2xl font-black text-white shadow-xl">
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border-2 border-cyan-400 flex items-center justify-center text-3xl font-black text-white shadow-2xl">
                         {peer.avatar || peer.display_name.charAt(0)}
                       </div>
-                      <h4 className="text-sm font-bold text-white mt-3">{peer.display_name}</h4>
+                      <h4 className="text-base font-bold text-white mt-3">{peer.display_name}</h4>
                       <p className="text-xs text-slate-400 capitalize">{peer.role}</p>
                     </div>
                     <div className="absolute bottom-3 left-3 px-3 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-white flex items-center gap-2">
@@ -1295,15 +1322,15 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                   </div>
                 ))}
 
-                {/* Fallback tiles if only 1 participant is present */}
+                {/* Fallback tile only if alone */}
                 {totalParticipantCount === 1 && (
-                  <div className="rounded-3xl bg-slate-900/40 border border-dashed border-slate-800 flex flex-col items-center justify-center text-center p-6 min-h-[220px]">
+                  <div className="rounded-3xl bg-slate-900/40 border border-dashed border-slate-800 flex flex-col items-center justify-center text-center p-6 min-h-[240px]">
                     <div className="w-14 h-14 rounded-2xl bg-slate-800/80 flex items-center justify-center text-slate-400 mb-3">
                       <Users className="w-6 h-6 text-cyan-400" />
                     </div>
                     <h4 className="font-bold text-sm text-slate-300">Waiting for others to join...</h4>
                     <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                      When students join this Grade {activeCallRoom.grade_number}-{activeCallRoom.section_name} session, their video tiles will appear right here automatically.
+                      When attendees join this Grade {activeCallRoom.grade_number}-{activeCallRoom.section_name} session, their video tiles will appear right here automatically.
                     </p>
                   </div>
                 )}
@@ -1472,7 +1499,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
                               <span className="text-slate-200">{opt.text}</span>
                               <span className="text-cyan-400 font-bold ml-2">{pct}%</span>
                             </div>
-                            {/* Vote percentage bar */}
                             <div
                               className="absolute left-0 top-0 bottom-0 bg-cyan-500/20 transition-all duration-500 ease-out"
                               style={{ width: `${pct}%` }}
@@ -1494,17 +1520,14 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
           )}
         </div>
 
-        {/* BOTTOM CALL CONTROL BAR (Mic, Cam, Screen Share, Whiteboard, Reactions, Chat, Leave) */}
+        {/* BOTTOM CALL CONTROL BAR */}
         <footer className="h-20 bg-slate-900 border-t border-slate-800 px-6 flex items-center justify-between shrink-0 z-30">
-          {/* Left: Device status */}
           <div className="hidden sm:flex items-center gap-2">
             <span className="text-xs font-medium text-slate-400">Classroom:</span>
             <span className="text-xs font-bold text-slate-200">{activeCallRoom.title}</span>
           </div>
 
-          {/* Center: Main Call Action Buttons */}
           <div className="flex items-center gap-2.5 sm:gap-3 mx-auto sm:mx-0">
-            {/* Microphone Toggle */}
             <button
               onClick={toggleMic}
               className={`p-3.5 rounded-2xl font-bold transition-all shadow-md ${
@@ -1515,7 +1538,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
             </button>
 
-            {/* Camera Toggle */}
             <button
               onClick={toggleCamera}
               className={`p-3.5 rounded-2xl font-bold transition-all shadow-md ${
@@ -1526,7 +1548,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
             </button>
 
-            {/* Screen Share Button */}
             <button
               onClick={toggleScreenShare}
               className={`p-3.5 rounded-2xl font-bold transition-all shadow-md ${
@@ -1539,7 +1560,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               <Monitor className="w-5 h-5" />
             </button>
 
-            {/* Collaborative Whiteboard Toggle */}
             <button
               onClick={() => setCallView(callView === 'whiteboard' ? 'gallery' : 'whiteboard')}
               className={`p-3.5 rounded-2xl font-bold transition-all shadow-md ${
@@ -1552,7 +1572,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               <PenTool className="w-5 h-5" />
             </button>
 
-            {/* Raise Hand Toggle */}
             <button
               onClick={() => {
                 const next = !isHandRaised
@@ -1567,7 +1586,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
               <Hand className="w-5 h-5" />
             </button>
 
-            {/* Floating Reactions Bar */}
             <div className="hidden lg:flex items-center gap-1 bg-slate-950 px-2 py-1.5 rounded-2xl border border-slate-800">
               {['👏', '❤️', '🎉', '💡', '🔥'].map((emoji) => (
                 <button
@@ -1581,7 +1599,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
             </div>
           </div>
 
-          {/* Right: Drawer Toggles */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
@@ -1629,7 +1646,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   // ── RENDER 2: CLASSROOM HUB / DASHBOARD VIEW ─────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* HEADER SECTION */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -1645,7 +1661,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
           </p>
         </div>
 
-        {/* Schedule / Launch Action for Teachers & Admins */}
         {(isTeacher || isAdmin) && (
           <button
             onClick={() => setShowScheduleModal(true)}
@@ -1657,7 +1672,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
         )}
       </div>
 
-      {/* FILTER BAR */}
       <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-slate-500 ml-2">Grade Filter:</span>
@@ -1681,7 +1695,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
         </button>
       </div>
 
-      {/* CLASS SESSIONS LISTING */}
       {loading ? (
         <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-3">
           <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin" />
@@ -1785,7 +1798,6 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
         </div>
       )}
 
-      {/* SCHEDULE MODAL (Strictly Linked to Real Timetable Slots) */}
       {showScheduleModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 animate-in zoom-in-95 duration-200">
