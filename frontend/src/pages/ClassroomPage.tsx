@@ -67,7 +67,6 @@ import {
   MoveRight,
 
   Highlighter,
-  Palette,
   Copy,
   CheckCheck,
   Subtitles,
@@ -98,6 +97,7 @@ import {
   createSchoolLiveClass,
 
   updateLiveClassStatus,
+  endLiveClassSession,
 
   uploadClassRecording,
   getTeacherCopilotAssistance,
@@ -482,6 +482,8 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
   // Student AI Tutor State (Visible only to students)
   const [showStudentTutorModal, setShowStudentTutorModal] = useState(false)
+  const [postSessionSummary, setPostSessionSummary] = useState<any | null>(null)
+  const [showPostSessionSummaryModal, setShowPostSessionSummaryModal] = useState(false)
   const [studentTutorTab, setStudentTutorTab] = useState<'doubt' | 'summary' | 'milestones'>('doubt')
   const [studentDoubtInput, setStudentDoubtInput] = useState('')
   const [studentDoubtHistory, setStudentDoubtHistory] = useState<Array<{ id: string; question: string; answer: string; timestamp: string }>>([])
@@ -493,9 +495,9 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   const [showLiveCaptions, setShowLiveCaptions] = useState(true)
   const [latestTranscriptSnippet, setLatestTranscriptSnippet] = useState<string>('')
   const [liveTranscript, setLiveTranscript] = useState<Array<{ id: string; second: number; text: string; speaker: string; timestamp: number }>>([])
-  const [showSkinMenu, setShowSkinMenu] = useState(false)
+  
   const [copilotTopic, setCopilotTopic] = useState('')
-  const [copilotAction, setCopilotAction] = useState<'enhance' | 'diagram' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question'>('diagram')
+  const [copilotAction, setCopilotAction] = useState<'enhance' | 'diagram' | 'case_study' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question'>('diagram')
   const [copilotResult, setCopilotResult] = useState<string | null>(null)
   const [copilotPollData, setCopilotPollData] = useState<any | null>(null)
   const [isCopilotLoading, setIsCopilotLoading] = useState(false)
@@ -1988,17 +1990,16 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
           }
 
           case 'meeting_ended': {
-
             stopCameraStream()
-
+            if (data.summary) {
+              setPostSessionSummary(data.summary)
+              setShowPostSessionSummaryModal(true)
+            } else {
+              setAlertMessage(data.reason || 'The instructor has ended this live class session for all attendees.')
+            }
             setActiveCallRoom(null)
-
-            setAlertMessage(data.reason || 'The instructor has ended this live class session for all attendees.')
-
             loadClassroomData()
-
             break
-
           }
 
           case 'kick_peer': {
@@ -2867,7 +2868,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   }, [elapsedSeconds, liveTranscript, copilotTopic, activeCallRoom])
 
 const handleTriggerTeacherCopilot = async (
-    action: 'enhance' | 'diagram' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question',
+    action: 'enhance' | 'diagram' | 'case_study' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question',
     customTopic?: string
   ) => {
     const topicToUse = (customTopic || copilotTopic || (activeCallRoom as any)?.title || 'Classroom Lesson').trim()
@@ -3668,65 +3669,42 @@ const handleTriggerTeacherCopilot = async (
   }
 
   const handleEndMeetingForAll = async () => {
-
     if (!activeCallRoom) return
-
     const roomId = activeCallRoom.id
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-
       try {
-
         mediaRecorderRef.current.stop()
-
       } catch (recErr) {
-
         console.warn('Error stopping recorder on end meeting:', recErr)
-
       }
-
     }
 
     try {
-
-      // 1. Send WebSocket notification to all attendees
-
-      sendWsMessage({
-
-        type: 'meeting_ended',
-
-        reason: 'The instructor has ended the live session for all participants.'
-
+      const fullTranscript = getTranscriptUpToNow()
+      // Call backend end-session endpoint with the real live transcript
+      const endRes = await endLiveClassSession(roomId, {
+        live_transcript: fullTranscript,
+        duration_seconds: elapsedSeconds
+      }).catch(err => {
+        console.warn('End session API error, falling back to status update:', err)
+        return updateLiveClassStatus(roomId, 'ended')
       })
 
-      // 2. Call backend PUT endpoint to mark status="ended" and trigger server-side broadcast
-
-      await updateLiveClassStatus(roomId, 'ended').catch(err => {
-
-        console.warn('Status update API error:', err)
-
-      })
-
-      // 3. Grace period pause (400ms) to ensure WebSocket frame is dispatched before socket teardown
+      if ((endRes as any)?.summary_json) {
+        setPostSessionSummary((endRes as any).summary_json)
+        setShowPostSessionSummaryModal(true)
+      }
 
       await new Promise(resolve => setTimeout(resolve, 400))
-
     } catch (err) {
-
       console.warn('End class error:', err)
-
     } finally {
-
       stopCameraStream()
-
       setActiveCallRoom(null)
-
       setShowEndMeetingModal(false)
-
       loadClassroomData()
-
     }
-
   }
 
   const handleLeaveMeetingOnly = () => {
@@ -5698,39 +5676,7 @@ const handleTriggerTeacherCopilot = async (
               <span className="hidden md:inline">{isScreenSharing ? 'Stop Share' : 'Share Screen'}</span>
             </button>
 
-            {/* Canvas Skin Selector */}
-            <div className="relative">
-              <button
-                onClick={() => setShowSkinMenu(prev => !prev)}
-                className={`h-11 px-3.5 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs transition-all shadow-md active:scale-95 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60`}
-                title="Whiteboard Canvas Skin"
-              >
-                <Palette className="w-4 h-4 text-cyan-400" />
-                <span className="hidden md:inline">Skin</span>
-              </button>
-              {showSkinMenu && (
-                <div className="absolute bottom-14 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-slate-800 backdrop-blur-xl rounded-2xl p-2 shadow-2xl flex flex-col gap-1 w-44 z-50 animate-in zoom-in-95 duration-150">
-                  <span className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">Canvas Theme</span>
-                  {[
-                    { id: 'dark', label: 'Dark Slate', dot: 'bg-slate-700' },
-                    { id: 'blueprint', label: 'Blueprint', dot: 'bg-blue-500' },
-                    { id: 'grid', label: 'Math Grid', dot: 'bg-cyan-500' },
-                    { id: 'white', label: 'Paper White', dot: 'bg-white' }
-                  ].map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => { setWhiteboardTheme(s.id as any); setShowSkinMenu(false); }}
-                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition ${
-                        whiteboardTheme === s.id ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      <span className={`w-2.5 h-2.5 rounded-full border border-slate-700 ${s.dot}`} />
-                      <span>{s.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            
 
             {/* Whiteboard */}
             <button
@@ -5800,21 +5746,22 @@ const handleTriggerTeacherCopilot = async (
               </button>
             )}
 
-            {/* STUDENT ONLY: AI Tutor Button */}
-            {!isHost && (
-              <button
-                onClick={() => setShowStudentTutorModal(true)}
-                className={`h-11 px-3.5 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs transition-all shadow-md active:scale-95 ${
-                  showStudentTutorModal
-                    ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/30 ring-2 ring-purple-400'
-                    : 'bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/30'
-                }`}
-                title="AI Student Tutor (Visible only to students)"
-              >
-                <Bot className="w-4 h-4 text-purple-300" />
-                <span className="hidden md:inline">AI Tutor</span>
-              </button>
-            )}
+            {/* AI Tutor Button (Active for Students, and previewable for Teachers) */}
+            <button
+              onClick={() => {
+                setShowStudentTutorModal(true)
+                setActiveSideDrawer('ai')
+              }}
+              className={`h-11 px-3.5 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs transition-all shadow-md active:scale-95 ${
+                showStudentTutorModal
+                  ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/30 ring-2 ring-purple-400'
+                  : 'bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/40'
+              }`}
+              title={isHost ? "Student AI Tutor (Teacher Preview & Test)" : "Student AI Tutor (Live Doubts & Summary)"}
+            >
+              <Bot className="w-4 h-4 text-purple-300" />
+              <span>{isHost ? 'AI Tutor (Preview)' : 'AI Tutor'}</span>
+            </button>
 
             {/* Raise Hand Button */}
             <button
@@ -6872,7 +6819,7 @@ const handleTriggerTeacherCopilot = async (
 
 
       {/* ── MODAL: STUDENT AI TUTOR (STUDENT ONLY) ─────────────────── */}
-      {!isHost && showStudentTutorModal && (
+      {showStudentTutorModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-purple-500/40 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh] text-slate-100">
             {/* Header */}
@@ -7111,7 +7058,145 @@ const handleTriggerTeacherCopilot = async (
         </div>
       )}
 
-{/* MODAL: Watch Class Recording with AI Doubt Solver & Summary */}
+{/* ── MODAL: POST-SESSION EXECUTIVE SUMMARY (FULLY FUNCTIONAL DYNAMIC REPORT) ───────── */}
+      {showPostSessionSummaryModal && postSessionSummary && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-cyan-500/40 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh] text-slate-100">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-600/30">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Lecture Session Completed</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Live AI Summary
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {postSessionSummary.title || "Lecture"} • {postSessionSummary.subject || "Academic Lesson"} (Grade {postSessionSummary.grade || 1})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPostSessionSummaryModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+              {/* Overview */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
+                <span className="font-bold text-cyan-400 text-xs flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4" />
+                  Executive Lecture Overview
+                </span>
+                <p className="text-slate-200 leading-relaxed">
+                  {postSessionSummary.overview}
+                </p>
+              </div>
+
+              {/* Key Topics Covered */}
+              {postSessionSummary.key_topics && postSessionSummary.key_topics.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="font-bold text-slate-300 text-xs">Key Concepts & Topics Covered:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {postSessionSummary.key_topics.map((t: string, i: number) => (
+                      <div key={i} className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-slate-300 flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-cyan-500/20 text-cyan-400 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                          {i + 1}
+                        </span>
+                        <span>{t}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Core Whiteboard Takeaways */}
+              {postSessionSummary.whiteboard_notes && postSessionSummary.whiteboard_notes.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="font-bold text-slate-300 text-xs">Core Formulas & Whiteboard Takeaways:</span>
+                  <ul className="space-y-1 pl-2 text-slate-300">
+                    {postSessionSummary.whiteboard_notes.map((n: string, i: number) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-cyan-400 font-bold">•</span>
+                        <span>{n}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Case Studies / Applications */}
+              {postSessionSummary.case_studies && postSessionSummary.case_studies.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 space-y-1">
+                  <span className="font-bold text-emerald-300 text-xs flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4" />
+                    Practical Real-World Case Study
+                  </span>
+                  <p className="text-slate-300 leading-relaxed text-[11px]">
+                    {postSessionSummary.case_studies.join(" ")}
+                  </p>
+                </div>
+              )}
+
+              {/* Interactive Self-Assessment Quiz */}
+              {postSessionSummary.quiz && postSessionSummary.quiz.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <span className="font-bold text-slate-300 text-xs flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                    Self-Assessment Check (Based on today's lecture):
+                  </span>
+                  {postSessionSummary.quiz.map((q: any, qi: number) => (
+                    <div key={qi} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                      <p className="text-white font-medium">{qi + 1}. {q.question}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-2">
+                        {q.options?.map((opt: string, oi: number) => (
+                          <div
+                            key={oi}
+                            className={`p-2 rounded-lg text-[11px] border ${
+                              oi === q.correct_index
+                                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300 font-semibold'
+                                : 'bg-slate-900 border-slate-800 text-slate-400'
+                            }`}
+                          >
+                            <span className="font-bold mr-1.5">{String.fromCharCode(65 + oi)}.</span>
+                            {opt}
+                          </div>
+                        ))}
+                      </div>
+                      {q.explanation && (
+                        <p className="text-[10px] text-slate-400 italic pl-2 pt-1 border-t border-slate-800/60">
+                          Explanation: {q.explanation}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex justify-end">
+              <button
+                onClick={() => setShowPostSessionSummaryModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md transition"
+              >
+                Close & Return to Classroom Lobby
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* MODAL: Watch Class Recording with AI Doubt Solver & Summary */}
       {selectedRecordingUrl && (
         <AiRecordingPlayerModal
           recordingUrl={selectedRecordingUrl}

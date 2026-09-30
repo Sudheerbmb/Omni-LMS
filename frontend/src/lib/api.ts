@@ -760,6 +760,18 @@ export const createSchoolLiveClass = (payload: {
 
   })
 
+export const endLiveClassSession = (
+  classId: string,
+  payload: { live_transcript?: string; duration_seconds?: number }
+) =>
+  request<{ id: string; status: string; summary_json?: any }>(
+    `/api/v1/classroom/classes/${classId}/end-session`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }
+  )
+
 export const updateLiveClassStatus = (classId: string, newStatus: string) =>
 
   request<{ id: string; status: string }>(`/api/v1/classroom/classes/${classId}/status?new_status=${newStatus}`, {
@@ -873,7 +885,7 @@ export const getTeacherCopilotAssistance = (
     current_topic: string
     grade?: any
     subject?: string
-    action: 'enhance' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question' | 'diagram'
+    action: 'enhance' | 'diagram' | 'case_study' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question'
     live_transcript?: string
     elapsed_seconds?: number
   }
