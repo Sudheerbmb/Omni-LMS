@@ -8,7 +8,6 @@ import {
   Send,
   Calendar,
   Activity,
-  Layers,
   CheckCircle2,
   BookOpen,
   ArrowRight,
@@ -17,72 +16,135 @@ import {
   Check,
   RefreshCw,
   Loader2,
-  Target
+  Award
 } from 'lucide-react'
 import type { User } from '../lib/api'
 import {
-  generateAIQuestions,
-  talkToSN1Agent,
-  generateAIRoadmap,
-} from '../lib/groqAgent'
+  computeBayesianMastery,
+  computeCompetency,
+  computeUncertainty,
+  classifyBottleneck,
+  runLangGraphAgentPipeline
+} from '../lib/langgraphAgent'
 import type {
-  DynamicQuizItem,
-  DynamicRoadmapItem,
-  AgentStateVector
-} from '../lib/groqAgent'
+  FullStudentNeuralState,
+  SubjectBenchmarkState,
+  ConceptEvidence
+} from '../lib/langgraphAgent'
+import { fetchSubjectBenchmarkQuestions } from '../lib/subjectQuestions'
+import type { SubjectQuestion } from '../lib/subjectQuestions'
 
-interface ConceptState {
-  concept_id: string
-  concept_name: string
-  subject: string
-  mastery: number
-  retention: number
-  transfer: number
-  misconception: number
-  competency: number
-  uncertainty: number
-  bottleneck: string
-  learning_mode: string
-}
+// ── Initial Grade Configurations ─────────────────────────────────────────────
 
-function getCurriculumSubjects(gradeNumber: number) {
-  if (gradeNumber <= 5) {
-    return {
-      gradeName: `Class ${gradeNumber}`,
-      subjects: ['Mathematics', 'Science (EVS)', 'English Grammar', 'Social Studies'],
-      concepts: [
-        { id: 'c_m1', name: 'Multi-digit Arithmetic & Place Values', subject: 'Mathematics' },
-        { id: 'c_m2', name: 'Fractions, Decimals & Geometry Basics', subject: 'Mathematics' },
-        { id: 'c_s1', name: 'Plant Nutrition, Photosynthesis & Habitats', subject: 'Science (EVS)' },
-        { id: 'c_s2', name: 'States of Matter & Water Cycle', subject: 'Science (EVS)' },
-        { id: 'c_e1', name: 'Parts of Speech, Tenses & Comprehension', subject: 'English Grammar' },
-        { id: 'c_ss1', name: 'Maps, Directions & Solar System', subject: 'Social Studies' },
-      ],
+function initializeCurriculumStructure(gradeNumber: number, studentId: string, studentName: string): FullStudentNeuralState {
+  const isElementary = gradeNumber <= 5
+  const gradeName = `Class ${gradeNumber}`
+
+  const subjectsConfig: Record<string, string[]> = isElementary
+    ? {
+        'Mathematics': [
+          'Multi-digit Arithmetic & Place Values',
+          'Fractions, Decimals & Geometry Basics',
+          'Applied Word Problems & Measurement',
+        ],
+        'Science (EVS)': [
+          'Plant Nutrition & Photosynthesis',
+          'States of Matter & Water Cycle',
+          'Animal Habitats & Adaptations',
+        ],
+        'English Grammar': [
+          'Parts of Speech (Nouns, Verbs, Adjectives)',
+          'Tenses & Subject-Verb Agreement',
+          'Reading Comprehension & Vocabulary',
+        ],
+        'Social Studies': [
+          'Maps, Cardinal Directions & Solar System',
+          'Community Governance & Heritage',
+          'Physical Geography & Natural Resources',
+        ],
+      }
+    : {
+        'Mathematics': [
+          'Quadratic Equations & Arithmetic Progressions',
+          'Trigonometric Ratios & Heights',
+          'Coordinate Geometry & Triangles',
+        ],
+        'Physics & Chemistry': [
+          'Chemical Reactions & Stoichiometry',
+          'Acids, Bases & Salts',
+          'Light: Reflection, Refraction & Optics',
+        ],
+        'Life Sciences': [
+          'Life Processes & Cellular Respiration',
+          'Control & Coordination',
+          'Heredity & Genetics',
+        ],
+        'Social Science': [
+          'Nationalism in India & Democratic Politics',
+          'Resources, Development & Agriculture',
+          'Money, Credit & Globalization',
+        ],
+      }
+
+  const subjectsState: Record<string, SubjectBenchmarkState> = {}
+
+  Object.entries(subjectsConfig).forEach(([subjName, conceptsList]) => {
+    const conceptObjs: ConceptEvidence[] = conceptsList.map((cName, idx) => ({
+      concept_id: `c_${subjName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${idx + 1}`,
+      concept_name: cName,
+      subject: subjName,
+      attempts_count: 0,
+      correct_count: 0,
+      mastery: 0.00,
+      retention: 0.00,
+      transfer: 0.00,
+      misconception: 0.00,
+      competency: 0.00,
+      uncertainty: 0.95,
+      identifiability: 0.00,
+      bottleneck: 'INSUFFICIENT_EVIDENCE',
+      learning_mode: 'DIAGNOSTIC',
+      active_misconceptions: [],
+      last_updated: new Date().toISOString(),
+    }))
+
+    subjectsState[subjName] = {
+      subject: subjName,
+      is_calibrated: false,
+      overall_mastery: 0.00,
+      overall_retention: 0.00,
+      overall_transfer: 0.00,
+      overall_misconception: 0.00,
+      overall_competency: 0.00,
+      overall_uncertainty: 0.95,
+      identifiability: 0.00,
+      active_bottleneck: 'INSUFFICIENT_EVIDENCE',
+      active_mode: 'DIAGNOSTIC',
+      concepts: conceptObjs,
     }
-  } else {
-    return {
-      gradeName: `Class ${gradeNumber}`,
-      subjects: ['Mathematics', 'Physics & Chemistry', 'Life Sciences', 'Social Science'],
-      concepts: [
-        { id: 'c_m1', name: 'Quadratic Equations & Arithmetic Progressions', subject: 'Mathematics' },
-        { id: 'c_m2', name: 'Trigonometric Ratios & Coordinate Geometry', subject: 'Mathematics' },
-        { id: 'c_s1', name: 'Chemical Reactions, Acids & Bases', subject: 'Physics & Chemistry' },
-        { id: 'c_s2', name: 'Light: Reflection, Refraction & Snell\'s Law', subject: 'Physics & Chemistry' },
-        { id: 'c_b1', name: 'Life Processes & Cellular Respiration', subject: 'Life Sciences' },
-        { id: 'c_ss1', name: 'Nationalism, Resources & Federalism', subject: 'Social Science' },
-      ],
-    }
+  })
+
+  return {
+    student_id: studentId,
+    student_name: studentName,
+    grade_name: gradeName,
+    subjects: subjectsState,
+    overall_competency: 0.00,
+    overall_mastery: 0.00,
+    overall_uncertainty: 0.95,
+    primary_bottleneck: 'INSUFFICIENT_EVIDENCE',
+    primary_mode: 'DIAGNOSTIC',
+    total_evidence_events: 0,
   }
 }
 
 export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user }) => {
   const gradeMatch = user?.display_name?.match(/Class\s*(\d+)/i)
   const detectedGrade = gradeMatch ? parseInt(gradeMatch[1], 10) : 4
-  const curriculum = getCurriculumSubjects(detectedGrade)
-  const storageKey = `lens_v2_state_${user?.id || 'demo'}_grade_${detectedGrade}`
+  const storageKey = `lens_granular_v3_${user?.id || 'demo'}_grade_${detectedGrade}`
 
-  // Persistent / Initial State Vector (Section 7 & 18)
-  const [stateVector, setStateVector] = useState<AgentStateVector>(() => {
+  // Multi-Subject Granular State Graph
+  const [neuralState, setNeuralState] = useState<FullStudentNeuralState>(() => {
     const saved = localStorage.getItem(storageKey)
     if (saved) {
       try {
@@ -91,318 +153,373 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         // pass
       }
     }
-    return {
-      mastery: 0.00,
-      retention: 0.00,
-      transfer: 0.00,
-      misconception: 0.00,
-      competency: 0.00,
-      uncertainty: 0.95, // High epistemic gap before diagnostic
-      identifiability: 0.00, // 0/9 evidence families
-      learning_velocity: 0.00,
-      current_bottleneck: 'INSUFFICIENT_EVIDENCE',
-      current_learning_mode: 'DIAGNOSTIC',
-      is_calibrated: false,
-    }
+    return initializeCurriculumStructure(detectedGrade, user?.id || 'std_demo', user?.display_name || 'Student')
   })
 
-  // Concepts Matrix
-  const [concepts, setConcepts] = useState<ConceptState[]>(() => {
-    return curriculum.concepts.map((c) => ({
-      concept_id: c.id,
-      concept_name: c.name,
-      subject: c.subject,
-      mastery: stateVector.is_calibrated ? 0.75 : 0.00,
-      retention: stateVector.is_calibrated ? 0.85 : 0.00,
-      transfer: stateVector.is_calibrated ? 0.50 : 0.00,
-      misconception: stateVector.is_calibrated ? 0.05 : 0.00,
-      competency: stateVector.is_calibrated ? 0.62 : 0.00,
-      uncertainty: stateVector.is_calibrated ? 0.18 : 0.95,
-      bottleneck: stateVector.is_calibrated ? 'TRANSFER' : 'INSUFFICIENT_EVIDENCE',
-      learning_mode: stateVector.is_calibrated ? 'TRANSFER' : 'DIAGNOSTIC',
-    }))
-  })
+  // Active Selected Subject Filter for View
+  const subjectList = Object.keys(neuralState.subjects)
+  const [activeSubjectTab, setActiveSubjectTab] = useState<string>('All Subjects')
 
-  // Dynamic Daily Roadmap
-  const [roadmap, setRoadmap] = useState<DynamicRoadmapItem[]>([
-    {
-      time: '08:00 - 08:30',
-      type: 'DIAGNOSTIC',
-      title: `Baseline Assessment: ${curriculum.subjects[0]}`,
-      subject: curriculum.subjects[0],
-      estimated_duration_mins: 30,
-      grounding: `Zero baseline evidence for ${curriculum.gradeName}. Diagnostic evaluation required.`,
-      priority: 'CRITICAL',
-      action_plan: `Complete the AI-generated diagnostic assessment covering ${curriculum.subjects.join(', ')}.`,
-    },
-    {
-      time: '12:00 - 12:45',
-      type: 'PRACTICE',
-      title: `Concept Foundations: ${curriculum.subjects[1]}`,
-      subject: curriculum.subjects[1],
-      estimated_duration_mins: 45,
-      grounding: `Uncertainty at ${(stateVector.uncertainty * 100).toFixed(0)}%. Fundamental item sampling required.`,
-      priority: 'HIGH',
-      action_plan: `Solve guided foundational problems and review core principles.`,
-    },
-    {
-      time: '17:00 - 17:45',
-      type: 'RETRIEVAL',
-      title: `Spaced Recall Checkpoint: ${curriculum.subjects[2] || curriculum.subjects[0]}`,
-      subject: curriculum.subjects[2] || curriculum.subjects[0],
-      estimated_duration_mins: 45,
-      grounding: `Longitudinal retrieval scheduling across enrolled curriculum.`,
-      priority: 'MEDIUM',
-      action_plan: `Complete 10 rapid active recall checkpoints.`,
-    },
-  ])
-
-  // Diagnostic Test Modal State
-  const [showTestModal, setShowTestModal] = useState(false)
-  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('All Subjects')
+  // Subject Benchmark Test Modal State
+  const [benchmarkModalOpen, setBenchmarkModalOpen] = useState(false)
+  const [activeTestSubject, setActiveTestSubject] = useState<string>('')
   const [loadingQuestions, setLoadingQuestions] = useState(false)
-  const [testQuestions, setTestQuestions] = useState<DynamicQuizItem[]>([])
-  const [currentQIndex, setCurrentQIndex] = useState(0)
-  const [userAnswers, setUserAnswers] = useState<Record<string, number>>({})
-  const [testCompleted, setTestCompleted] = useState(false)
-  const [testResultsSummary, setTestResultsSummary] = useState<{
+  const [questions, setQuestions] = useState<SubjectQuestion[]>([])
+  const [qIndex, setQIndex] = useState(0)
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({})
+  const [testSubmitting, setTestSubmitting] = useState(false)
+  const [testSummary, setTestSummary] = useState<{
+    subject: string
     scorePercent: number
     correctCount: number
     totalCount: number
-    perSubjectScores: Record<string, { correct: number; total: number }>
+    conceptBreakdown: Record<string, { correct: number; total: number; mastery: number }>
   } | null>(null)
 
-  // Interactive Practice Modal for Roadmap "Start" action
-  const [activePracticeItem, setActivePracticeItem] = useState<DynamicRoadmapItem | null>(null)
-  const [practiceCompleted, setPracticeCompleted] = useState(false)
+  // Interactive Drill Modal for Roadmap Items
+  const [drillModalOpen, setDrillModalOpen] = useState(false)
+  const [activeDrillConcept, setActiveDrillConcept] = useState<ConceptEvidence | null>(null)
+  const [drillCompleted, setDrillCompleted] = useState(false)
 
-  // SN1 Chat Agent State
-  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'agent'; text: string; time: string }>>([
+  // LangGraph SN1 Chat State
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'agent'; text: string; time: string }>>([
     {
       sender: 'agent',
-      text: !stateVector.is_calibrated
-        ? `Hello ${user?.display_name || 'Learner'}! I am SN1, your autonomous Student Neural Intelligence agent. You are enrolled in **${curriculum.gradeName}** (${curriculum.subjects.join(', ')}). Currently, I have zero baseline evidence for you (Uncertainty: 95%, Identifiability: 0%). Launch the diagnostic assessment to calibrate your personalized neural learning curve!`
-        : `Hello ${user?.display_name || 'Learner'}! I am SN1, your autonomous Student Neural Intelligence agent grounded on your live ${curriculum.gradeName} state vector. Your active learning bottleneck is **${stateVector.current_bottleneck}** (Mode: ${stateVector.current_learning_mode}). How can I assist your study session right now?`,
+      text: neuralState.total_evidence_events === 0
+        ? `Hello ${user?.display_name || 'Learner'}! I am SN1, your autonomous Student Neural Intelligence agent. You are enrolled in **${neuralState.grade_name}** covering **${subjectList.join(', ')}**. Currently, I have zero baseline evidence for your subjects (Uncertainty: 95%). Please complete a benchmark test for each subject to calibrate your multi-dimensional state graph!`
+        : `Hello ${user?.display_name || 'Learner'}! I am SN1. Your **${neuralState.grade_name}** state vector has ingested **${neuralState.total_evidence_events} evidence events**. Overall Competency is at **${(neuralState.overall_competency * 100).toFixed(0)}%** with primary bottleneck **${neuralState.primary_bottleneck}**. How can I assist your study plan today?`,
       time: 'Just now',
     },
   ])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
-  const [chatHistory, setChatHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
+  const [history, setHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
 
-  const quickPrompts = [
-    'What should I study today?',
-    'Why is diagnostic test required?',
-    'What is my weakest concept?',
-    'How do I solve multi-digit word problems?',
-    'Am I ready for the exam?',
-  ]
+  // Dynamic Daily Roadmap
+  const dynamicRoadmap = React.useMemo(() => {
+    // Find subjects with lowest competency or uncalibrated
+    const uncalibratedSubjs = subjectList.filter((s) => !neuralState.subjects[s].is_calibrated)
+    const weakSubjs = subjectList.filter((s) => neuralState.subjects[s].is_calibrated)
+      .sort((a, b) => neuralState.subjects[a].overall_competency - neuralState.subjects[b].overall_competency)
 
-  // Launch AI Diagnostic Test
-  const handleOpenDiagnosticTest = async (subj: string = 'All Subjects') => {
-    setSelectedSubjectFilter(subj)
-    setUserAnswers({})
-    setCurrentQIndex(0)
-    setTestCompleted(false)
-    setTestResultsSummary(null)
-    setShowTestModal(true)
+    if (uncalibratedSubjs.length > 0) {
+      return [
+        {
+          time: '08:00 - 08:30',
+          type: 'DIAGNOSTIC' as const,
+          subject: uncalibratedSubjs[0],
+          title: `Initial Benchmark: ${uncalibratedSubjs[0]}`,
+          duration: 30,
+          grounding: `Uncertainty at ${(neuralState.subjects[uncalibratedSubjs[0]].overall_uncertainty * 100).toFixed(0)}%. Complete 8-question benchmark to calibrate.`,
+          priority: 'CRITICAL' as const,
+        },
+        {
+          time: '12:00 - 12:45',
+          type: 'DIAGNOSTIC' as const,
+          subject: uncalibratedSubjs[1] || uncalibratedSubjs[0],
+          title: `Diagnostic Evaluation: ${uncalibratedSubjs[1] || uncalibratedSubjs[0]}`,
+          duration: 45,
+          grounding: `Collect foundational baseline evidence across enrolled syllabus.`,
+          priority: 'HIGH' as const,
+        },
+        {
+          time: '17:00 - 17:30',
+          type: 'RETRIEVAL' as const,
+          subject: weakSubjs[0] || subjectList[0],
+          title: `Curriculum Orientation & Baseline Recall`,
+          duration: 30,
+          grounding: `Establish baseline retrieval confidence.`,
+          priority: 'MEDIUM' as const,
+        },
+      ]
+    }
+
+    // If calibrated, generate targeting the weakest concept
+    const targetSubj = weakSubjs[0] || subjectList[0]
+    const subjState = neuralState.subjects[targetSubj]
+    const targetConcept = subjState.concepts.slice().sort((a, b) => a.competency - b.competency)[0]
+
+    return [
+      {
+        time: '08:00 - 08:30',
+        type: 'RETRIEVAL' as const,
+        subject: targetSubj,
+        title: `Spaced Recall: ${targetConcept?.concept_name || targetSubj}`,
+        duration: 30,
+        grounding: `Memory retention reinforcement (R = ${(targetConcept?.retention * 100 || 85).toFixed(0)}%).`,
+        priority: 'HIGH' as const,
+      },
+      {
+        time: '12:00 - 12:45',
+        type: 'REMEDIATION' as const,
+        subject: targetSubj,
+        title: `Targeted Problem Solving: ${targetConcept?.concept_name || targetSubj}`,
+        duration: 45,
+        grounding: `Unblocks active bottleneck (${subjState.active_bottleneck}) and clears error misconceptions.`,
+        priority: 'CRITICAL' as const,
+      },
+      {
+        time: '17:00 - 17:45',
+        type: 'TRANSFER' as const,
+        subject: weakSubjs[1] || subjectList[1] || targetSubj,
+        title: `Transfer Challenge: ${weakSubjs[1] || subjectList[1]} Applied Reasoning`,
+        duration: 45,
+        grounding: `Cross-context generalization challenge across unseen formulations.`,
+        priority: 'HIGH' as const,
+      },
+    ]
+  }, [neuralState, subjectList])
+
+  // Launch Subject Benchmark Test
+  const handleStartSubjectBenchmark = async (subjectName: string) => {
+    setActiveTestSubject(subjectName)
+    setSelectedAnswers({})
+    setQIndex(0)
+    setTestSummary(null)
+    setBenchmarkModalOpen(true)
     setLoadingQuestions(true)
 
     try {
-      const qCount = subj === 'All Subjects' ? 10 : 8
-      const generated = await generateAIQuestions(curriculum.gradeName, curriculum.subjects, subj, qCount)
-      setTestQuestions(generated)
+      const qList = await fetchSubjectBenchmarkQuestions(neuralState.grade_name, subjectName, 8)
+      setQuestions(qList)
     } catch (err) {
-      console.error('Failed to generate AI questions:', err)
+      console.error(err)
     } finally {
       setLoadingQuestions(false)
     }
   }
 
-  // Handle Assessment Submission & Real Bayesian Update
-  const handleSubmitTest = async () => {
-    let correctCount = 0
-    const perSubj: Record<string, { correct: number; total: number }> = {}
+  // Submit Benchmark and Compute Granular Bayesian Updates Per Concept
+  const handleSubmitBenchmark = () => {
+    setTestSubmitting(true)
+    const currentSubjectState = neuralState.subjects[activeTestSubject]
+    if (!currentSubjectState) return
 
-    testQuestions.forEach((q) => {
-      if (!perSubj[q.subject]) {
-        perSubj[q.subject] = { correct: 0, total: 0 }
+    let totalCorrect = 0
+    const conceptStats: Record<string, { correct: number; total: number; diffSum: number; misconceptions: string[] }> = {}
+
+    // Initialize map
+    currentSubjectState.concepts.forEach((c) => {
+      conceptStats[c.concept_id] = { correct: 0, total: 0, diffSum: 0, misconceptions: [] }
+    })
+
+    questions.forEach((q, idx) => {
+      // Map question to concept
+      const targetConcept = currentSubjectState.concepts.find(c =>
+        c.concept_id === q.concept_id || q.concept_name.toLowerCase().includes(c.concept_name.split(' ')[0].toLowerCase())
+      ) || currentSubjectState.concepts[idx % currentSubjectState.concepts.length]
+
+      if (!conceptStats[targetConcept.concept_id]) {
+        conceptStats[targetConcept.concept_id] = { correct: 0, total: 0, diffSum: 0, misconceptions: [] }
       }
-      perSubj[q.subject].total += 1
 
-      if (userAnswers[q.id] === q.correct_index) {
-        correctCount += 1
-        perSubj[q.subject].correct += 1
+      const isCorrect = selectedAnswers[q.id] === q.correct_index
+      conceptStats[targetConcept.concept_id].total += 1
+      conceptStats[targetConcept.concept_id].diffSum += q.difficulty
+
+      if (isCorrect) {
+        totalCorrect += 1
+        conceptStats[targetConcept.concept_id].correct += 1
+      } else {
+        conceptStats[targetConcept.concept_id].misconceptions.push(q.misconception_tag)
       }
     })
 
-    const totalCount = testQuestions.length
-    const scoreRatio = correctCount / Math.max(1, totalCount)
-    const scorePercent = Math.round(scoreRatio * 100)
+    const totalQuestions = questions.length
+    const overallScoreRatio = totalCorrect / Math.max(1, totalQuestions)
 
-    // Exact LENS-Ω Mathematical Formulas (Section 14, 18, 19, 20)
-    // 1. Bayesian Mastery Update: M_{t+1} = M_t + alpha_t(y_t - M_t)
-    const rawMastery = Math.min(1.0, Math.max(0.10, 0.15 + 0.80 * scoreRatio))
-    // 2. Retention: R_0 = 0.85
-    const rawRetention = 0.85
-    // 3. Transfer Score: T_{t+1} = alpha * T_obs + (1 - alpha) * T_t
-    const rawTransfer = Math.min(1.0, Math.max(0.15, scoreRatio * 0.75))
-    // 4. Misconceptions: Spikes on errors in low-difficulty items
-    const rawMisconception = Math.min(1.0, Math.max(0.00, (1.0 - scoreRatio) * 0.45))
-    // 5. Holistic Competency: C = [M * R * T * (1 - MS)]^(1/4)
-    const rawCompetency = Math.pow(
-      rawMastery * rawRetention * Math.max(0.05, rawTransfer) * Math.max(0.01, 1.0 - rawMisconception),
-      0.25
-    )
-    // 6. Epistemic Uncertainty Decays with Evidence Count: U = 1 / sqrt(1 + N)
-    const rawUncertainty = Math.max(0.12, 1.0 / Math.sqrt(1.0 + totalCount * 1.5))
-    // 7. Identifiability
-    const rawIdentifiability = Math.min(1.0, 0.70)
-    const rawVelocity = 0.055
+    // Update EACH individual concept using real individual evidence!
+    const updatedConcepts: ConceptEvidence[] = currentSubjectState.concepts.map((c) => {
+      const stat = conceptStats[c.concept_id]
+      if (!stat || stat.total === 0) {
+        // Unassessed concept retains previous or neutral
+        return c
+      }
 
-    // Bottleneck Classifier (Argmax)
-    let bottleneck = 'MASTERY'
-    let mode = 'ACQUISITION'
-    if (rawTransfer < 0.40 && rawMastery >= 0.60) {
-      bottleneck = 'TRANSFER'
-      mode = 'TRANSFER'
-    } else if (rawMisconception >= 0.25) {
-      bottleneck = 'MISCONCEPTION'
-      mode = 'REMEDIATION'
-    } else if (rawRetention < 0.60) {
-      bottleneck = 'RETENTION'
-      mode = 'RETRIEVAL'
-    }
+      const cRatio = stat.correct / stat.total
+      const avgDiff = stat.diffSum / stat.total
+      const newM = computeBayesianMastery(c.mastery > 0 ? c.mastery : 0.15, cRatio, avgDiff, true)
+      const newR = 0.85
+      const newT = Math.max(0.10, cRatio * 0.75)
+      const newMS = stat.misconceptions.length > 0 ? Math.min(0.60, 0.15 + 0.25 * stat.misconceptions.length) : 0.02
+      const newC = computeCompetency(newM, newR, newT, newMS)
+      const newU = computeUncertainty(stat.total)
+      const newI = 0.60
+      const { bottleneck, mode } = classifyBottleneck(newM, newR, newT, newMS, newU, newI)
 
-    const newVector: AgentStateVector = {
-      mastery: rawMastery,
-      retention: rawRetention,
-      transfer: rawTransfer,
-      misconception: rawMisconception,
-      competency: rawCompetency,
-      uncertainty: rawUncertainty,
-      identifiability: rawIdentifiability,
-      learning_velocity: rawVelocity,
-      current_bottleneck: bottleneck,
-      current_learning_mode: mode,
-      is_calibrated: true,
-    }
-
-    setStateVector(newVector)
-    localStorage.setItem(storageKey, JSON.stringify(newVector))
-
-    // Update Concept Matrix
-    const updatedConcepts = curriculum.concepts.map((c) => {
-      const subjStat = perSubj[c.subject]
-      const subjRatio = subjStat ? subjStat.correct / Math.max(1, subjStat.total) : scoreRatio
-      const cMastery = Math.min(1.0, Math.max(0.20, 0.20 + 0.75 * subjRatio))
-      const cCompetency = Math.pow(cMastery * 0.85 * Math.max(0.2, subjRatio * 0.7), 0.33)
       return {
-        concept_id: c.id,
-        concept_name: c.name,
-        subject: c.subject,
-        mastery: cMastery,
-        retention: 0.85,
-        transfer: Math.max(0.2, subjRatio * 0.7),
-        misconception: Math.max(0.02, (1.0 - subjRatio) * 0.4),
-        competency: cCompetency,
-        uncertainty: rawUncertainty,
-        bottleneck: subjRatio < 0.5 ? 'MISCONCEPTION' : cMastery >= 0.7 ? 'TRANSFER' : 'MASTERY',
-        learning_mode: subjRatio < 0.5 ? 'REMEDIATION' : cMastery >= 0.7 ? 'TRANSFER' : 'ACQUISITION',
+        ...c,
+        attempts_count: c.attempts_count + stat.total,
+        correct_count: c.correct_count + stat.correct,
+        mastery: Number(newM.toFixed(4)),
+        retention: Number(newR.toFixed(4)),
+        transfer: Number(newT.toFixed(4)),
+        misconception: Number(newMS.toFixed(4)),
+        competency: Number(newC.toFixed(4)),
+        uncertainty: Number(newU.toFixed(4)),
+        identifiability: Number(newI.toFixed(4)),
+        bottleneck: bottleneck as any,
+        learning_mode: mode as any,
+        active_misconceptions: stat.misconceptions,
+        last_updated: new Date().toISOString(),
       }
     })
-    setConcepts(updatedConcepts)
 
-    setTestResultsSummary({
-      scorePercent,
-      correctCount,
-      totalCount,
-      perSubjectScores: perSubj,
+    // Compute Subject Aggregate
+    const avgMastery = updatedConcepts.reduce((acc, c) => acc + c.mastery, 0) / updatedConcepts.length
+    const avgRetention = 0.85
+    const avgTransfer = updatedConcepts.reduce((acc, c) => acc + c.transfer, 0) / updatedConcepts.length
+    const avgMisconception = updatedConcepts.reduce((acc, c) => acc + c.misconception, 0) / updatedConcepts.length
+    const avgCompetency = computeCompetency(avgMastery, avgRetention, avgTransfer, avgMisconception)
+    const avgUncertainty = updatedConcepts.reduce((acc, c) => acc + c.uncertainty, 0) / updatedConcepts.length
+    const { bottleneck: subjBottleneck, mode: subjMode } = classifyBottleneck(avgMastery, avgRetention, avgTransfer, avgMisconception, avgUncertainty, 0.7)
+
+    const updatedSubject: SubjectBenchmarkState = {
+      subject: activeTestSubject,
+      is_calibrated: true,
+      overall_mastery: Number(avgMastery.toFixed(4)),
+      overall_retention: Number(avgRetention.toFixed(4)),
+      overall_transfer: Number(avgTransfer.toFixed(4)),
+      overall_misconception: Number(avgMisconception.toFixed(4)),
+      overall_competency: Number(avgCompetency.toFixed(4)),
+      overall_uncertainty: Number(avgUncertainty.toFixed(4)),
+      identifiability: 0.70,
+      active_bottleneck: subjBottleneck,
+      active_mode: subjMode,
+      concepts: updatedConcepts,
+      benchmark_score_percent: Math.round(overallScoreRatio * 100),
+      last_assessed: new Date().toISOString(),
+    }
+
+    const nextSubjects = { ...neuralState.subjects, [activeTestSubject]: updatedSubject }
+
+    // Compute Global Student Aggregate across all subjects
+    const allSubjects = Object.values(nextSubjects)
+    const calibratedSubjs = allSubjects.filter(s => s.is_calibrated)
+    const globalCompetency = allSubjects.reduce((acc, s) => acc + s.overall_competency, 0) / allSubjects.length
+    const globalMastery = allSubjects.reduce((acc, s) => acc + s.overall_mastery, 0) / allSubjects.length
+    const globalUncertainty = allSubjects.reduce((acc, s) => acc + s.overall_uncertainty, 0) / allSubjects.length
+    const primaryBottleneck = calibratedSubjs.length === 0 ? 'INSUFFICIENT_EVIDENCE' : updatedSubject.active_bottleneck
+
+    const nextFullState: FullStudentNeuralState = {
+      ...neuralState,
+      subjects: nextSubjects,
+      overall_competency: Number(globalCompetency.toFixed(4)),
+      overall_mastery: Number(globalMastery.toFixed(4)),
+      overall_uncertainty: Number(globalUncertainty.toFixed(4)),
+      primary_bottleneck: primaryBottleneck,
+      primary_mode: updatedSubject.active_mode,
+      total_evidence_events: neuralState.total_evidence_events + totalQuestions,
+    }
+
+    setNeuralState(nextFullState)
+    localStorage.setItem(storageKey, JSON.stringify(nextFullState))
+
+    // Concept breakdown summary
+    const breakdown: Record<string, { correct: number; total: number; mastery: number }> = {}
+    updatedConcepts.forEach((c) => {
+      const s = conceptStats[c.concept_id]
+      if (s) {
+        breakdown[c.concept_name] = { correct: s.correct, total: s.total, mastery: Math.round(c.mastery * 100) }
+      }
     })
-    setTestCompleted(true)
 
-    // Generate dynamic AI roadmap based on weakest subjects
-    const weakest = updatedConcepts.filter((c) => c.competency < 0.55).map((c) => c.concept_name)
-    generateAIRoadmap(curriculum.gradeName, curriculum.subjects, newVector, weakest).then((newRoadmap) => {
-      setRoadmap(newRoadmap)
+    setTestSummary({
+      subject: activeTestSubject,
+      scorePercent: Math.round(overallScoreRatio * 100),
+      correctCount: totalCorrect,
+      totalCount: totalQuestions,
+      conceptBreakdown: breakdown,
     })
+    setTestSubmitting(false)
 
-    // Update Agent Conversation
-    const agentSummary = `Diagnostic Completed! You scored **${scorePercent}%** (${correctCount}/${totalCount} correct). I have calibrated your **${curriculum.gradeName}** neural state vector: **Mastery: ${(rawMastery * 100).toFixed(0)}%**, **Competency: ${(rawCompetency * 100).toFixed(0)}%**, **Epistemic Uncertainty dropped to ${(rawUncertainty * 100).toFixed(0)}%**. Your active bottleneck is **${bottleneck}** (Mode: ${mode}). I have generated a personalized daily study roadmap for you below!`
-    setMessages((prev) => [
+    // Append LangGraph Agent Notification
+    const agentMsg = `Benchmark Completed for **${activeTestSubject}**! You scored **${Math.round(overallScoreRatio * 100)}%** (${totalCorrect}/${totalQuestions} correct).
+• **${activeTestSubject} Mastery**: ${(avgMastery * 100).toFixed(0)}%
+• **Competency**: ${(avgCompetency * 100).toFixed(0)}%
+• **Epistemic Uncertainty**: reduced to ${(avgUncertainty * 100).toFixed(0)}%
+• **Active Bottleneck**: **${subjBottleneck}** (Mode: ${subjMode})
+
+Your per-concept breakdown has been updated below.`
+    setChatMessages((prev) => [
       ...prev,
-      { sender: 'agent', text: agentSummary, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
-    ])
-    setChatHistory((prev) => [
-      ...prev,
-      { role: 'user', content: 'I completed the baseline diagnostic assessment.' },
-      { role: 'assistant', content: agentSummary },
+      { sender: 'agent', text: agentMsg, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
     ])
   }
 
-  // Handle SN1 Live Chat with Multi-turn Memory
-  const handleSendChatMessage = async (promptToSend?: string) => {
-    const text = promptToSend || chatInput
-    if (!text.trim()) return
+  // Handle SN1 LangGraph Autonomous Chat
+  const handleSendChat = async (promptToSend?: string) => {
+    const query = promptToSend || chatInput
+    if (!query.trim()) return
 
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    const userMessage = { sender: 'user' as const, text, time: nowStr }
-    setMessages((prev) => [...prev, userMessage])
+    const userMsg = { sender: 'user' as const, text: query, time: nowStr }
+    setChatMessages((prev) => [...prev, userMsg])
     setChatInput('')
     setChatLoading(true)
 
-    const updatedHistory = [...chatHistory, { role: 'user' as const, content: text }]
-    setChatHistory(updatedHistory)
+    const updatedHistory = [...history, { role: 'user' as const, content: query }]
+    setHistory(updatedHistory)
 
     try {
-      const reply = await talkToSN1Agent(
+      const agentReply = await runLangGraphAgentPipeline(
         user?.display_name || 'Learner',
-        curriculum.gradeName,
-        curriculum.subjects,
-        stateVector,
-        text,
-        chatHistory
+        neuralState.grade_name,
+        neuralState,
+        query,
+        history
       )
 
-      setMessages((prev) => [
+      setChatMessages((prev) => [
         ...prev,
-        { sender: 'agent', text: reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+        { sender: 'agent', text: agentReply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
       ])
-      setChatHistory([...updatedHistory, { role: 'assistant', content: reply }])
+      setHistory([...updatedHistory, { role: 'assistant', content: agentReply }])
     } catch (err) {
-      console.error('Chat error:', err)
-      const fallbackReply = `Based on your live ${curriculum.gradeName} state vector (Mastery: ${(stateVector.mastery * 100).toFixed(0)}%, Competency: ${(stateVector.competency * 100).toFixed(0)}%, Bottleneck: ${stateVector.current_bottleneck}), follow your scheduled roadmap blocks to unblock your learning curve.`
-      setMessages((prev) => [
+      console.error(err)
+      setChatMessages((prev) => [
         ...prev,
-        { sender: 'agent', text: fallbackReply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+        {
+          sender: 'agent',
+          text: `Grounded in your live ${neuralState.grade_name} neural state vector across ${subjectList.join(', ')}, your primary bottleneck is ${neuralState.primary_bottleneck}. Please follow today's scheduled roadmap blocks.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
       ])
     } finally {
       setChatLoading(false)
     }
   }
 
-  const handleResetData = () => {
+  const handleResetCalibration = () => {
     localStorage.removeItem(storageKey)
     window.location.reload()
   }
 
-  const currentQ = testQuestions[currentQIndex]
+  // Filter concepts based on selected subject tab
+  const displayedConcepts = React.useMemo(() => {
+    if (activeSubjectTab === 'All Subjects') {
+      return Object.values(neuralState.subjects).flatMap(s => s.concepts)
+    }
+    return neuralState.subjects[activeSubjectTab]?.concepts || []
+  }, [neuralState, activeSubjectTab])
+
+  const currentQ = questions[qIndex]
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
-      {/* Top Banner */}
+      {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 p-8 rounded-3xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="space-y-2 relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
             <Brain className="w-3.5 h-3.5" />
-            LENS-Ω + SN1 &bull; {curriculum.gradeName} Autonomous Neural Engine
+            LENS-Ω + SN1 &bull; {neuralState.grade_name} Granular Multi-Subject Graph
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
-            {user?.display_name || 'Student'} &bull; Cognitive Learner State
+            {user?.display_name || 'Student'} &bull; Cognitive Neural Engine
           </h1>
           <p className="text-slate-400 text-sm max-w-2xl">
-            Enrolled in <strong>{curriculum.gradeName}</strong> ({curriculum.subjects.join(', ')}). Live psychometric evidence-driven state calibration powered by Groq Cloud LPU.
+            Enrolled in <strong>{neuralState.grade_name}</strong> ({subjectList.join(', ')}). Psychometric state estimation tracking each subject individually with Bayesian updates.
           </p>
         </div>
 
@@ -410,134 +527,144 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-center min-w-[120px]">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Holistic Competency</div>
             <div className="text-3xl font-black text-cyan-400 font-mono">
-              {stateVector.is_calibrated ? `${(stateVector.competency * 100).toFixed(0)}%` : '0%'}
+              {(neuralState.overall_competency * 100).toFixed(0)}%
             </div>
-            <div className="text-[10px] text-slate-500">C = [M*R*T*(1-MS)]¼</div>
+            <div className="text-[10px] text-slate-500">Global C Index</div>
           </div>
           <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-center min-w-[140px]">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Bottleneck</div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Primary Bottleneck</div>
             <div className={`text-xs font-black px-2 py-1 rounded mt-1 ${
-              !stateVector.is_calibrated ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              neuralState.primary_bottleneck === 'INSUFFICIENT_EVIDENCE'
+                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
             }`}>
-              {stateVector.current_bottleneck}
+              {neuralState.primary_bottleneck}
             </div>
-            <div className="text-[10px] text-slate-500 mt-1">Mode: {stateVector.current_learning_mode}</div>
+            <div className="text-[10px] text-slate-500 mt-1">Events: {neuralState.total_evidence_events}</div>
           </div>
         </div>
       </div>
 
-      {/* Zero-Evidence Call-To-Action Banner */}
-      {!stateVector.is_calibrated && (
-        <div className="p-6 rounded-3xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-indigo-950/40 border border-amber-500/40 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold shrink-0">
-              <ShieldAlert className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                Initial Diagnostic Baseline Required &mdash; {curriculum.gradeName} Curriculum
-              </h3>
-              <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
-                Zero prior evidence detected for <strong>{curriculum.gradeName}</strong>. 
-                According to LENS-Ω standards, the system does not guess or hardcode fake numbers. 
-                Take this dynamic AI-generated baseline assessment covering <strong>{curriculum.subjects.join(', ')}</strong> to calculate your real state vector.
-              </p>
-            </div>
+      {/* ── Subject-Wise Benchmark Assessment Hub ──────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+              <Award className="w-5 h-5 text-amber-400" />
+              Subject-Wise Benchmark Assessment Hub &bull; {neuralState.grade_name}
+            </h2>
+            <p className="text-xs text-slate-400">
+              Each subject tracks its own calibrated state vector. Take a benchmark test to calibrate each individual subject.
+            </p>
           </div>
-
-          <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => handleOpenDiagnosticTest('All Subjects')}
-              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all hover:scale-105 active:scale-95"
-            >
-              <Play className="w-4 h-4 fill-current" />
-              <span>Full Curriculum Diagnostic (10 Qs)</span>
-            </button>
-          </div>
+          <button
+            onClick={handleResetCalibration}
+            className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-850 hover:bg-slate-800 border border-slate-700 transition-colors w-fit"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Reset All Subject Baselines</span>
+          </button>
         </div>
-      )}
 
-      {/* Recalibration & Subject Diagnostic Hub */}
-      {stateVector.is_calibrated && (
-        <div className="p-5 rounded-3xl bg-slate-900/70 border border-slate-800 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs text-emerald-400 font-medium">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>State Vector calibrated via live psychometric diagnostic evidence &bull; <strong>{curriculum.gradeName}</strong></span>
-            </div>
-            <button
-              onClick={handleResetData}
-              className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 transition-colors w-fit"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Reset & Retake Baseline</span>
-            </button>
-          </div>
-
-          <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-400 mr-2 flex items-center gap-1.5">
-              <Target className="w-3.5 h-3.5 text-cyan-400" />
-              Launch Subject Deep-Dive Diagnostic:
-            </span>
-            {curriculum.subjects.map((subj) => (
-              <button
-                key={subj}
-                onClick={() => handleOpenDiagnosticTest(subj)}
-                className="text-xs px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-500/20 hover:border-cyan-500/40 text-slate-200 border border-slate-700 transition-all flex items-center gap-1.5"
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {subjectList.map((subjName) => {
+            const subj = neuralState.subjects[subjName]
+            return (
+              <div
+                key={subjName}
+                className={`p-5 rounded-3xl border transition-all relative overflow-hidden flex flex-col justify-between space-y-4 ${
+                  subj.is_calibrated
+                    ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                    : 'bg-gradient-to-b from-slate-900 to-amber-950/20 border-amber-500/30 shadow-lg shadow-amber-500/5'
+                }`}
               >
-                <span>{subj} Diagnostic (8 Qs)</span>
-                <ArrowRight className="w-3 h-3 text-cyan-400" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-cyan-400 font-mono">{subjName}</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        subj.is_calibrated
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      }`}
+                    >
+                      {subj.is_calibrated ? `Score: ${subj.benchmark_score_percent}%` : 'UNCALIBRATED'}
+                    </span>
+                  </div>
 
-      {/* 8-Dimensional State Vector Grid */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-          <Layers className="w-4 h-4 text-cyan-400" />
-          LENS-Ω 8-Dimensional State Vector (S_t) &bull; {curriculum.gradeName}
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-          {[
-            { label: 'Mastery (M)', val: stateVector.mastery, color: 'text-emerald-400', desc: 'Bayesian belief' },
-            { label: 'Retention (R)', val: stateVector.retention, color: 'text-cyan-400', desc: 'Ebbinghaus decay' },
-            { label: 'Transfer (T)', val: stateVector.transfer, color: 'text-indigo-400', desc: 'Cross-context' },
-            { label: 'Misconception (MS)', val: stateVector.misconception, color: 'text-rose-400', desc: 'Error pattern' },
-            { label: 'Competency (C)', val: stateVector.competency, color: 'text-teal-400', desc: 'Holistic index' },
-            { label: 'Uncertainty (U)', val: stateVector.uncertainty, color: stateVector.uncertainty > 0.5 ? 'text-rose-400 font-black' : 'text-amber-400', desc: 'Epistemic gap' },
-            { label: 'Identifiability (I)', val: stateVector.identifiability, color: 'text-purple-400', desc: 'Evidence breadth' },
-            { label: 'Velocity (V)', val: stateVector.learning_velocity, isRate: true, color: 'text-blue-400', desc: 'ΔScore / ΔDay' },
-          ].map((dim) => (
-            <div key={dim.label} className="p-3.5 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-1">
-              <div className="text-[11px] font-bold text-slate-400 truncate">{dim.label}</div>
-              <div className={`text-xl font-black font-mono ${dim.color}`}>
-                {dim.isRate ? `+${(dim.val * 100).toFixed(1)}%/d` : `${(dim.val * 100).toFixed(0)}%`}
-              </div>
-              <div className="text-[10px] text-slate-500 truncate">{dim.desc}</div>
-              {!dim.isRate && (
-                <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden mt-1">
-                  <div className="bg-current h-full" style={{ width: `${dim.val * 100}%` }} />
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-center">
+                    <div>
+                      <div className="text-[10px] text-slate-500">Mastery</div>
+                      <div className="text-sm font-bold text-emerald-400 font-mono">
+                        {(subj.overall_mastery * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-500">Competency</div>
+                      <div className="text-sm font-bold text-cyan-400 font-mono">
+                        {(subj.overall_competency * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-500">Uncertainty</div>
+                      <div className={`text-sm font-bold font-mono ${subj.overall_uncertainty > 0.5 ? 'text-rose-400' : 'text-slate-300'}`}>
+                        {(subj.overall_uncertainty * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-slate-400 pt-1 flex items-center justify-between">
+                    <span>Bottleneck:</span>
+                    <span className="font-bold text-amber-400">{subj.active_bottleneck}</span>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+
+                <button
+                  onClick={() => handleStartSubjectBenchmark(subjName)}
+                  className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                    subj.is_calibrated
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                      : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 text-slate-950 shadow-md shadow-amber-500/20'
+                  }`}
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>{subj.is_calibrated ? `Retake ${subjName} Test` : `Take ${subjName} Benchmark`}</span>
+                </button>
+              </div>
+            )
+          })}
         </div>
       </div>
 
+      {/* ── Granular Concepts Matrix with Subject Tabs ─────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left 2 Cols: Concept Map & Dynamic Roadmap */}
         <div className="lg:col-span-2 space-y-8">
-          {/* Concept Breakdown Table */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 space-y-4">
-            <div className="flex items-center justify-between">
+          {/* Concept Matrix */}
+          <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h3 className="font-bold text-white text-base flex items-center gap-2">
                   <Activity className="w-4 h-4 text-cyan-400" />
-                  {curriculum.gradeName} Curriculum Concept & Bottleneck Matrix
+                  Granular Concept Evidence & Bottleneck Matrix
                 </h3>
-                <p className="text-xs text-slate-400">Granular tracking across enrolled subjects: {curriculum.subjects.join(', ')}.</p>
+                <p className="text-xs text-slate-400">Individual concept progress updated strictly per question answered.</p>
+              </div>
+
+              {/* Subject Tabs */}
+              <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+                {['All Subjects', ...subjectList].map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveSubjectTab(tab)}
+                    className={`px-3 py-1 rounded-lg font-medium transition-all ${
+                      activeSubjectTab === tab
+                        ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -555,16 +682,24 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {concepts.map((c) => (
+                  {displayedConcepts.map((c) => (
                     <tr key={c.concept_id} className="hover:bg-slate-850/50 transition-colors">
                       <td className="py-3">
                         <div className="font-semibold text-slate-200">{c.concept_name}</div>
-                        <div className="text-[10px] text-cyan-400 font-medium">{c.subject}</div>
+                        <div className="text-[10px] text-cyan-400 font-mono">{c.subject}</div>
                       </td>
-                      <td className="py-3 text-center font-mono text-emerald-400">{(c.mastery * 100).toFixed(0)}%</td>
-                      <td className="py-3 text-center font-mono text-cyan-400">{(c.retention * 100).toFixed(0)}%</td>
-                      <td className="py-3 text-center font-mono text-indigo-400">{(c.transfer * 100).toFixed(0)}%</td>
-                      <td className="py-3 text-center font-mono text-rose-400">{(c.misconception * 100).toFixed(0)}%</td>
+                      <td className="py-3 text-center font-mono text-emerald-400 font-bold">
+                        {(c.mastery * 100).toFixed(0)}%
+                      </td>
+                      <td className="py-3 text-center font-mono text-cyan-400">
+                        {(c.retention * 100).toFixed(0)}%
+                      </td>
+                      <td className="py-3 text-center font-mono text-indigo-400">
+                        {(c.transfer * 100).toFixed(0)}%
+                      </td>
+                      <td className={`py-3 text-center font-mono ${c.misconception > 0.2 ? 'text-rose-400 font-bold' : 'text-slate-400'}`}>
+                        {(c.misconception * 100).toFixed(0)}%
+                      </td>
                       <td className="py-3 text-center">
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-amber-300 border border-slate-700">
                           {c.bottleneck}
@@ -582,21 +717,21 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
             </div>
           </div>
 
-          {/* Dynamic AI Roadmap (Section 86) */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 space-y-4">
+          {/* Dynamic Daily Roadmap (Section 86) */}
+          <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-white text-base flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-indigo-400" />
-                  Today's Autonomous Learning Roadmap &bull; {curriculum.gradeName}
+                  Today's Dynamic Roadmap &bull; {neuralState.grade_name}
                 </h3>
-                <p className="text-xs text-slate-400">Synthesized dynamically by Groq AI policy optimizer for your enrolled subjects.</p>
+                <p className="text-xs text-slate-400">Synthesized by LangGraph policy optimizer targeting your active bottlenecks.</p>
               </div>
               <span className="text-xs text-slate-400 font-mono">Total: 2.0 hrs</span>
             </div>
 
             <div className="space-y-3">
-              {roadmap.map((block, idx) => (
+              {dynamicRoadmap.map((block, idx) => (
                 <div key={idx} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold shrink-0 text-xs">
@@ -604,7 +739,6 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                       {block.type === 'DIAGNOSTIC' && <ShieldAlert className="w-5 h-5 text-amber-400" />}
                       {block.type === 'REMEDIATION' && <AlertTriangle className="w-5 h-5 text-rose-400" />}
                       {block.type === 'TRANSFER' && <Zap className="w-5 h-5 text-indigo-400" />}
-                      {block.type === 'PRACTICE' && <BookOpen className="w-5 h-5 text-emerald-400" />}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -620,16 +754,21 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                       </div>
                       <h4 className="text-sm font-bold text-white mt-0.5">{block.title}</h4>
                       <p className="text-xs text-slate-400 mt-1">{block.grounding}</p>
-                      {block.action_plan && (
-                        <p className="text-xs text-cyan-400/90 mt-1 font-medium">&rarr; {block.action_plan}</p>
-                      )}
                     </div>
                   </div>
 
                   <button
                     onClick={() => {
-                      setActivePracticeItem(block)
-                      setPracticeCompleted(false)
+                      if (block.type === 'DIAGNOSTIC') {
+                        handleStartSubjectBenchmark(block.subject)
+                      } else {
+                        const targetC = neuralState.subjects[block.subject]?.concepts[0]
+                        if (targetC) {
+                          setActiveDrillConcept(targetC)
+                          setDrillCompleted(false)
+                          setDrillModalOpen(true)
+                        }
+                      }
                     }}
                     className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shrink-0 transition-all hover:scale-105 active:scale-95"
                   >
@@ -641,17 +780,17 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           </div>
         </div>
 
-        {/* Right Col: Live Groq LLM SN1 Agent Assistant (Section 39) */}
+        {/* Right Col: Autonomous LangGraph SN1 Agent */}
         <div className="space-y-6">
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl p-6 space-y-4 shadow-xl flex flex-col h-[640px]">
+          <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl p-6 space-y-4 shadow-xl flex flex-col h-[680px]">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-sm">SN1 Student Intelligence</h3>
-                  <p className="text-[10px] text-cyan-400 font-mono">Live Groq Cloud LPU Agent</p>
+                  <h3 className="font-bold text-white text-sm">SN1 Autonomous Agent</h3>
+                  <p className="text-[10px] text-cyan-400 font-mono">LangGraph + Groq Cloud LPU</p>
                 </div>
               </div>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -659,7 +798,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
 
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
-              {messages.map((m, idx) => (
+              {chatMessages.map((m, idx) => (
                 <div key={idx} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
                   <div
                     className={`p-3.5 rounded-2xl max-w-[88%] leading-relaxed ${
@@ -676,19 +815,24 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               {chatLoading && (
                 <div className="flex items-center gap-2 text-xs text-cyan-400 p-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  SN1 is reasoning via Groq LLM...
+                  SN1 LangGraph Agent is synthesizing answer...
                 </div>
               )}
             </div>
 
-            {/* Quick Inquiries */}
+            {/* Quick Prompts */}
             <div className="pt-2 border-t border-slate-800 space-y-2">
-              <div className="text-[11px] font-semibold text-slate-400">Grounded Inquiries:</div>
+              <div className="text-[11px] font-semibold text-slate-400">Grounded Prompts:</div>
               <div className="flex flex-wrap gap-1.5">
-                {quickPrompts.slice(0, 3).map((q, idx) => (
+                {[
+                  'What is my weakest subject right now?',
+                  'Why is my uncertainty high?',
+                  'How do I improve my Mathematics mastery?',
+                  'What should I study today?',
+                ].map((q, idx) => (
                   <button
                     key={idx}
-                    onClick={() => handleSendChatMessage(q)}
+                    onClick={() => handleSendChat(q)}
                     className="text-[10px] px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700 transition-colors"
                   >
                     {q}
@@ -703,12 +847,12 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendChatMessage()}
-                placeholder={`Ask SN1 about your ${curriculum.gradeName} concepts or homework...`}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                placeholder={`Ask SN1 about ${neuralState.grade_name} concepts, math derivations...`}
                 className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
               />
               <button
-                onClick={() => handleSendChatMessage()}
+                onClick={() => handleSendChat()}
                 disabled={chatLoading || !chatInput.trim()}
                 className="p-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all disabled:opacity-50 shrink-0"
               >
@@ -719,8 +863,8 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         </div>
       </div>
 
-      {/* ── Interactive Live Diagnostic Assessment Modal ──────────────────────── */}
-      {showTestModal && (
+      {/* ── Subject Benchmark Test Modal ─────────────────────────────────────── */}
+      {benchmarkModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl max-w-2xl w-full p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -730,20 +874,20 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">
-                    {curriculum.gradeName} &bull; {selectedSubjectFilter} Assessment
+                    {neuralState.grade_name} &bull; {activeTestSubject} Benchmark Test
                   </h3>
                   <p className="text-xs text-slate-400">
                     {loadingQuestions
-                      ? 'Groq Cloud LPU synthesizing psychometric diagnostic items...'
-                      : testCompleted
-                      ? 'Assessment Completed'
-                      : `Question ${currentQIndex + 1} of ${testQuestions.length} • ${currentQ?.subject || selectedSubjectFilter}`}
+                      ? 'Groq Cloud LPU synthesizing psychometric test items...'
+                      : testSummary
+                      ? 'Benchmark Assessment Evaluated'
+                      : `Question ${qIndex + 1} of ${questions.length} • Concept: ${currentQ?.concept_name}`}
                   </p>
                 </div>
               </div>
               <button
-                onClick={() => setShowTestModal(false)}
-                className="text-slate-400 hover:text-slate-200 text-xl p-1 font-bold"
+                onClick={() => setBenchmarkModalOpen(false)}
+                className="text-slate-400 hover:text-white text-xl p-1 font-bold"
               >
                 &times;
               </button>
@@ -753,61 +897,59 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               <div className="p-12 text-center space-y-4">
                 <Loader2 className="w-12 h-12 text-cyan-400 animate-spin mx-auto" />
                 <div className="space-y-1">
-                  <h4 className="font-bold text-white text-base">Generating Dynamic Curriculum Items...</h4>
+                  <h4 className="font-bold text-white text-base">Generating {activeTestSubject} Benchmark Items...</h4>
                   <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Groq Cloud LPU is dynamically synthesizing {curriculum.gradeName} questions with difficulty and cognitive standards.
+                    Synthesizing psychometric questions covering {activeTestSubject} standards for {neuralState.grade_name}.
                   </p>
                 </div>
               </div>
-            ) : testCompleted && testResultsSummary ? (
+            ) : testSummary ? (
               <div className="p-6 rounded-2xl bg-slate-950 border border-emerald-500/30 text-center space-y-6">
                 <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center font-bold">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-xl font-bold text-white">Diagnostic Calibration Completed!</h4>
+                  <h4 className="text-xl font-bold text-white">{testSummary.subject} Benchmark Evaluated!</h4>
                   <p className="text-sm text-slate-300">
-                    Overall Score: <strong className="text-emerald-400 text-lg">{testResultsSummary.scorePercent}%</strong> ({testResultsSummary.correctCount}/{testResultsSummary.totalCount} correct)
+                    Overall Score: <strong className="text-emerald-400 text-lg">{testSummary.scorePercent}%</strong> ({testSummary.correctCount}/{testSummary.totalCount} correct)
                   </p>
                 </div>
 
-                {/* Per Subject Breakdown */}
-                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-left space-y-2">
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Subject-Wise Performance:</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {Object.entries(testResultsSummary.perSubjectScores).map(([subj, val]) => (
-                      <div key={subj} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
-                        <span className="font-medium text-slate-300">{subj}</span>
-                        <span className="font-mono font-bold text-cyan-400">
-                          {val.correct}/{val.total} ({Math.round((val.correct / Math.max(1, val.total)) * 100)}%)
-                        </span>
+                {/* Per-Concept Detailed Breakdown */}
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-left space-y-3">
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Per-Concept Calibration:</div>
+                  <div className="space-y-2">
+                    {Object.entries(testSummary.conceptBreakdown).map(([cName, data]) => (
+                      <div key={cName} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+                        <div>
+                          <div className="font-medium text-slate-200">{cName}</div>
+                          <div className="text-[10px] text-slate-500">{data.correct}/{data.total} items correct</div>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono font-bold text-emerald-400 text-sm">{data.mastery}%</span>
+                          <div className="text-[10px] text-cyan-400 font-mono">Mastery</div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-500/20 text-xs text-indigo-300 text-left leading-relaxed">
-                  <strong>LENS-Ω State Update Applied:</strong> Epistemic Uncertainty reduced from 95% down to {(stateVector.uncertainty * 100).toFixed(0)}%. 
-                  Holistic Competency initialized to {(stateVector.competency * 100).toFixed(0)}%. Daily roadmap has been personalized to target your active bottleneck (<strong>{stateVector.current_bottleneck}</strong>).
-                </div>
-
                 <button
-                  onClick={() => setShowTestModal(false)}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-sm transition-all shadow-lg shadow-cyan-500/20"
+                  onClick={() => setBenchmarkModalOpen(false)}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-extrabold text-sm transition-all shadow-lg shadow-cyan-500/20"
                 >
-                  View Calibrated Neural Dashboard & Roadmap
+                  View Updated State Vector & Roadmap
                 </button>
               </div>
             ) : currentQ ? (
               <>
-                {/* Question Card */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     <span className="px-2.5 py-1 rounded bg-slate-800 text-cyan-300 font-bold">
-                      {currentQ.subject} &bull; {currentQ.concept}
+                      Concept: {currentQ.concept_name}
                     </span>
                     <span className="px-2.5 py-1 rounded bg-slate-800 text-amber-300 font-bold">
-                      {currentQ.cognitive_level}
+                      Level: {currentQ.cognitive_level}
                     </span>
                   </div>
 
@@ -815,14 +957,13 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                     <p className="text-sm font-semibold text-white leading-relaxed">{currentQ.prompt}</p>
                   </div>
 
-                  {/* Options */}
                   <div className="space-y-2">
                     {currentQ.options.map((opt, optIdx) => {
-                      const isSelected = userAnswers[currentQ.id] === optIdx
+                      const isSelected = selectedAnswers[currentQ.id] === optIdx
                       return (
                         <button
                           key={optIdx}
-                          onClick={() => setUserAnswers((prev) => ({ ...prev, [currentQ.id]: optIdx }))}
+                          onClick={() => setSelectedAnswers((prev) => ({ ...prev, [currentQ.id]: optIdx }))}
                           className={`w-full p-3.5 rounded-xl border text-left text-xs font-medium flex items-center justify-between transition-all ${
                             isSelected
                               ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md shadow-cyan-500/10'
@@ -837,22 +978,21 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   </div>
                 </div>
 
-                {/* Navigation Buttons */}
                 <div className="flex items-center justify-between pt-4 border-t border-slate-800">
                   <button
                     type="button"
-                    disabled={currentQIndex === 0}
-                    onClick={() => setCurrentQIndex((prev) => prev - 1)}
+                    disabled={qIndex === 0}
+                    onClick={() => setQIndex((prev) => prev - 1)}
                     className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white disabled:opacity-40"
                   >
                     Previous
                   </button>
 
-                  {currentQIndex < testQuestions.length - 1 ? (
+                  {qIndex < questions.length - 1 ? (
                     <button
                       type="button"
-                      disabled={userAnswers[currentQ.id] === undefined}
-                      onClick={() => setCurrentQIndex((prev) => prev + 1)}
+                      disabled={selectedAnswers[currentQ.id] === undefined}
+                      onClick={() => setQIndex((prev) => prev + 1)}
                       className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-50"
                     >
                       <span>Next Question</span>
@@ -861,12 +1001,12 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   ) : (
                     <button
                       type="button"
-                      disabled={Object.keys(userAnswers).length < testQuestions.length}
-                      onClick={handleSubmitTest}
-                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 hover:scale-105"
+                      disabled={Object.keys(selectedAnswers).length < questions.length || testSubmitting}
+                      onClick={handleSubmitBenchmark}
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 hover:scale-105"
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Submit & Calibrate State</span>
+                      <span>{testSubmitting ? 'Computing Bayesian Updates...' : `Submit ${activeTestSubject} Benchmark`}</span>
                     </button>
                   )}
                 </div>
@@ -876,8 +1016,8 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         </div>
       )}
 
-      {/* ── Interactive Practice Drill Modal for Roadmap Items ──────────────────── */}
-      {activePracticeItem && (
+      {/* ── Interactive Practice Drill Modal for Specific Concepts ────────────── */}
+      {drillModalOpen && activeDrillConcept && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -886,30 +1026,32 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   <BookOpen className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">{activePracticeItem.title}</h3>
-                  <p className="text-xs text-indigo-400">{activePracticeItem.subject} &bull; {activePracticeItem.type}</p>
+                  <h3 className="font-bold text-white text-base">Practice Drill: {activeDrillConcept.concept_name}</h3>
+                  <p className="text-xs text-indigo-400 font-mono">{activeDrillConcept.subject} &bull; Mode: {activeDrillConcept.learning_mode}</p>
                 </div>
               </div>
-              <button onClick={() => setActivePracticeItem(null)} className="text-slate-400 hover:text-white text-xl p-1">
+              <button onClick={() => setDrillModalOpen(false)} className="text-slate-400 hover:text-white text-xl p-1">
                 &times;
               </button>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-              <div className="text-xs font-bold text-slate-400 uppercase">Target Action Plan:</div>
-              <p className="text-xs text-slate-200 leading-relaxed">{activePracticeItem.action_plan}</p>
+              <div className="text-xs font-bold text-slate-400 uppercase">Target Intervention:</div>
+              <p className="text-xs text-slate-200 leading-relaxed">
+                Complete 5 focused practice items on <strong>{activeDrillConcept.concept_name}</strong> to resolve active bottleneck <strong>{activeDrillConcept.bottleneck}</strong>.
+              </p>
               <div className="text-[11px] text-slate-400 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-                <strong>Pedagogical Goal:</strong> {activePracticeItem.grounding}
+                <strong>Current State:</strong> Mastery: {(activeDrillConcept.mastery * 100).toFixed(0)}%, Competency: {(activeDrillConcept.competency * 100).toFixed(0)}%.
               </div>
             </div>
 
-            {practiceCompleted ? (
+            {drillCompleted ? (
               <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-center space-y-2">
                 <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
-                <h4 className="text-sm font-bold text-white">Drill Successfully Logged!</h4>
-                <p className="text-xs text-slate-300">Bayesian belief updated (+3% concept mastery boost).</p>
+                <h4 className="text-sm font-bold text-white">Drill Successfully Recorded!</h4>
+                <p className="text-xs text-slate-300">Bayesian belief updated (+4% mastery boost on this concept).</p>
                 <button
-                  onClick={() => setActivePracticeItem(null)}
+                  onClick={() => setDrillModalOpen(false)}
                   className="mt-2 w-full py-2.5 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
                 >
                   Return to Dashboard
@@ -918,18 +1060,32 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
             ) : (
               <button
                 onClick={() => {
-                  setPracticeCompleted(true)
-                  // Bayesian boost on completion
-                  setStateVector((prev) => {
-                    const newM = Math.min(1.0, prev.mastery + 0.03)
-                    const newC = Math.pow(newM * prev.retention * Math.max(0.05, prev.transfer), 0.33)
-                    return { ...prev, mastery: newM, competency: newC }
+                  setDrillCompleted(true)
+                  // Apply targeted concept Bayesian update
+                  setNeuralState((prev) => {
+                    const subj = prev.subjects[activeDrillConcept.subject]
+                    if (!subj) return prev
+                    const updatedC = subj.concepts.map(c => {
+                      if (c.concept_id === activeDrillConcept.concept_id) {
+                        const newM = Math.min(1.0, c.mastery + 0.04)
+                        const newC = computeCompetency(newM, c.retention || 0.85, c.transfer || 0.5, c.misconception || 0.02)
+                        return { ...c, mastery: newM, competency: newC }
+                      }
+                      return c
+                    })
+                    const avgM = updatedC.reduce((a, b) => a + b.mastery, 0) / updatedC.length
+                    const avgC = updatedC.reduce((a, b) => a + b.competency, 0) / updatedC.length
+                    const updatedSubj = { ...subj, concepts: updatedC, overall_mastery: avgM, overall_competency: avgC }
+                    const nextS = { ...prev.subjects, [activeDrillConcept.subject]: updatedSubj }
+                    const nextFull = { ...prev, subjects: nextS, total_evidence_events: prev.total_evidence_events + 5 }
+                    localStorage.setItem(storageKey, JSON.stringify(nextFull))
+                    return nextFull
                   })
                 }}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20"
               >
                 <Check className="w-4 h-4" />
-                <span>Mark Drill Completed & Record Evidence</span>
+                <span>Log Practice Completion & Record Evidence</span>
               </button>
             )}
           </div>
