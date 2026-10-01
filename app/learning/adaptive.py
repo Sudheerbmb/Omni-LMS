@@ -13,7 +13,6 @@ from uuid import UUID, NAMESPACE_URL, uuid5
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import SQLAlchemyError
 
 from app.identity.models import User
 from app.identity.models import OrganizationMembership
@@ -33,29 +32,15 @@ ACTION_EFFECTS = {
     "novel_application": {"mastery": .05, "retention": .05, "transfer": .23, "misconception": -.04, "cost": .30},
     "guided_practice": {"mastery": .19, "retention": .08, "transfer": .04, "misconception": -.05, "cost": .24},
 }
-_schema_available: bool | None = None
+_schema_available = False
 
 
 async def ensure_adaptive_schema(session: AsyncSession) -> bool:
-    """Create additive adaptive tables when a host skipped its release migration."""
-    global _schema_available
-    if _schema_available is not None:
-        return _schema_available
-    try:
-        connection = await session.connection()
-        for table in (LearningEvidence.__table__, LearnerConceptState.__table__, LearningActionFeedback.__table__):
-            await connection.run_sync(
-                lambda sync_connection, target=table: target.create(sync_connection, checkfirst=True)
-            )
-        await session.commit()
-        _schema_available = True
-        return True
-    except SQLAlchemyError:
-        # Managed production databases may disallow application-time DDL. The
-        # existing transactional outbox is the durable event-store fallback.
-        await session.rollback()
-        _schema_available = False
-        return False
+    """Use the established event store until managed migrations are available."""
+    # The Render/Neon production role cannot safely migrate schema at request
+    # time. OutboxEvent is already deployed, durable, append-only and versioned,
+    # so it is the canonical LENS evidence store on every environment.
+    return _schema_available
 
 
 def _new_state(user_id: UUID, course_id: UUID | None, concept: str) -> LearnerConceptState:
