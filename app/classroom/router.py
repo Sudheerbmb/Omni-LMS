@@ -16,7 +16,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.classroom.models import LiveClass
-from app.classroom.schemas import LiveClassCreate, LiveClassRead, TeacherTimetableSlotRead
+from app.classroom.schemas import (
+    EndClassSessionRequest,
+    LiveClassCreate,
+    LiveClassRead,
+    TeacherTimetableSlotRead,
+)
 from app.classroom.service import (
     ClassroomAccessError,
     ScheduleConflictError,
@@ -415,11 +420,6 @@ class TeacherCopilotRequest(BaseModel):
     action: Optional[str] = "enhance"  # enhance | fun_fact | analogy | quick_poll | engagement_question | diagram
     live_transcript: Optional[str] = None
     elapsed_seconds: Optional[int] = None
-
-
-class EndClassSessionRequest(BaseModel):
-    live_transcript: Optional[str] = None
-    duration_seconds: Optional[int] = None
 
 
 class StudentTutorRequest(BaseModel):

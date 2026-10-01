@@ -37,7 +37,7 @@ class LearningResource(UUIDMixin, TimestampMixin, Base):
     content_body: Mapped[str | None] = mapped_column(Text)
 
     # Extra metadata (captions, attachments, etc.)
-    metadata: Mapped[dict | None] = mapped_column(JSON)
+    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSON)
 
     section: Mapped["CourseSection | None"] = relationship(back_populates="resources")
 

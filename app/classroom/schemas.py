@@ -53,3 +53,8 @@ class TeacherTimetableSlotRead(BaseModel):
     start_time: str
     end_time: str
     room_or_venue: str
+
+
+class EndClassSessionRequest(BaseModel):
+    live_transcript: Optional[str] = None
+    duration_seconds: Optional[int] = None

@@ -63,5 +63,5 @@ class AuditLog(UUIDMixin, Base):
     resource_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="success", nullable=False)
