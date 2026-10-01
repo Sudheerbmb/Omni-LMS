@@ -6,8 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.identity.auth import get_current_user
+from app.identity.models import User
 from app.platform.database import get_session
 from app.timetable.models import (
+    CurriculumCourseOverride,
+    GradeCurriculum,
     SchoolGrade,
     SchoolSection,
     Subject,
@@ -19,6 +23,7 @@ from app.timetable.models import (
     TimetableSlot,
 )
 from app.timetable.schemas import (
+    CurriculumCourseUpdate,
     SchoolGradeRead,
     SlotSwapRequest,
     SlotUpdateRequest,
@@ -338,3 +343,55 @@ async def get_school_courses_endpoint(
         user_email=user_email,
         user_role=user_role,
     )
+
+
+@router.put("/courses/{grade_number}/{subject_code}", response_model=Dict[str, Any])
+async def update_school_course_endpoint(
+    grade_number: int,
+    subject_code: str,
+    payload: CurriculumCourseUpdate,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Persist an admin-authored syllabus override for one grade and subject."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can edit curriculum courses")
+
+    grade = await session.scalar(select(SchoolGrade).where(SchoolGrade.grade_number == grade_number))
+    subject = await session.scalar(select(Subject).where(Subject.code == subject_code.upper()))
+    if not grade or not subject:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curriculum course not found")
+
+    curriculum = await session.scalar(
+        select(GradeCurriculum).where(
+            GradeCurriculum.grade_id == grade.id,
+            GradeCurriculum.subject_id == subject.id,
+        )
+    )
+    if not curriculum:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subject is not assigned to this grade")
+
+    if payload.subject_name is not None:
+        subject.name = payload.subject_name.strip()
+    if payload.category is not None:
+        subject.category = payload.category.strip()
+    if payload.color is not None:
+        subject.color = payload.color
+    curriculum.periods_per_week = payload.periods_per_week
+
+    override = await session.scalar(
+        select(CurriculumCourseOverride).where(
+            CurriculumCourseOverride.grade_id == grade.id,
+            CurriculumCourseOverride.subject_id == subject.id,
+        )
+    )
+    if not override:
+        override = CurriculumCourseOverride(grade_id=grade.id, subject_id=subject.id)
+        session.add(override)
+
+    override.title = payload.title.strip() if payload.title else None
+    override.academic_year = payload.academic_year
+    override.chapters_json = [chapter.model_dump() for chapter in payload.chapters]
+    await session.commit()
+
+    return {"status": "success", "message": "Curriculum course updated"}

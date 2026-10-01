@@ -3,7 +3,7 @@ import type {
   User, 
   SchoolCourse
 } from '../lib/api'
-import { getSchoolCourses } from '../lib/api'
+import { getSchoolCourses, updateSchoolCourse } from '../lib/api'
 import { 
   BookOpen, 
   Search, 
@@ -22,7 +22,9 @@ import {
   Trophy, 
   ShieldCheck, 
   ChevronRight,
-  Filter
+  Filter,
+  Pencil,
+  Save
 } from 'lucide-react'
 
 type CoursesPageProps = {
@@ -35,6 +37,16 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
   const [search, setSearch] = useState('')
   const [selectedGrade, setSelectedGrade] = useState<number | 'all'>('all')
   const [activeCourse, setActiveCourse] = useState<SchoolCourse | null>(null)
+  const [editingCourse, setEditingCourse] = useState<SchoolCourse | null>(null)
+  const [editSubjectName, setEditSubjectName] = useState('')
+  const [editTitle, setEditTitle] = useState('')
+  const [editCategory, setEditCategory] = useState('')
+  const [editColor, setEditColor] = useState('#06b6d4')
+  const [editAcademicYear, setEditAcademicYear] = useState('2026-2027')
+  const [editPeriods, setEditPeriods] = useState(5)
+  const [editChaptersJson, setEditChaptersJson] = useState('[]')
+  const [savingCourse, setSavingCourse] = useState(false)
+  const [editError, setEditError] = useState('')
   
   // Chapter progress tracker (local persistence per user/course)
   const [completedChapters, setCompletedChapters] = useState<Record<string, boolean>>(() => {
@@ -82,6 +94,44 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
       localStorage.setItem(`course_progress_${user.id}`, JSON.stringify(updated))
     } catch (e) {
       console.error(e)
+    }
+  }
+
+  const openCourseEditor = (course: SchoolCourse) => {
+    setEditingCourse(course)
+    setEditSubjectName(course.subject_name)
+    setEditTitle(course.title)
+    setEditCategory(course.category)
+    setEditColor(course.color)
+    setEditAcademicYear(course.academic_year)
+    setEditPeriods(course.periods_per_week)
+    setEditChaptersJson(JSON.stringify(course.chapters, null, 2))
+    setEditError('')
+  }
+
+  const saveCourseEdits = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!editingCourse) return
+    try {
+      setSavingCourse(true)
+      setEditError('')
+      const chapters = JSON.parse(editChaptersJson)
+      if (!Array.isArray(chapters)) throw new Error('Chapters must be a JSON array.')
+      await updateSchoolCourse(editingCourse.grade_number, editingCourse.subject_code, {
+        title: editTitle.trim(),
+        subject_name: editSubjectName.trim(),
+        category: editCategory.trim(),
+        color: editColor,
+        academic_year: editAcademicYear.trim(),
+        periods_per_week: editPeriods,
+        chapters
+      })
+      setEditingCourse(null)
+      await fetchCourses()
+    } catch (error: any) {
+      setEditError(error.message || 'Unable to update this curriculum course.')
+    } finally {
+      setSavingCourse(false)
     }
   }
 
@@ -251,6 +301,19 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
                         </h3>
                       </div>
                     </div>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openCourseEditor(c)
+                        }}
+                        className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+                        title="Edit curriculum course"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Highlights */}
@@ -303,6 +366,56 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {isAdmin && editingCourse && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <form onSubmit={saveCourseEdits} className="bg-slate-900 border border-slate-700 rounded-3xl max-w-3xl w-full p-6 space-y-5 shadow-2xl my-8">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-lg font-black text-white">Edit Curriculum Course</h2>
+                <p className="text-xs text-slate-400">{editingCourse.grade_name} &bull; {editingCourse.subject_code}</p>
+              </div>
+              <button type="button" onClick={() => setEditingCourse(null)} className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editError && <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300">{editError}</div>}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="text-xs text-slate-400">Subject name
+                <input required value={editSubjectName} onChange={e => setEditSubjectName(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white" />
+              </label>
+              <label className="text-xs text-slate-400">Course title
+                <input required value={editTitle} onChange={e => setEditTitle(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white" />
+              </label>
+              <label className="text-xs text-slate-400">Category
+                <input required value={editCategory} onChange={e => setEditCategory(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white" />
+              </label>
+              <label className="text-xs text-slate-400">Academic year
+                <input required value={editAcademicYear} onChange={e => setEditAcademicYear(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white" />
+              </label>
+              <label className="text-xs text-slate-400">Periods per week
+                <input required type="number" min={1} max={20} value={editPeriods} onChange={e => setEditPeriods(Number(e.target.value))} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white" />
+              </label>
+              <label className="text-xs text-slate-400">Course color
+                <input type="color" value={editColor} onChange={e => setEditColor(e.target.value)} className="mt-1 w-full h-11 bg-slate-950 border border-slate-700 rounded-xl p-1" />
+              </label>
+            </div>
+
+            <label className="block text-xs text-slate-400">Chapters JSON
+              <textarea required rows={16} value={editChaptersJson} onChange={e => setEditChaptersJson(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 font-mono" />
+            </label>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => setEditingCourse(null)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold">Cancel</button>
+              <button disabled={savingCourse} type="submit" className="px-5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white text-xs font-black flex items-center gap-2">
+                <Save className="w-4 h-4" /> {savingCourse ? 'Saving...' : 'Save Curriculum'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

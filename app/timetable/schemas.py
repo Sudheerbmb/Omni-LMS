@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SubjectRead(BaseModel):
@@ -14,6 +14,24 @@ class SubjectRead(BaseModel):
     requires_ground: bool
     requires_lab: bool
     color: str
+
+
+class CurriculumChapterUpdate(BaseModel):
+    num: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=250)
+    duration_weeks: int = Field(ge=1, le=52)
+    topics: list[str] = []
+    outcomes: str = ""
+
+
+class CurriculumCourseUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=200)
+    subject_name: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    category: Optional[str] = Field(default=None, min_length=1, max_length=32)
+    color: Optional[str] = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    academic_year: str = Field(default="2026-2027", min_length=4, max_length=16)
+    periods_per_week: int = Field(ge=1, le=20)
+    chapters: list[CurriculumChapterUpdate]
 
 
 class SchoolSectionRead(BaseModel):

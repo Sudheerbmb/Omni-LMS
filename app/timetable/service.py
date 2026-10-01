@@ -11,6 +11,7 @@ from app.identity.security import hash_password
 from app.timetable.agent import build_timetable_graph
 from app.timetable.models import (
     GradeCurriculum,
+    CurriculumCourseOverride,
     SchoolGrade,
     SchoolSection,
     Subject,
@@ -31,18 +32,18 @@ GRADE_CURRICULUM_MATRIX = {
     2: [("ENG", 7), ("HIN", 6), ("MATH", 7), ("EVS", 6), ("ART", 5), ("VAL", 5), ("PET", 4)],
 
     # Preparatory / Junior (Classes 3 - 5): Expanding Science, Social, and ICT
-    3: [("ENG", 6), ("HIN", 5), ("MATH", 7), ("SCI", 6), ("SST", 5), ("CS", 4), ("ART", 3), ("PET", 4)],
-    4: [("ENG", 6), ("HIN", 5), ("MATH", 7), ("SCI", 6), ("SST", 5), ("CS", 4), ("ART", 3), ("PET", 4)],
-    5: [("ENG", 6), ("HIN", 5), ("MATH", 7), ("SCI", 6), ("SST", 5), ("CS", 4), ("ART", 3), ("PET", 4)],
+    3: [("ENG", 6), ("HIN", 5), ("MATH", 7), ("EVS", 6), ("CTAI", 4), ("ART", 4), ("PET", 4)],
+    4: [("ENG", 6), ("HIN", 5), ("MATH", 7), ("EVS", 6), ("CTAI", 4), ("ART", 4), ("PET", 4)],
+    5: [("ENG", 6), ("HIN", 5), ("MATH", 7), ("EVS", 6), ("CTAI", 4), ("ART", 4), ("PET", 4)],
 
     # Middle School (Classes 6 - 8): 3 Languages, Pre-Algebra, Integrated Science
-    6: [("ENG", 5), ("HIN", 4), ("SKT", 4), ("MATH", 7), ("SCI", 6), ("SST", 5), ("CS", 4), ("ART", 2), ("PET", 3)],
-    7: [("ENG", 5), ("HIN", 4), ("SKT", 4), ("MATH", 7), ("SCI", 6), ("SST", 5), ("CS", 4), ("ART", 2), ("PET", 3)],
-    8: [("ENG", 5), ("HIN", 4), ("SKT", 4), ("MATH", 7), ("SCI", 6), ("SST", 5), ("CS", 4), ("ART", 2), ("PET", 3)],
+    6: [("ENG", 5), ("HIN", 4), ("SKT", 3), ("MATH", 6), ("SCI", 5), ("SST", 5), ("CTAI", 4), ("SKILL", 3), ("ART", 2), ("PET", 3)],
+    7: [("ENG", 5), ("HIN", 4), ("SKT", 3), ("MATH", 6), ("SCI", 5), ("SST", 5), ("CTAI", 4), ("SKILL", 3), ("ART", 2), ("PET", 3)],
+    8: [("ENG", 5), ("HIN", 4), ("SKT", 3), ("MATH", 6), ("SCI", 5), ("SST", 5), ("CTAI", 4), ("SKILL", 3), ("ART", 2), ("PET", 3)],
 
     # Secondary / High School (Classes 9 - 10): CBSE/ICSE Board Standard with Specialized Sciences & Labs
-    9: [("ENG", 5), ("HIN", 4), ("MATH", 7), ("PHY", 4), ("CHEM", 4), ("BIO", 4), ("HIST", 4), ("GEOG", 3), ("CS", 3), ("PET", 2)],
-    10: [("ENG", 5), ("HIN", 4), ("MATH", 7), ("PHY", 4), ("CHEM", 4), ("BIO", 4), ("HIST", 4), ("GEOG", 3), ("CS", 3), ("PET", 2)],
+    9: [("ENG", 5), ("HIN", 4), ("MATH", 6), ("SCI", 6), ("SST", 5), ("SKILL", 4), ("CTAI", 3), ("ART", 3), ("PET", 4)],
+    10: [("ENG", 5), ("HIN", 4), ("MATH", 7), ("SCI", 6), ("SST", 6), ("CTAI", 3), ("ART", 4), ("PET", 5)],
 }
 
 SUBJECT_DEFAULTS = [
@@ -60,6 +61,8 @@ SUBJECT_DEFAULTS = [
     {"code": "HIST", "name": "History & Political Science", "category": "core_academic", "color": "#e879f9"},
     {"code": "GEOG", "name": "Geography & Economics", "category": "core_academic", "color": "#fb7185"},
     {"code": "CS", "name": "Computer Science & AI Lab", "category": "lab", "requires_lab": True, "color": "#818cf8"},
+    {"code": "CTAI", "name": "Computational Thinking & Artificial Intelligence", "category": "skill", "requires_lab": True, "color": "#6366f1"},
+    {"code": "SKILL", "name": "Skill Education / Kaushal Bodh", "category": "vocational", "color": "#14b8a6"},
     {"code": "ART", "name": "Visual Art & Performing Craft", "category": "arts", "color": "#f87171"},
     {"code": "PET", "name": "Physical Education & Sports", "category": "sports", "requires_ground": True, "color": "#f59e0b"},
 ]
@@ -67,7 +70,7 @@ SUBJECT_DEFAULTS = [
 TEACHER_SEEDS = [
     # Mathematics Department
     {"name": "Dr. Sarah Connor", "email": "sarah.connor@school.edu", "emp_id": "T001", "subjects": ["MATH", "PHY"], "rating": 4.8},
-    {"name": "Prof. Alan Turing", "email": "alan.turing@school.edu", "emp_id": "T002", "subjects": ["CS", "MATH"], "rating": 4.9},
+    {"name": "Prof. Alan Turing", "email": "alan.turing@school.edu", "emp_id": "T002", "subjects": ["CS", "CTAI", "MATH"], "rating": 4.9},
     {"name": "Mrs. Shakuntala Devi", "email": "shakuntala.d@school.edu", "emp_id": "T011", "subjects": ["MATH"], "rating": 4.9},
     {"name": "Mr. Srinivasa Ramanujan", "email": "ramanujan.s@school.edu", "emp_id": "T012", "subjects": ["MATH"], "rating": 5.0},
     {"name": "Mr. Ramesh Sharma", "email": "ramesh.sharma@school.edu", "emp_id": "T006", "subjects": ["MATH"], "rating": 2.1},
@@ -93,8 +96,8 @@ TEACHER_SEEDS = [
     {"name": "Mrs. Medha Patkar", "email": "medha.p@school.edu", "emp_id": "T021", "subjects": ["EVS", "GEOG"], "rating": 4.6},
 
     # Computer Science & AI
-    {"name": "Mrs. Ada Lovelace", "email": "ada.lovelace@school.edu", "emp_id": "T022", "subjects": ["CS"], "rating": 5.0},
-    {"name": "Mr. Linus Torvalds", "email": "linus.t@school.edu", "emp_id": "T023", "subjects": ["CS"], "rating": 4.8},
+    {"name": "Mrs. Ada Lovelace", "email": "ada.lovelace@school.edu", "emp_id": "T022", "subjects": ["CS", "CTAI", "SKILL"], "rating": 5.0},
+    {"name": "Mr. Linus Torvalds", "email": "linus.t@school.edu", "emp_id": "T023", "subjects": ["CS", "CTAI", "SKILL"], "rating": 4.8},
 
     # Arts & Crafts
     {"name": "Mrs. Jamini Roy", "email": "jamini.r@school.edu", "emp_id": "T024", "subjects": ["ART"], "rating": 4.7},
@@ -237,6 +240,7 @@ async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
             section_list.append(sec)
 
         curr_rules = GRADE_CURRICULUM_MATRIX.get(g_num, [])
+        allowed_subject_ids = [subject_map[code].id for code, _ in curr_rules if code in subject_map]
         for sub_code, periods in curr_rules:
             sub = subject_map.get(sub_code)
             if sub:
@@ -254,6 +258,15 @@ async def seed_school_defaults(session: AsyncSession) -> Dict[str, Any]:
                     ))
                 else:
                     existing_curr.periods_per_week = periods
+
+        # Keep existing deployments aligned when the official scheme of studies changes.
+        if allowed_subject_ids:
+            await session.execute(
+                delete(GradeCurriculum).where(
+                    GradeCurriculum.grade_id == grade.id,
+                    GradeCurriculum.subject_id.not_in(allowed_subject_ids),
+                )
+            )
 
     # 4. Seed Teachers with Skills
     teachers_created: List[TeacherProfile] = []
@@ -795,6 +808,20 @@ async def get_school_courses_and_syllabus(
     grade_map = {g.grade_number: g for g in grades}
     grade_by_id = {g.id: g for g in grades}
 
+    overrides = (await session.scalars(select(CurriculumCourseOverride))).all()
+    override_map = {(item.grade_id, item.subject_id): item for item in overrides}
+
+    def curriculum_content(grade: SchoolGrade, subject: Subject) -> tuple[str, str, List[Dict[str, Any]]]:
+        override = override_map.get((grade.id, subject.id))
+        chapters = (
+            override.chapters_json
+            if override and override.chapters_json
+            else get_chapters_for_subject_and_grade(subject.code, grade.grade_number)
+        )
+        title = override.title if override and override.title else f"{grade.name} — {subject.name}"
+        academic_year = override.academic_year if override else grade.academic_year
+        return title, academic_year, chapters
+
     # Fetch all teachers
     teachers = (
         await session.scalars(
@@ -875,21 +902,21 @@ async def get_school_courses_and_syllabus(
                 gr = grade_by_id.get(gid)
                 sb = sub_by_id.get(sid)
                 if gr and sb:
-                    chapters = get_chapters_for_subject_and_grade(sb.code, gr.grade_number)
+                    title, academic_year, chapters = curriculum_content(gr, sb)
                     curr_item = next((c for c in gr.curriculum if c.subject_id == sb.id), None)
                     periods = curr_item.periods_per_week if curr_item else 5
                     t_info = teacher_info.get(target_teacher.id, {})
 
                     courses_result.append({
                         "id": f"{gr.grade_number}_{sb.code}",
-                        "title": f"{gr.name} — {sb.name}",
+                        "title": title,
                         "subject_code": sb.code,
                         "subject_name": sb.name,
                         "category": sb.category,
                         "color": sb.color,
                         "grade_number": gr.grade_number,
                         "grade_name": gr.name,
-                        "academic_year": gr.academic_year,
+                        "academic_year": academic_year,
                         "periods_per_week": periods,
                         "instructor_name": t_info.get("display_name", "Assigned Faculty"),
                         "instructor_email": t_info.get("email", ""),
@@ -926,18 +953,18 @@ async def get_school_courses_and_syllabus(
                         assigned_tid = cand.id
 
                 t_info = teacher_info.get(assigned_tid, {}) if assigned_tid else {}
-                chapters = get_chapters_for_subject_and_grade(sb.code, gr.grade_number)
+                title, academic_year, chapters = curriculum_content(gr, sb)
 
                 courses_result.append({
                     "id": f"{gr.grade_number}_{sb.code}",
-                    "title": f"{gr.name} — {sb.name}",
+                    "title": title,
                     "subject_code": sb.code,
                     "subject_name": sb.name,
                     "category": sb.category,
                     "color": sb.color,
                     "grade_number": gr.grade_number,
                     "grade_name": gr.name,
-                    "academic_year": gr.academic_year,
+                    "academic_year": academic_year,
                     "periods_per_week": curr.periods_per_week,
                     "instructor_name": t_info.get("display_name", "Department Faculty"),
                     "instructor_email": t_info.get("email", ""),
@@ -963,18 +990,18 @@ async def get_school_courses_and_syllabus(
                     assigned_tid = cand.id
 
             t_info = teacher_info.get(assigned_tid, {}) if assigned_tid else {}
-            chapters = get_chapters_for_subject_and_grade(sb.code, gr.grade_number)
+            title, academic_year, chapters = curriculum_content(gr, sb)
 
             courses_result.append({
                 "id": f"{gr.grade_number}_{sb.code}",
-                "title": f"{gr.name} — {sb.name}",
+                "title": title,
                 "subject_code": sb.code,
                 "subject_name": sb.name,
                 "category": sb.category,
                 "color": sb.color,
                 "grade_number": gr.grade_number,
                 "grade_name": gr.name,
-                "academic_year": gr.academic_year,
+                "academic_year": academic_year,
                 "periods_per_week": curr.periods_per_week,
                 "instructor_name": t_info.get("display_name", "Department Faculty"),
                 "instructor_email": t_info.get("email", ""),

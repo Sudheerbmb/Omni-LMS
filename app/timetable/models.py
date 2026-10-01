@@ -57,6 +57,25 @@ class GradeCurriculum(UUIDMixin, Base):
     subject: Mapped["Subject"] = relationship("Subject")
 
 
+class CurriculumCourseOverride(UUIDMixin, TimestampMixin, Base):
+    """Admin-managed syllabus content for one subject in one grade."""
+    __tablename__ = "curriculum_course_overrides"
+
+    grade_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("school_grades.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    subject_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("school_subjects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    academic_year: Mapped[str] = mapped_column(String(16), default="2026-2027", nullable=False)
+    chapters_json: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("grade_id", "subject_id", name="uq_curriculum_course_override"),
+    )
+
+
 class TeacherProfile(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "teacher_profiles"
 

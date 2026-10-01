@@ -672,6 +672,23 @@ export const getSchoolCourses = (params?: { grade_number?: number; teacher_id?: 
 
 }
 
+export const updateSchoolCourse = (
+  gradeNumber: number,
+  subjectCode: string,
+  payload: {
+    title?: string
+    subject_name?: string
+    category?: string
+    color?: string
+    academic_year: string
+    periods_per_week: number
+    chapters: CurriculumChapter[]
+  }
+) => request<{ status: string; message: string }>(
+  `/api/v1/timetable/courses/${gradeNumber}/${encodeURIComponent(subjectCode)}`,
+  { method: 'PUT', body: JSON.stringify(payload) }
+)
+
 export interface TeacherTimetableSlot {
 
   grade_number: number

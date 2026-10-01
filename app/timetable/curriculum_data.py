@@ -2060,17 +2060,46 @@ CHAPTERS_DB = {
     ]
 }
 
+SUBJECT_STRANDS = {
+    "ENG": ["Reading and Literature", "Grammar and Language Use", "Writing and Composition", "Speaking, Listening and Projects"],
+    "HIN": ["पठन एवं साहित्य", "व्याकरण एवं भाषा", "रचनात्मक लेखन", "श्रवण-वाचन एवं परियोजना"],
+    "SKT": ["संस्कृत पठन", "व्याकरण", "शब्दरूप एवं धातुरूप", "संवाद एवं रचना"],
+    "EVS": ["Family and Community", "Food, Water and Shelter", "Plants, Animals and Habitats", "Travel, Work and Environmental Care"],
+    "SCI": ["Matter and the Physical World", "Living Systems", "Motion, Energy and Natural Phenomena", "Environment, Health and Scientific Inquiry"],
+    "SST": ["History and Heritage", "Geography and Environment", "Civics and Democratic Life", "Economics, Society and Sustainable Development"],
+    "CTAI": ["Digital Literacy and Safety", "Computational Thinking", "Data and Artificial Intelligence", "Responsible Innovation Project"],
+    "SKILL": ["Work, Tools and Safety", "Design and Making", "Community and Vocational Exploration", "Kaushal Project and Reflection"],
+    "ART": ["Visual Expression", "Music, Movement and Theatre", "Indian Arts and Cultural Heritage", "Creative Portfolio"],
+    "PET": ["Movement and Fitness", "Games and Sports Skills", "Health, Nutrition and Well-being", "Yoga, Teamwork and Fair Play"],
+    "CS": ["Digital Systems", "Programming and Algorithms", "Data and Networks", "Cyber Safety and Applied Project"],
+}
+
+
 def get_chapters_for_subject_and_grade(subject_code: str, grade_number: int) -> List[Dict[str, Any]]:
     """Retrieves syllabus chapters for a specific subject and grade number."""
     key = f"{subject_code}_{grade_number}"
     if key in CHAPTERS_DB:
         return CHAPTERS_DB[key]
     
-    # Check fallback for same subject from adjacent grade
-    for alt_g in [grade_number, grade_number - 1, grade_number + 1, 6, 7, 8, 9, 10, 4, 5]:
-        alt_key = f"{subject_code}_{alt_g}"
-        if alt_key in CHAPTERS_DB:
-            return CHAPTERS_DB[alt_key]
+    # Every subject offered by the CBSE-aligned scheme receives grade-specific
+    # competency units instead of borrowing another grade's textbook chapters.
+    strands = SUBJECT_STRANDS.get(subject_code)
+    if strands:
+        return [
+            {
+                "num": index,
+                "title": title,
+                "duration_weeks": 4,
+                "topics": [
+                    f"Class {grade_number} Core Concepts",
+                    "NCERT-aligned Activities and Examples",
+                    "Competency-based Practice",
+                    "Assessment and Portfolio Evidence",
+                ],
+                "outcomes": f"Demonstrate Class {grade_number} competency in {title.lower()} through application and reflection.",
+            }
+            for index, title in enumerate(strands, start=1)
+        ]
     
     # Generic high quality fallback chapters
     return [
