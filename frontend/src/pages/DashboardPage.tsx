@@ -8,7 +8,8 @@ import type {
   Enrollment,
   Announcement,
   Course,
-  TimetableSlot
+  TimetableSlot,
+  SchoolCourse
 } from '../lib/api'
 import {
   getDashboardSummary,
@@ -26,6 +27,7 @@ import {
   seedTimetableDefaults,
   getTimetableGrid,
   getCourses,
+  getSchoolCourses,
   recordTeacherLeave
 } from '../lib/api'
 import {
@@ -70,6 +72,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
   const [liveClasses, setLiveClasses] = useState<SchoolLiveClass[]>([])
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
   const [teacherSlots, setTeacherSlots] = useState<TeacherTimetableSlot[]>([])
+  const [teacherCurriculumCourses, setTeacherCurriculumCourses] = useState<SchoolCourse[]>([])
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [availableCourses, setAvailableCourses] = useState<Course[]>([])
@@ -122,8 +125,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
         const usersRes = await getAdminUsers().catch(() => [])
         setAdminUsers(usersRes || [])
       } else if (user.role === 'teacher') {
-        const slotsRes = await getTeacherTimetableSlots().catch(() => [])
+        const [slotsRes, curriculumRes] = await Promise.all([
+          getTeacherTimetableSlots().catch(() => []),
+          getSchoolCourses({
+            user_email: user.email,
+            user_role: user.role
+          }).catch(() => [])
+        ])
         setTeacherSlots(slotsRes || [])
+        setTeacherCurriculumCourses(curriculumRes || [])
       } else if (user.role === 'student') {
         const [enrolledRes, coursesRes, gridRes] = await Promise.all([
           getMyEnrollments().catch(() => []),
@@ -139,7 +149,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
     } finally {
       setLoading(false)
     }
-  }, [user.role])
+  }, [user.email, user.role])
 
   useEffect(() => {
     loadDashboardData()
@@ -623,7 +633,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
                   <BookOpen className="w-5 h-5" />
                 </div>
               </div>
-              <p className="text-3xl font-black text-white">{statsData.courses_total ?? 10}</p>
+              <p className="text-3xl font-black text-white">{teacherCurriculumCourses.length}</p>
               <p className="text-[11px] text-blue-400 mt-2 font-medium flex items-center gap-1">
                 Edit curriculum &rarr;
               </p>
