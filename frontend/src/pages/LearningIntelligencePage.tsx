@@ -15,9 +15,11 @@ import {
   ShieldAlert,
   Play,
   Check,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from 'lucide-react'
-import type { User } from '../lib/api'
+import type { User, LensDiagnosticQuestion } from '../lib/api'
+import { generateLensDiagnostic, submitLensDiagnostic, sendLensChat } from '../lib/api'
 
 interface LearnerStateData {
   student_id: string
@@ -59,18 +61,7 @@ interface DailyBlock {
   priority: string
 }
 
-interface DiagnosticQuestion {
-  id: string
-  subject: string
-  concept: string
-  prompt: string
-  options: string[]
-  correct_index: number
-  difficulty: number
-  cognitive_level: string
-}
-
-// ── Grade-Specific Curriculum Builders ───────────────────────────────────────
+// ── Grade-Specific Curriculum Helpers ───────────────────────────────────────
 
 function getCurriculumForGrade(gradeNumber: number) {
   if (gradeNumber <= 5) {
@@ -85,7 +76,7 @@ function getCurriculumForGrade(gradeNumber: number) {
         { id: 'g4_e1', name: 'Parts of Speech & Tenses', subject: 'English Grammar' },
         { id: 'g4_ss1', name: 'Maps, Cardinal Directions & Solar System', subject: 'Social Studies' },
       ],
-      diagnosticQuestions: [
+      defaultQuestions: [
         {
           id: 'q1',
           subject: 'Mathematics',
@@ -146,7 +137,7 @@ function getCurriculumForGrade(gradeNumber: number) {
           difficulty: 0.25,
           cognitive_level: 'FOUNDATION',
         },
-      ] as DiagnosticQuestion[]
+      ] as LensDiagnosticQuestion[]
     }
   } else {
     // Class 10 Curriculum
@@ -161,7 +152,7 @@ function getCurriculumForGrade(gradeNumber: number) {
         { id: 'g10_b1', name: 'Life Processes & Cellular Respiration', subject: 'Life Sciences' },
         { id: 'g10_ss1', name: 'Resources, Development & Federalism', subject: 'Social Science' },
       ],
-      diagnosticQuestions: [
+      defaultQuestions: [
         {
           id: 'q1',
           subject: 'Mathematics',
@@ -222,20 +213,18 @@ function getCurriculumForGrade(gradeNumber: number) {
           difficulty: 0.45,
           cognitive_level: 'APPLICATION',
         },
-      ] as DiagnosticQuestion[]
+      ] as LensDiagnosticQuestion[]
     }
   }
 }
 
 export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user }) => {
-  // Extract grade from user (e.g. "Ananya Iyer (Class 4-A)" -> 4)
   const gradeMatch = user?.display_name?.match(/Class\s*(\d+)/i)
   const detectedGrade = gradeMatch ? parseInt(gradeMatch[1], 10) : 4
   const curriculum = getCurriculumForGrade(detectedGrade)
-
   const storageKey = `lens_state_${user?.id || 'demo'}_grade_${detectedGrade}`
 
-  // Initial Uncalibrated State vs Calibrated
+  // Initial 0-Evidence State vs Calibrated State
   const [stateData, setStateData] = useState<LearnerStateData>(() => {
     const saved = localStorage.getItem(storageKey)
     if (saved) {
@@ -245,7 +234,6 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         // pass
       }
     }
-    // 0-Evidence Baseline (Section 22: Identifiability < 0.50 -> INSUFFICIENT_EVIDENCE)
     return {
       student_id: user?.id || 'std_demo',
       mastery: 0.00,
@@ -319,7 +307,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         title: `Spaced Recall: ${curriculum.concepts[0].name}`,
         subject: curriculum.concepts[0].subject,
         estimated_duration_mins: 30,
-        grounding: 'Memory retention retention baseline reinforcement.',
+        grounding: 'Memory retention baseline reinforcement.',
         priority: 'HIGH',
       },
       {
@@ -345,6 +333,8 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
 
   // Diagnostic Modal State
   const [showDiagnosticModal, setShowDiagnosticModal] = useState(false)
+  const [loadingQuestions, setLoadingQuestions] = useState(false)
+  const [activeQuestions, setActiveQuestions] = useState<LensDiagnosticQuestion[]>(curriculum.defaultQuestions)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({})
   const [submittingDiagnostic, setSubmittingDiagnostic] = useState(false)
@@ -371,126 +361,141 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
     'Why is uncertainty high?',
   ]
 
-  const handleStartDiagnostic = () => {
+  const handleStartDiagnostic = async () => {
     setSelectedAnswers({})
     setCurrentQuestionIndex(0)
     setDiagnosticResult(null)
     setShowDiagnosticModal(true)
+    setLoadingQuestions(true)
+
+    try {
+      // Call live AI question generator on backend powered by Groq LPU
+      const res = await generateLensDiagnostic(curriculum.gradeName, curriculum.subjects, 6)
+      if (res && res.questions && res.questions.length > 0) {
+        setActiveQuestions(res.questions)
+      } else {
+        setActiveQuestions(curriculum.defaultQuestions)
+      }
+    } catch {
+      setActiveQuestions(curriculum.defaultQuestions)
+    } finally {
+      setLoadingQuestions(false)
+    }
   }
 
   const handleAnswerSelect = (qId: string, optIdx: number) => {
     setSelectedAnswers((prev) => ({ ...prev, [qId]: optIdx }))
   }
 
-  const handleSubmitDiagnostic = () => {
+  const handleSubmitDiagnostic = async () => {
     setSubmittingDiagnostic(true)
-    const questions = curriculum.diagnosticQuestions
-    let correctCount = 0
 
-    questions.forEach((q) => {
-      if (selectedAnswers[q.id] === q.correct_index) {
-        correctCount++
-      }
-    })
+    try {
+      // Send real answers to backend LENS-Ω evaluation endpoint
+      const res = await submitLensDiagnostic(
+        curriculum.gradeName,
+        curriculum.subjects,
+        selectedAnswers,
+        activeQuestions
+      )
 
-    const scoreRatio = correctCount / questions.length
-    
-    // Mathematical Update using Section 14, 18, 19, 20
-    const rawMastery = 0.20 + (0.75 * scoreRatio)
-    const rawRetention = 0.85
-    const rawTransfer = Math.max(0.20, scoreRatio * 0.70)
-    const rawMisconception = Math.max(0.00, 0.40 * (1.0 - scoreRatio))
-    const rawCompetency = Math.pow(rawMastery * rawRetention * rawTransfer * (1.0 - rawMisconception), 0.25)
-    const rawUncertainty = 0.22 // Reduced significantly from 0.95 because diagnostic evidence arrived
-    const rawIdentifiability = 0.65 // Diagnostic evidence type now present
-    const rawVelocity = 0.045
-    const newBottleneck = rawTransfer < 0.45 ? 'TRANSFER' : rawMisconception > 0.20 ? 'MISCONCEPTION' : 'MASTERY'
-    const newMode = newBottleneck === 'TRANSFER' ? 'TRANSFER' : newBottleneck === 'MISCONCEPTION' ? 'REMEDIATION' : 'ACQUISITION'
-
-    const updatedState: LearnerStateData = {
-      student_id: user?.id || 'std_demo',
-      mastery: rawMastery,
-      retention: rawRetention,
-      transfer: rawTransfer,
-      misconception: rawMisconception,
-      competency: rawCompetency,
-      uncertainty: rawUncertainty,
-      identifiability: rawIdentifiability,
-      learning_velocity: rawVelocity,
-      current_bottleneck: newBottleneck,
-      current_learning_mode: newMode,
-      tracked_concepts_count: curriculum.concepts.length,
-      is_calibrated: true,
-    }
-
-    setStateData(updatedState)
-    localStorage.setItem(storageKey, JSON.stringify(updatedState))
-
-    // Update concepts table
-    setConcepts(
-      curriculum.concepts.map((c, idx) => {
-        const qForConcept = questions.find((q) => q.concept.toLowerCase().includes(c.name.split(' ')[0].toLowerCase()))
-        const cCorrect = qForConcept ? selectedAnswers[qForConcept.id] === qForConcept.correct_index : (idx % 2 === 0)
-        const cMastery = cCorrect ? 0.82 : 0.48
-        return {
-          concept_id: c.id,
-          concept_name: c.name,
-          subject: c.subject,
-          mastery: cMastery,
-          retention: 0.85,
-          transfer: cCorrect ? 0.55 : 0.25,
-          misconception: cCorrect ? 0.02 : 0.32,
-          competency: cCorrect ? 0.68 : 0.38,
-          uncertainty: 0.20,
-          bottleneck: cCorrect ? 'TRANSFER' : 'MISCONCEPTION',
-          learning_mode: cCorrect ? 'TRANSFER' : 'REMEDIATION',
+      if (res && res.state_vector) {
+        const sv = res.state_vector
+        const updatedState: LearnerStateData = {
+          student_id: user?.id || 'std_demo',
+          mastery: sv.mastery,
+          retention: sv.retention,
+          transfer: sv.transfer,
+          misconception: sv.misconception,
+          competency: sv.competency,
+          uncertainty: sv.uncertainty,
+          identifiability: sv.identifiability,
+          learning_velocity: sv.learning_velocity,
+          current_bottleneck: sv.current_bottleneck,
+          current_learning_mode: sv.current_learning_mode,
+          tracked_concepts_count: curriculum.concepts.length,
+          is_calibrated: true,
         }
-      })
-    )
 
-    // Update daily roadmap
-    setDailyPlan([
-      {
-        time: '08:00 - 08:30',
-        type: 'RETRIEVAL',
-        title: `Spaced Retrieval: ${curriculum.concepts[0].name}`,
-        subject: curriculum.concepts[0].subject,
-        estimated_duration_mins: 30,
-        grounding: `Retention baseline reinforcement for ${curriculum.gradeName}.`,
-        priority: 'HIGH',
-      },
-      {
-        time: '12:00 - 12:45',
-        type: 'PRACTICE',
-        title: `Targeted Practice: ${curriculum.concepts[1].name}`,
-        subject: curriculum.concepts[1].subject,
-        estimated_duration_mins: 45,
-        grounding: `Targeting mastery unblock for ${curriculum.gradeName} ${curriculum.concepts[1].subject}.`,
-        priority: 'MEDIUM',
-      },
-      {
-        time: '17:00 - 17:45',
-        type: 'TRANSFER',
-        title: `Applied Problem Solving: ${curriculum.concepts[2]?.name || curriculum.concepts[0].name}`,
-        subject: curriculum.concepts[2]?.subject || curriculum.subjects[0],
-        estimated_duration_mins: 45,
-        grounding: `Transfer problem solving across novel contexts.`,
-        priority: 'HIGH',
-      },
-    ])
+        setStateData(updatedState)
+        localStorage.setItem(storageKey, JSON.stringify(updatedState))
 
-    setDiagnosticResult({ score: Math.round(scoreRatio * 100), correctCount })
-    setSubmittingDiagnostic(false)
+        // Update concepts table based on per-question performance
+        setConcepts(
+          curriculum.concepts.map((c, idx) => {
+            const qForConcept = activeQuestions.find((q) =>
+              q.subject.toLowerCase().includes(c.subject.toLowerCase()) ||
+              q.concept.toLowerCase().includes(c.name.split(' ')[0].toLowerCase())
+            )
+            const cCorrect = qForConcept ? selectedAnswers[qForConcept.id] === qForConcept.correct_index : (idx % 2 === 0)
+            const cMastery = cCorrect ? 0.85 : 0.45
+            return {
+              concept_id: c.id,
+              concept_name: c.name,
+              subject: c.subject,
+              mastery: cMastery,
+              retention: 0.85,
+              transfer: cCorrect ? 0.60 : 0.25,
+              misconception: cCorrect ? 0.02 : 0.35,
+              competency: cCorrect ? 0.70 : 0.36,
+              uncertainty: sv.uncertainty,
+              bottleneck: cCorrect ? 'TRANSFER' : 'MISCONCEPTION',
+              learning_mode: cCorrect ? 'TRANSFER' : 'REMEDIATION',
+            }
+          })
+        )
 
-    // Append agent message
-    setMessages((prev) => [
-      ...prev,
-      {
-        sender: 'agent',
-        text: `Diagnostic Completed! You scored **${Math.round(scoreRatio * 100)}%** (${correctCount}/${questions.length} correct). I have calibrated your ${curriculum.gradeName} state vector: **Mastery: ${(rawMastery * 100).toFixed(0)}%**, **Competency: ${(rawCompetency * 100).toFixed(0)}%**, **Uncertainty reduced to ${(rawUncertainty * 100).toFixed(0)}%**. Your active bottleneck is **${newBottleneck}**.`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ])
+        // Update dynamic daily roadmap
+        setDailyPlan([
+          {
+            time: '08:00 - 08:30',
+            type: 'RETRIEVAL',
+            title: `Spaced Retrieval: ${curriculum.concepts[0].name}`,
+            subject: curriculum.concepts[0].subject,
+            estimated_duration_mins: 30,
+            grounding: `Retention baseline reinforcement for ${curriculum.gradeName}.`,
+            priority: 'HIGH',
+          },
+          {
+            time: '12:00 - 12:45',
+            type: 'PRACTICE',
+            title: `Targeted Practice: ${curriculum.concepts[1].name}`,
+            subject: curriculum.concepts[1].subject,
+            estimated_duration_mins: 45,
+            grounding: `Targeting mastery unblock for ${curriculum.gradeName} ${curriculum.concepts[1].subject}.`,
+            priority: 'MEDIUM',
+          },
+          {
+            time: '17:00 - 17:45',
+            type: 'TRANSFER',
+            title: `Applied Problem Solving: ${curriculum.concepts[2]?.name || curriculum.concepts[0].name}`,
+            subject: curriculum.concepts[2]?.subject || curriculum.subjects[0],
+            estimated_duration_mins: 45,
+            grounding: `Transfer problem solving across novel contexts.`,
+            priority: 'HIGH',
+          },
+        ])
+
+        setDiagnosticResult({
+          score: Math.round(res.result.score_percent),
+          correctCount: res.result.correct_count,
+        })
+
+        // Grounded agent message update
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: 'agent',
+            text: `Diagnostic Completed! You scored **${Math.round(res.result.score_percent)}%** (${res.result.correct_count}/${res.result.total_questions} correct). I have calibrated your ${curriculum.gradeName} state vector: **Mastery: ${(sv.mastery * 100).toFixed(0)}%**, **Competency: ${(sv.competency * 100).toFixed(0)}%**, **Uncertainty reduced to ${(sv.uncertainty * 100).toFixed(0)}%**. Your active bottleneck is **${sv.current_bottleneck}**.`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ])
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSubmittingDiagnostic(false)
+    }
   }
 
   const handleResetCalibration = () => {
@@ -509,29 +514,12 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
     setChatLoading(true)
 
     try {
-      await new Promise((r) => setTimeout(r, 600))
-      let agentReply = ''
-      const qLower = query.toLowerCase()
-
-      if (!stateData.is_calibrated) {
-        if (qLower.includes('diagnostic') || qLower.includes('uncertainty')) {
-          agentReply = `Because you have not completed any quizzes or diagnostic tests yet in **${curriculum.gradeName}**, my epistemic uncertainty (U) is at **95%**. Taking the 6-question diagnostic assessment will establish your baseline evidence and unlock your personalized roadmap.`
-        } else if (qLower.includes('what should i study') || qLower.includes('today')) {
-          agentReply = `Before generating specific micro-lessons, your primary objective today is completing the **${curriculum.gradeName} Diagnostic Benchmark** (${curriculum.subjects.join(', ')}). Please click "Take Diagnostic Assessment" above!`
-        } else {
-          agentReply = `I am awaiting your **${curriculum.gradeName}** baseline diagnostic test. Once completed, I will calculate your true mastery and retention curve across ${curriculum.subjects.join(', ')}.`
-        }
-      } else {
-        if (qLower.includes('what should i study') || qLower.includes('today')) {
-          agentReply = `Based on your calibrated ${curriculum.gradeName} state vector, your primary focus today is **${dailyPlan[1].title}** (${dailyPlan[1].estimated_duration_mins} mins) to resolve your **${stateData.current_bottleneck}** bottleneck.`
-        } else if (qLower.includes('weak') || qLower.includes('bottleneck')) {
-          agentReply = `Your primary learning bottleneck in ${curriculum.gradeName} is **${stateData.current_bottleneck}** in **${concepts[1]?.concept_name || curriculum.subjects[0]}** (Competency: ${(stateData.competency * 100).toFixed(0)}%).`
-        } else if (qLower.includes('ready for the exam') || qLower.includes('exam')) {
-          agentReply = `Your multi-dimensional Exam Readiness Score for ${curriculum.gradeName} is **${(stateData.competency * 100).toFixed(0)}%**. Complete your scheduled practice and transfer challenges to reach exam readiness.`
-        } else {
-          agentReply = `Grounded in your ${curriculum.gradeName} state vector (Mastery: ${(stateData.mastery * 100).toFixed(0)}%, Retention: ${(stateData.retention * 100).toFixed(0)}%, Competency: ${(stateData.competency * 100).toFixed(0)}%), I recommend following today's scheduled roadmap.`
-        }
-      }
+      // Live call to backend SN1 Groq LLM API
+      const res = await sendLensChat(query, curriculum.gradeName, curriculum.subjects, stateData)
+      const agentReply = res?.response || (
+        `Based on your ${curriculum.gradeName} state vector (Competency: ${(stateData.competency * 100).toFixed(0)}%, ` +
+        `Bottleneck: ${stateData.current_bottleneck}), please continue with your personalized study roadmap.`
+      )
 
       setMessages((prev) => [
         ...prev,
@@ -539,12 +527,20 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
       ])
     } catch (err) {
       console.error(err)
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: 'agent',
+          text: `Based on your live ${curriculum.gradeName} state vector (Mastery: ${(stateData.mastery * 100).toFixed(0)}%, Bottleneck: ${stateData.current_bottleneck}), follow your scheduled study blocks.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ])
     } finally {
       setChatLoading(false)
     }
   }
 
-  const currentQ = curriculum.diagnosticQuestions[currentQuestionIndex]
+  const currentQ = activeQuestions[currentQuestionIndex] || curriculum.defaultQuestions[0]
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
@@ -598,7 +594,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
                 You have not completed any diagnostic tests or quizzes in <strong>{curriculum.gradeName}</strong>. 
                 According to the LENS-Ω specification, the system does not guess or invent arbitrary numbers. 
-                Complete this 6-question diagnostic assessment covering <strong>{curriculum.subjects.join(', ')}</strong> to calculate your baseline state vector.
+                Complete this 6-question AI-generated diagnostic assessment covering <strong>{curriculum.subjects.join(', ')}</strong> to calculate your baseline state vector.
               </p>
             </div>
           </div>
@@ -782,7 +778,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-sm">SN1 Student Intelligence</h3>
-                  <p className="text-[10px] text-cyan-400 font-mono">{curriculum.gradeName} Grounded</p>
+                  <p className="text-[10px] text-cyan-400 font-mono">Live Groq Cloud LPU Agent</p>
                 </div>
               </div>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -807,7 +803,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               {chatLoading && (
                 <div className="flex items-center gap-2 text-xs text-slate-400 p-2">
                   <Sparkles className="w-3.5 h-3.5 animate-spin text-cyan-400" />
-                  SN1 is querying {curriculum.gradeName} evidence...
+                  SN1 is reasoning via Groq Cloud AI...
                 </div>
               )}
             </div>
@@ -861,10 +857,10 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">
-                    {curriculum.gradeName} Diagnostic Baseline Assessment
+                    {curriculum.gradeName} Dynamic Diagnostic Assessment
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Question {currentQuestionIndex + 1} of {curriculum.diagnosticQuestions.length} &bull; {currentQ.subject}
+                    {loadingQuestions ? 'Generating live questions via Groq AI...' : `Question ${currentQuestionIndex + 1} of ${activeQuestions.length} • ${currentQ.subject}`}
                   </p>
                 </div>
               </div>
@@ -876,7 +872,17 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               </button>
             </div>
 
-            {diagnosticResult ? (
+            {loadingQuestions ? (
+              <div className="p-12 text-center space-y-4">
+                <Loader2 className="w-10 h-10 text-cyan-400 animate-spin mx-auto" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-white text-sm">Crafting Psychometric Diagnostic Items...</h4>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    Groq Cloud LPU is dynamically synthesizing {curriculum.gradeName} questions covering {curriculum.subjects.join(', ')}.
+                  </p>
+                </div>
+              </div>
+            ) : diagnosticResult ? (
               <div className="p-6 rounded-2xl bg-slate-950 border border-emerald-500/30 text-center space-y-4">
                 <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center font-bold">
                   <CheckCircle2 className="w-8 h-8" />
@@ -884,7 +890,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 <div className="space-y-1">
                   <h4 className="text-lg font-bold text-white">Baseline Assessment Completed!</h4>
                   <p className="text-xs text-slate-400">
-                    You scored <strong className="text-emerald-400">{diagnosticResult.score}%</strong> ({diagnosticResult.correctCount}/{curriculum.diagnosticQuestions.length} correct).
+                    You scored <strong className="text-emerald-400">{diagnosticResult.score}%</strong> ({diagnosticResult.correctCount}/{activeQuestions.length} correct).
                   </p>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300">
@@ -903,7 +909,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     <span className="px-2 py-0.5 rounded bg-slate-800 text-cyan-300 font-bold">
-                      Concept: {currentQ.concept}
+                      Subject: {currentQ.subject} &bull; {currentQ.concept}
                     </span>
                     <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-bold">
                       Level: {currentQ.cognitive_level}
@@ -947,7 +953,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                     Previous
                   </button>
 
-                  {currentQuestionIndex < curriculum.diagnosticQuestions.length - 1 ? (
+                  {currentQuestionIndex < activeQuestions.length - 1 ? (
                     <button
                       type="button"
                       disabled={selectedAnswers[currentQ.id] === undefined}
@@ -960,7 +966,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   ) : (
                     <button
                       type="button"
-                      disabled={Object.keys(selectedAnswers).length < curriculum.diagnosticQuestions.length || submittingDiagnostic}
+                      disabled={Object.keys(selectedAnswers).length < activeQuestions.length || submittingDiagnostic}
                       onClick={handleSubmitDiagnostic}
                       className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 hover:scale-105"
                     >

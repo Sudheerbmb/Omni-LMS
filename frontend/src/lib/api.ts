@@ -991,3 +991,89 @@ export const getStudentTutorAssistance = (
   })
 
 
+
+
+// ── LENS-Ω Adaptive Intelligence & SN1 Agent APIs ──────────────────────────
+
+export interface LensDiagnosticQuestion {
+  id: string
+  subject: string
+  concept: string
+  prompt: string
+  options: string[]
+  correct_index: number
+  difficulty: number
+  cognitive_level: string
+  misconception_tag?: string
+}
+
+export interface LensGenerateDiagnosticResponse {
+  status: string
+  grade_name: string
+  subjects: string[]
+  questions_count: number
+  questions: LensDiagnosticQuestion[]
+}
+
+export interface LensSubmitDiagnosticResponse {
+  status: string
+  result: {
+    score_percent: number
+    correct_count: number
+    total_questions: number
+  }
+  state_vector: {
+    student_id: string
+    student_name: string
+    grade_name: string
+    mastery: number
+    retention: number
+    transfer: number
+    misconception: number
+    competency: number
+    uncertainty: number
+    identifiability: number
+    learning_velocity: number
+    current_bottleneck: string
+    current_learning_mode: string
+    is_calibrated: boolean
+  }
+}
+
+export interface LensChatResponse {
+  status: string
+  query: string
+  response: string
+}
+
+export const generateLensDiagnostic = (
+  grade_name: string,
+  subjects: string[],
+  num_questions: number = 6
+) =>
+  request<LensGenerateDiagnosticResponse>('/api/v1/lens/diagnostic/generate', {
+    method: 'POST',
+    body: JSON.stringify({ grade_name, subjects, num_questions }),
+  })
+
+export const submitLensDiagnostic = (
+  grade_name: string,
+  subjects: string[],
+  answers: Record<string, number>,
+  questions: LensDiagnosticQuestion[]
+) =>
+  request<LensSubmitDiagnosticResponse>('/api/v1/lens/diagnostic/submit', {
+    method: 'POST',
+    body: JSON.stringify({ grade_name, subjects, answers, questions }),
+  })
+
+export const sendLensChat = (
+  query: string,
+  grade_name: string,
+  subjects: string[],
+  state_vector?: any
+) =>
+  request<LensChatResponse>('/api/v1/lens/chat', {
+    method: 'POST',
+    body: JSON.stringify({ query, grade_name, subjects, state_vector }),
+  })

@@ -37,6 +37,7 @@ from app.communication import models as communication_models  # noqa: F401
 from app.communication.router import router as communication_router
 from app.enrollment.router import router as enrollment_router
 from app.learning.router import router as learning_router
+from app.learning_agent.router import router as lens_router
 from app.platform.config import settings
 from app.platform.database import init_database
 from app.platform.errors import database_error_handler, unhandled_exception_handler
@@ -91,6 +92,7 @@ app.include_router(classroom_router)
 app.include_router(coding_router)
 app.include_router(communication_router)
 app.include_router(timetable_router)
+app.include_router(lens_router)
 
 ZOOM_SECRET_TOKEN = settings.zoom_secret_token or os.getenv("ZOOM_SECRET_TOKEN")
 
