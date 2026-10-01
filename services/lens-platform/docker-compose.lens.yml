@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  lens-postgres:
+    image: postgres:16-alpine
+    container_name: lens-postgres
+    environment:
+      POSTGRES_USER: lens_user
+      POSTGRES_PASSWORD: lens_password
+      POSTGRES_DB: lens_omega
+    ports:
+      - "5433:5432"
+    volumes:
+      - lens_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  lens-redis:
+    image: redis:7-alpine
+    container_name: lens-redis
+    ports:
+      - "6380:6379"
+    restart: unless-stopped
+
+  lens-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.lens
+    container_name: lens-api
+    depends_on:
+      - lens-postgres
+      - lens-redis
+    environment:
+      LENS_DATABASE_URL: postgresql+asyncpg://lens_user:lens_password@lens-postgres:5432/lens_omega
+      REDIS_URL: redis://lens-redis:6379/0
+      LMS_API_URL: http://lms-api:8000
+      LLM_PROVIDER: groq
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+volumes:
+  lens_pgdata:
