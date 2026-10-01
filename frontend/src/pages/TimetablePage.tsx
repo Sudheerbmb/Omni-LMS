@@ -612,7 +612,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
           </button>
         )}
 
-        {(isAdmin || isTeacher) && (
+        {isAdmin && (
           <button
             onClick={() => setActiveTab('teachers')}
             className={`pb-3 text-sm font-semibold transition-colors relative flex items-center gap-2 ${
@@ -1087,7 +1087,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
       )}
 
       {/* TAB 3: Faculty Directory, Ratings & Active Blacklists */}
-      {(isAdmin || isTeacher) && activeTab === 'teachers' && (
+      {isAdmin && activeTab === 'teachers' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
