@@ -96,3 +96,15 @@ async def grade_submission(session: AsyncSession, submission_id: UUID, data: Gra
     await session.commit()
     await session.refresh(submission)
     return submission
+
+async def get_course_assignments(session: AsyncSession, course_id: UUID) -> list[Assignment]:
+    stmt = select(Assignment).where(Assignment.course_id == course_id).order_by(Assignment.created_at.desc())
+    result = await session.scalars(stmt)
+    return list(result.all())
+
+
+async def get_assignment_submissions(session: AsyncSession, assignment_id: UUID) -> list[AssignmentSubmission]:
+    stmt = select(AssignmentSubmission).where(AssignmentSubmission.assignment_id == assignment_id).order_by(AssignmentSubmission.created_at.desc())
+    result = await session.scalars(stmt)
+    return list(result.all())
+

@@ -9,6 +9,8 @@ from app.assignments.service import (
     AssignmentNotFoundError,
     SubmissionAlreadyExistsError,
     create_assignment,
+    get_assignment_submissions,
+    get_course_assignments,
     grade_submission,
     submit_assignment,
 )
@@ -18,6 +20,15 @@ from app.platform.database import get_session
 
 
 router = APIRouter(prefix="/api/v1/assignments", tags=["assignments"])
+
+
+@router.get("/courses/{course_id}", response_model=list[AssignmentRead])
+async def list_course_assignments(
+    course_id: UUID,
+    current_user: User = Depends(require_permission("course:read")),
+    session: AsyncSession = Depends(get_session),
+) -> list[AssignmentRead]:
+    return await get_course_assignments(session, course_id)
 
 
 @router.post("/courses/{course_id}", response_model=AssignmentRead, status_code=status.HTTP_201_CREATED)
@@ -31,6 +42,15 @@ async def create(
         return await create_assignment(session, course_id, data, current_user)
     except AssignmentAccessError as error:
         raise HTTPException(status_code=403, detail=str(error)) from error
+
+
+@router.get("/{assignment_id}/submissions", response_model=list[SubmissionRead])
+async def list_submissions_for_assignment(
+    assignment_id: UUID,
+    current_user: User = Depends(require_permission("assignment:grade")),
+    session: AsyncSession = Depends(get_session),
+) -> list[SubmissionRead]:
+    return await get_assignment_submissions(session, assignment_id)
 
 
 @router.post("/{assignment_id}/submissions", response_model=SubmissionRead, status_code=status.HTTP_201_CREATED)

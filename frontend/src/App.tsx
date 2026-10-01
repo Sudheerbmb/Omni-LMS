@@ -23,6 +23,7 @@ import { ClassroomPage } from './pages/ClassroomPage'
 import { AdminPage } from './pages/AdminPage'
 import { TimetablePage } from './pages/TimetablePage'
 import { LearningIntelligencePage } from './pages/LearningIntelligencePage'
+import { CertificatesPage } from './pages/CertificatesPage'
 
 export function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('lms_access_token'))
@@ -343,6 +344,7 @@ export function App() {
           {currentTab === 'assessments' && user.role !== 'admin' && <AssessmentsPage user={user} />}
           {currentTab === 'learning-intelligence' && <LearningIntelligencePage user={user} />}
           {currentTab === 'assignments' && user.role !== 'admin' && <AssignmentsPage user={user} />}
+          {currentTab === 'certificates' && user.role !== 'admin' && <CertificatesPage user={user} />}
           {currentTab === 'organizations' && <OrganizationsPage user={user} />}
           {currentTab === 'coding' && <CodingPage user={user} />}
           {currentTab === 'classroom' && <ClassroomPage user={user} />}

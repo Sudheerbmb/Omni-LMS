@@ -140,9 +140,9 @@ export type Assessment = { id: string; course_id: string; title: string; descrip
 
 export type AssessmentAttempt = { id: string; assessment_id: string; score: number; passed: boolean; created_at: string }
 
-export type AssignmentSubmission = { id: string; assignment_id: string; student_id: string; content: string; file_url?: string; grade?: number; feedback?: string; created_at: string }
+export type AssignmentSubmission = { id: string; assignment_id: string; student_id?: string; user_id?: string; content: string; file_url?: string; grade?: number; score?: number | null; status?: string; feedback?: string | null; created_at?: string }
 
-export type Assignment = { id: string; course_id: string; title: string; description: string; due_date?: string; max_score: number; submissions?: AssignmentSubmission[] }
+export type Assignment = { id: string; course_id: string; title: string; description: string; instructions?: string; status?: string; due_date?: string; max_score: number; submissions?: AssignmentSubmission[] }
 
 export type Certificate = { id: string; user_id: string; course_id: string; certificate_number: string; issued_at: string; pdf_url?: string }
 
@@ -273,6 +273,12 @@ export const submitAssessmentAttempt = (assessmentId: string, payload: { answers
   request<AssessmentAttempt>(`/api/v1/assessment/${assessmentId}/attempts`, { method: 'POST', body: JSON.stringify(payload) })
 
 // Assignments
+
+export const getAssignments = (courseId: string) =>
+  request<Assignment[]>(`/api/v1/assignments/courses/${courseId}`)
+
+export const getAssignmentSubmissions = (assignmentId: string) =>
+  request<AssignmentSubmission[]>(`/api/v1/assignments/${assignmentId}/submissions`)
 
 export const createAssignment = (courseId: string, payload: { title: string; description: string; due_date?: string; max_score: number }) =>
 

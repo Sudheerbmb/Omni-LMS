@@ -10,7 +10,8 @@ import {
   Users, 
   LogOut,
   CalendarDays,
-  BrainCircuit
+  BrainCircuit,
+  Award
 } from 'lucide-react'
 
 type SidebarProps = {
@@ -43,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: BrainCircuit
     },
     ...(userRole !== 'admin' ? [{ id: 'assignments', label: 'Assignments Desk', icon: FileText }] : []),
+    ...(userRole !== 'admin' ? [{ id: 'certificates', label: 'Certificates', icon: Award }] : []),
     { id: 'organizations', label: 'Organizations', icon: Building2 },
     { id: 'coding', label: 'Coding Playground', icon: Code2 },
     { id: 'classroom', label: 'Live Classrooms', icon: Video },
