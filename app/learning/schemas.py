@@ -61,6 +61,8 @@ class LearnerDashboard(BaseModel):
     states: list[LearnerStateRead]
     overall_competency: float
     needs_diagnostic: bool
+    learning_patterns: dict[str, Any] = Field(default_factory=dict)
+    agent_plan: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CohortLearnerRead(BaseModel):
@@ -71,3 +73,11 @@ class CohortLearnerRead(BaseModel):
     average_competency: float
     high_risk_concepts: int
     primary_bottleneck: str
+
+
+class ActionFeedbackCreate(BaseModel):
+    action: str = Field(min_length=1, max_length=80)
+    accepted: bool = True
+    helpfulness: int | None = Field(default=None, ge=1, le=5)
+    outcome_score: float | None = Field(default=None, ge=0, le=1)
+    notes: str | None = Field(default=None, max_length=500)

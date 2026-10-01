@@ -18,11 +18,29 @@ from app.identity.models import User
 from app.identity.models import OrganizationMembership
 from app.courses.models import Course
 from app.enrollment.models import Enrollment
-from app.learning.models import LearnerConceptState, LearningEvidence
+from app.learning.models import LearnerConceptState, LearningActionFeedback, LearningEvidence
 from app.learning.schemas import CohortLearnerRead, EvidenceCreate, LearnerDashboard, LearnerStateRead
 
 WEIGHTS = {"diagnostic": 1.25, "quiz": 1.0, "retrieval": 1.15, "practice": 0.8,
            "transfer": 1.25, "project": 1.2, "teacher_observation": 0.65}
+
+ACTION_EFFECTS = {
+    "diagnostic_check": {"mastery": .01, "retention": .00, "transfer": .00, "uncertainty": -.25, "cost": .12},
+    "worked_example": {"mastery": .14, "retention": .05, "transfer": .03, "misconception": -.22, "cost": .28},
+    "spaced_retrieval": {"mastery": .04, "retention": .22, "transfer": .03, "misconception": -.02, "cost": .18},
+    "novel_application": {"mastery": .05, "retention": .05, "transfer": .23, "misconception": -.04, "cost": .30},
+    "guided_practice": {"mastery": .19, "retention": .08, "transfer": .04, "misconception": -.05, "cost": .24},
+}
+
+
+async def ensure_adaptive_schema(session: AsyncSession) -> None:
+    """Create additive adaptive tables when a host skipped its release migration."""
+    connection = await session.connection()
+    for table in (LearningEvidence.__table__, LearnerConceptState.__table__, LearningActionFeedback.__table__):
+        await connection.run_sync(
+            lambda sync_connection, target=table: target.create(sync_connection, checkfirst=True)
+        )
+    await session.commit()
 
 
 def _clamp(value: float) -> float:
@@ -69,11 +87,24 @@ def recommend(state: LearnerConceptState) -> dict[str, Any]:
         "build": ("guided_practice", "Study one focused explanation and complete scaffolded practice."),
     }
     action, reason = actions[mode]
+    candidates = []
+    for candidate, effects in ACTION_EFFECTS.items():
+        predicted = (
+            .30 * effects.get("mastery", 0) + .24 * effects.get("retention", 0)
+            + .22 * effects.get("transfer", 0) - .14 * effects.get("misconception", 0)
+            - .10 * effects.get("uncertainty", 0) - .18 * effects["cost"]
+        )
+        if candidate == action:
+            predicted += .18
+        candidates.append({"action": candidate, "utility": round(predicted, 3), "estimated_minutes": round(5 + effects["cost"] * 35)})
+    candidates.sort(key=lambda item: item["utility"], reverse=True)
     return {"action": action, "reason": reason, "concept": state.concept, "mode": mode,
-            "priority": round(max(1 - competency(state), state.uncertainty), 3)}
+            "priority": round(max(1 - competency(state), state.uncertainty), 3),
+            "candidates": candidates}
 
 
 async def record_evidence(session: AsyncSession, actor: User, data: EvidenceCreate) -> LearnerConceptState:
+    await ensure_adaptive_schema(session)
     target_id = data.user_id or actor.id
     if target_id != actor.id and actor.role not in {"admin", "teacher"}:
         raise PermissionError("Students may only record their own learning evidence")
@@ -160,12 +191,33 @@ def serialize_state(state: LearnerConceptState) -> LearnerStateRead:
 
 
 async def learner_dashboard(session: AsyncSession, user_id: UUID) -> LearnerDashboard:
+    await ensure_adaptive_schema(session)
     states = list((await session.scalars(select(LearnerConceptState).where(
         LearnerConceptState.user_id == user_id).order_by(LearnerConceptState.updated_at.desc()))).all())
     output = [serialize_state(state) for state in states]
     overall = sum(item.competency for item in output) / len(output) if output else 0.0
+    evidence = list((await session.scalars(select(LearningEvidence).where(
+        LearningEvidence.user_id == user_id).order_by(LearningEvidence.occurred_at.desc()).limit(250))).all())
+    by_type: dict[str, list[float]] = {}
+    by_hour: dict[int, list[float]] = {}
+    misconceptions: Counter[str] = Counter()
+    for item in evidence:
+        by_type.setdefault(item.evidence_type, []).append(item.score)
+        by_hour.setdefault(item.occurred_at.hour, []).append(item.score)
+        if item.misconception_code:
+            misconceptions[item.misconception_code] += 1
+    type_performance = {key: round(sum(values) / len(values), 3) for key, values in by_type.items()}
+    best_type = max(type_performance, key=type_performance.get) if type_performance else None
+    best_hour = max(by_hour, key=lambda hour: sum(by_hour[hour]) / len(by_hour[hour])) if by_hour else None
+    plan = [item.recommendation for item in sorted(output, key=lambda row: row.recommendation["priority"], reverse=True)[:5]]
     return LearnerDashboard(user_id=user_id, states=output, overall_competency=overall,
-                            needs_diagnostic=not output or all(s.evidence_adequacy < .35 for s in output))
+                            needs_diagnostic=not output or all(s.evidence_adequacy < .35 for s in output),
+                            learning_patterns={
+                                "observations": len(evidence), "performance_by_evidence": type_performance,
+                                "strongest_evidence_context": best_type, "best_observed_hour": best_hour,
+                                "recurring_misconceptions": dict(misconceptions.most_common(5)),
+                                "notice": "Patterns describe observed platform behavior, not fixed learning styles.",
+                            }, agent_plan=plan)
 
 
 async def visible_student_ids(session: AsyncSession, viewer: User) -> set[UUID] | None:
@@ -177,6 +229,7 @@ async def visible_student_ids(session: AsyncSession, viewer: User) -> set[UUID] 
 
 
 async def cohort_dashboard(session: AsyncSession, viewer: User) -> list[CohortLearnerRead]:
+    await ensure_adaptive_schema(session)
     allowed = await visible_student_ids(session, viewer)
     query = select(User).where(User.role == "student")
     if allowed is not None:

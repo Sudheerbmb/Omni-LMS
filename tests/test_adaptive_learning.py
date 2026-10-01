@@ -29,9 +29,12 @@ def test_diagnostic_evidence_builds_transparent_learner_state() -> None:
     assert state.status_code == 200
     assert state.json()["mastery"] > 0.25
     assert state.json()["recommendation"]["action"]
+    assert len(state.json()["recommendation"]["candidates"]) == 5
     assert dashboard.status_code == 200
     assert dashboard.json()["states"][0]["concept"] == "Fractions"
     assert dashboard.json()["states"][0]["model_version"] == "lens-omega-0.1"
+    assert dashboard.json()["learning_patterns"]["observations"] == 1
+    assert dashboard.json()["agent_plan"][0]["concept"] == "Fractions"
 
 
 def test_student_cannot_write_evidence_for_another_user() -> None:

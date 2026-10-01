@@ -5,8 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.identity.auth import get_current_user
 from app.identity.models import User
-from app.learning.schemas import CohortLearnerRead, EvidenceCreate, LearnerDashboard, LearnerStateRead, ProgressRead, ProgressUpdate
-from app.learning.adaptive import cohort_dashboard, learner_dashboard, record_evidence, serialize_state, visible_student_ids
+from app.learning.schemas import ActionFeedbackCreate, CohortLearnerRead, EvidenceCreate, LearnerDashboard, LearnerStateRead, ProgressRead, ProgressUpdate
+from app.learning.adaptive import cohort_dashboard, ensure_adaptive_schema, learner_dashboard, record_evidence, serialize_state, visible_student_ids
+from app.learning.models import LearnerConceptState, LearningActionFeedback
+from sqlalchemy import select
 from app.identity.permissions import require_roles
 from app.learning.service import ProgressAccessError, ResourceNotFoundError, update_progress
 from app.platform.database import get_session
@@ -41,6 +43,24 @@ async def student_adaptive_dashboard(student_id: UUID, _current_user: User = Dep
 @router.get("/adaptive/cohort", response_model=list[CohortLearnerRead])
 async def adaptive_cohort(_current_user: User = Depends(require_roles("admin", "teacher")), session: AsyncSession = Depends(get_session)):
     return await cohort_dashboard(session, _current_user)
+
+
+@router.post("/adaptive/states/{state_id}/feedback", status_code=201)
+async def adaptive_action_feedback(state_id: UUID, data: ActionFeedbackCreate, current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    await ensure_adaptive_schema(session)
+    state = await session.scalar(select(LearnerConceptState).where(LearnerConceptState.id == state_id))
+    if not state:
+        raise HTTPException(status_code=404, detail="Learner state not found")
+    if state.user_id != current_user.id:
+        if current_user.role not in {"admin", "teacher"}:
+            raise HTTPException(status_code=403, detail="You cannot review this learner action")
+        allowed = await visible_student_ids(session, current_user)
+        if allowed is not None and state.user_id not in allowed:
+            raise HTTPException(status_code=403, detail="This learner is outside your teaching organizations")
+    feedback = LearningActionFeedback(user_id=state.user_id, state_id=state.id, **data.model_dump())
+    session.add(feedback)
+    await session.commit()
+    return {"id": str(feedback.id), "status": "recorded"}
 
 
 @router.post("/resources/{resource_id}/progress", response_model=ProgressRead)

@@ -2,7 +2,7 @@ import traceback
 
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.platform.logging import get_logger
 
@@ -58,6 +58,15 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
         content={"detail": "A resource with that value already exists.", "error_type": "ConflictError"},
+    )
+
+
+async def database_error_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    """Return a CORS-compatible structured response while keeping details in logs."""
+    logger.error("database_error", error=str(exc), path=request.url.path, traceback=traceback.format_exc())
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "Learning data is temporarily unavailable. Please retry.", "error_type": "DatabaseError"},
     )
 
 

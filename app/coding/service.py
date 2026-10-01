@@ -8,6 +8,8 @@ from app.coding.schemas import CodeSubmissionCreate, ExerciseCreate, ExerciseUpd
 from app.courses.models import Course
 from app.enrollment.models import Enrollment
 from app.identity.models import OrganizationMembership, User
+from app.learning.adaptive import record_evidence
+from app.learning.schemas import EvidenceCreate
 
 
 class CodingAccessError(ValueError):
@@ -203,6 +205,25 @@ async def update_submission_result(
     submission.status = status
     if result is not None:
         submission.result = result
+
+    if status in {"completed", "passed", "failed"}:
+        exercise = await session.scalar(select(CodingExercise).where(CodingExercise.id == submission.exercise_id))
+        passed = status == "passed" or bool((result or {}).get("passed"))
+        test_total = int((result or {}).get("tests_total") or 0)
+        test_passed = int((result or {}).get("tests_passed") or 0)
+        observed_score = (test_passed / test_total) if test_total else (1.0 if passed else 0.0)
+        evidence_actor = user or await session.get(User, submission.user_id)
+        if evidence_actor and exercise:
+            await record_evidence(session, evidence_actor, EvidenceCreate(
+                user_id=submission.user_id,
+                course_id=exercise.course_id,
+                concept=exercise.title,
+                evidence_type="transfer",
+                score=observed_score,
+                difficulty=0.65,
+                transfer_distance=0.7,
+                metadata={"exercise_id": str(exercise.id), "submission_id": str(submission.id)},
+            ))
 
     await session.commit()
     await session.refresh(submission)

@@ -58,3 +58,15 @@ class LearnerConceptState(UUIDMixin, TimestampMixin, Base):
     evidence_types: Mapped[list[str]] = mapped_column(JSON, default=list)
     last_evidence_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     model_version: Mapped[str] = mapped_column(String(32), default="lens-omega-0.1")
+
+
+class LearningActionFeedback(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "learning_action_feedback"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    state_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("learner_concept_states.id", ondelete="CASCADE"), index=True)
+    action: Mapped[str] = mapped_column(String(80), index=True)
+    accepted: Mapped[bool] = mapped_column(Boolean, default=True)
+    helpfulness: Mapped[int | None] = mapped_column(Integer)
+    outcome_score: Mapped[float | None] = mapped_column(Float)
+    notes: Mapped[str | None] = mapped_column(String(500))

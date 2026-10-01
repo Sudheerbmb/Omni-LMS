@@ -70,7 +70,13 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
   const baseUrl = apiBase.endsWith('/') ? apiBase.slice(0, -1) : apiBase
 
-  const response = await fetch(`${baseUrl}${path}`, { ...options, headers })
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl}${path}`, { ...options, headers })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Network request failed'
+    throw new ApiError(0, `Cannot reach the LMS backend at ${baseUrl}. ${message}. Please retry after the service wakes up.`)
+  }
 
   const body = await response.json().catch(() => null)
 
@@ -157,10 +163,14 @@ export type AdaptiveState = {
   mastery: number; retention: number; transfer: number; competency: number
   misconception: number; uncertainty: number; evidence_adequacy: number; velocity: number
   evidence_count: number; evidence_types: string[]; bottleneck: string; learning_mode: string
-  recommendation: { action: string; reason: string; concept: string; mode: string; priority: number }
+  recommendation: { action: string; reason: string; concept: string; mode: string; priority: number; candidates?: Array<{ action: string; utility: number; estimated_minutes: number }> }
   model_version: string
 }
-export type AdaptiveDashboard = { user_id: string; states: AdaptiveState[]; overall_competency: number; needs_diagnostic: boolean }
+export type AdaptiveDashboard = {
+  user_id: string; states: AdaptiveState[]; overall_competency: number; needs_diagnostic: boolean
+  learning_patterns: { observations?: number; performance_by_evidence?: Record<string, number>; strongest_evidence_context?: string | null; best_observed_hour?: number | null; recurring_misconceptions?: Record<string, number>; notice?: string }
+  agent_plan: AdaptiveState['recommendation'][]
+}
 export type CohortLearner = { user_id: string; display_name: string; email: string; concept_count: number; average_competency: number; high_risk_concepts: number; primary_bottleneck: string }
 
 export const getMyAdaptiveDashboard = () => request<AdaptiveDashboard>('/api/v1/learning/adaptive/me')
@@ -171,6 +181,8 @@ export const submitLearningEvidence = (payload: {
   evidence_type: 'diagnostic' | 'quiz' | 'retrieval' | 'practice' | 'transfer' | 'project' | 'teacher_observation'
   score: number; difficulty?: number; attempts?: number; transfer_distance?: number; misconception_code?: string
 }) => request<AdaptiveState>('/api/v1/learning/adaptive/evidence', { method: 'POST', body: JSON.stringify(payload) })
+export const submitAdaptiveFeedback = (stateId: string, payload: { action: string; accepted?: boolean; helpfulness?: number; outcome_score?: number; notes?: string }) =>
+  request<{ id: string; status: string }>(`/api/v1/learning/adaptive/states/${stateId}/feedback`, { method: 'POST', body: JSON.stringify(payload) })
 
 // Identity & Auth
 

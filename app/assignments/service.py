@@ -8,6 +8,8 @@ from app.assignments.schemas import AssignmentCreate, GradeRequest, SubmissionCr
 from app.courses.models import Course
 from app.enrollment.models import Enrollment
 from app.identity.models import OrganizationMembership, User
+from app.learning.adaptive import record_evidence
+from app.learning.schemas import EvidenceCreate
 
 
 class AssignmentNotFoundError(ValueError):
@@ -82,6 +84,15 @@ async def grade_submission(session: AsyncSession, submission_id: UUID, data: Gra
     submission.score = data.score
     submission.feedback = data.feedback
     submission.status = "graded"
+    await record_evidence(session, user, EvidenceCreate(
+        user_id=submission.user_id,
+        course_id=assignment.course_id,
+        concept=assignment.title,
+        evidence_type="project",
+        score=data.score / assignment.max_score if assignment.max_score else 0,
+        transfer_distance=0.5,
+        metadata={"assignment_id": str(assignment.id), "submission_id": str(submission.id)},
+    ))
     await session.commit()
     await session.refresh(submission)
     return submission

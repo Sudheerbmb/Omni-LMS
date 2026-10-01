@@ -39,7 +39,8 @@ from app.enrollment.router import router as enrollment_router
 from app.learning.router import router as learning_router
 from app.platform.config import settings
 from app.platform.database import init_database
-from app.platform.errors import unhandled_exception_handler
+from app.platform.errors import database_error_handler, unhandled_exception_handler
+from sqlalchemy.exc import SQLAlchemyError
 from app.platform.logging import configure_logging
 from app.tenancy.router import router as tenancy_router
 from app.timetable import models as timetable_models  # noqa: F401
@@ -72,6 +73,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_exception_handler(Exception, unhandled_exception_handler)
+app.add_exception_handler(SQLAlchemyError, database_error_handler)
 app.include_router(identity_router)
 app.include_router(notifications_router)
 app.include_router(tenancy_router)

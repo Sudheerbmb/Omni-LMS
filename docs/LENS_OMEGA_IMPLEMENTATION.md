@@ -9,7 +9,10 @@ The application now closes the first useful evidence-to-action loop:
 3. Competency and the current bottleneck are derived rather than independently learned, avoiding contradictory stored values.
 4. The policy returns a transparent next action: diagnose, repair, retrieve, generalize, or build.
 5. Students see their own model and recommendation. Teachers see only learners in their organizations. Administrators see the platform cohort.
-6. Assessment attempts automatically produce quiz evidence. A diagnostic/observation form supports initial baselines and teacher judgment.
+6. Assessment attempts automatically produce quiz evidence. Course-resource completion produces practice evidence, graded assignments produce project/transfer evidence, and evaluated coding submissions produce transfer evidence.
+7. A diagnostic/observation form supports initial baselines and teacher judgment.
+8. The agent ranks multiple action candidates with explicit expected-gain, effort-cost, uncertainty, and bottleneck-policy terms. These are transparent policy estimates, not causal claims.
+9. The dashboard summarizes performance by evidence context, best observed study hour, recurring coded misconceptions, and a five-step priority plan. These are observed behavior patterns and are deliberately not labelled as fixed “learning styles.”
 
 ## Scientific interpretation
 
@@ -44,5 +47,7 @@ This is a configurable prototype policy, not a validated cognitive diagnosis. Th
 - `GET /api/v1/learning/adaptive/me`
 - `GET /api/v1/learning/adaptive/students/{student_id}`
 - `GET /api/v1/learning/adaptive/cohort`
+
+The adaptive schema is created at startup and checked again on first use, which supports the project's current migration-light Render deployment. Database exceptions are returned as structured, CORS-compatible errors so browser clients do not misreport server failures as generic network failures.
 
 The model version is currently `lens-omega-0.1`.
