@@ -95,6 +95,34 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
     try {
       const res = await submitAssessmentAttempt(takingAssessment.id, { answers })
       setAttemptResult({ score: res.score, passed: res.passed })
+
+      // Closed-loop LENS-Ω evidence ingestion
+      try {
+        const { ingestLearningEvidenceEvent } = await import('../lib/evidenceEngine')
+        const scoreRatio = (res.score || 75) / 100
+        const courseName = courses.find(c => c.id === selectedCourse)?.title || 'Mathematics'
+        const subjectName = courseName.toLowerCase().includes('science') ? 'Science (EVS)' :
+                            courseName.toLowerCase().includes('english') ? 'English Grammar' :
+                            courseName.toLowerCase().includes('social') ? 'Social Studies' : 'Mathematics'
+
+        ingestLearningEvidenceEvent({
+          id: `quiz_attempt_${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          student_id: user.id,
+          grade_name: user.display_name?.includes('Class') ? user.display_name : 'Class 4',
+          subject: subjectName,
+          concept_name: takingAssessment.title,
+          event_type: takingAssessment.title.toLowerCase().includes('test') || takingAssessment.title.toLowerCase().includes('exam') ? 'TEST' : 'QUIZ',
+          title: takingAssessment.title,
+          score_ratio: scoreRatio,
+          difficulty: 0.50,
+          misconception_detected: scoreRatio < 0.60,
+          misconception_tag: scoreRatio < 0.60 ? 'concept_application_error' : undefined,
+          feedback: `Scored ${res.score}% on ${takingAssessment.title}.`
+        })
+      } catch (ingestErr) {
+        console.warn('LENS ingestion non-fatal warning:', ingestErr)
+      }
     } catch (err: any) {
       alert(err.message || 'Failed to submit attempt')
     } finally {

@@ -33,6 +33,7 @@ import type {
 } from '../lib/langgraphAgent'
 import { fetchSubjectBenchmarkQuestions } from '../lib/subjectQuestions'
 import type { SubjectQuestion } from '../lib/subjectQuestions'
+import { ingestLearningEvidenceEvent } from '../lib/evidenceEngine'
 
 // ── Initial Grade Configurations ─────────────────────────────────────────────
 
@@ -1091,7 +1092,96 @@ Your per-concept breakdown has been updated below.`
           </div>
         </div>
       )}
+      {/* ── Live Closed-Loop Evidence Stream & Multi-Modal Audit Feed ─────────── */}
+      <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="font-bold text-white text-base flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-400" />
+              Live Multi-Modal Evidence Stream & Closed-Loop Telemetry
+            </h3>
+            <p className="text-xs text-slate-400">
+              Every quiz, benchmark test, homework assignment, and doubt asked feeds directly into the Bayesian state engine.
+            </p>
+          </div>
+
+          <button
+            onClick={() => {
+              // Simulate 6 multi-modal realistic events (Quizzes, Assignments, Doubts, Practice)
+              const subjs = Object.keys(neuralState.subjects)
+              const eventsToSimulate = [
+                { type: 'QUIZ' as const, subj: subjs[0], concept: 'Multi-digit Arithmetic & Place Values', score: 0.90, diff: 0.40, title: 'Weekly Speed Math Quiz' },
+                { type: 'ASSIGNMENT' as const, subj: subjs[0], concept: 'Fractions, Decimals & Geometry Basics', score: 0.85, diff: 0.55, title: 'Fractions Problem Set 1' },
+                { type: 'TEST' as const, subj: subjs[1] || subjs[0], concept: 'Plant Nutrition & Photosynthesis', score: 0.88, diff: 0.60, title: 'Science Term Benchmark' },
+                { type: 'DOUBT' as const, subj: subjs[1] || subjs[0], concept: 'States of Matter & Water Cycle', score: 0.50, diff: 0.50, title: 'Asked AI: Why does evaporation cause cooling?' },
+                { type: 'PRACTICE' as const, subj: subjs[2] || subjs[0], concept: 'Parts of Speech (Nouns, Verbs, Adjectives)', score: 0.95, diff: 0.35, title: 'Spaced Retrieval Flashcards' },
+              ]
+
+              let latestState = neuralState
+
+              eventsToSimulate.forEach((evt, idx) => {
+                latestState = ingestLearningEvidenceEvent({
+                  id: `sim_event_${Date.now()}_${idx}`,
+                  timestamp: new Date().toISOString(),
+                  student_id: user?.id || 'demo_student',
+                  grade_name: neuralState.grade_name,
+                  subject: evt.subj,
+                  concept_name: evt.concept,
+                  event_type: evt.type,
+                  title: evt.title,
+                  score_ratio: evt.score,
+                  difficulty: evt.diff,
+                  misconception_detected: evt.score < 0.60,
+                  misconception_tag: evt.score < 0.60 ? 'application_error' : undefined,
+                  feedback: `Ingested ${evt.type}: ${evt.title} (Score: ${Math.round(evt.score * 100)}%)`
+                })
+              })
+
+              setNeuralState(latestState)
+              alert('Successfully ingested 5 multi-modal learning evidence events into the LENS-Ω closed-loop engine!')
+            }}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 text-white font-bold text-xs flex items-center gap-2 shadow-md transition-all hover:scale-105"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Simulate Multi-Modal Evidence Events (+5 Events)</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+          {[
+            {
+              type: 'DIAGNOSTIC / BENCHMARK',
+              icon: Award,
+              color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+              desc: 'High Bayesian weight calibration. Eliminates initial epistemic uncertainty from 95% down to 20%.',
+            },
+            {
+              type: 'QUIZZES & ASSIGNMENTS',
+              icon: BookOpen,
+              color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+              desc: 'Continuous measurement of deliberate problem solving, accuracy, and cross-context transfer.',
+            },
+            {
+              type: 'DOUBTS & SPATIAL PRACTICE',
+              icon: Brain,
+              color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+              desc: 'Flags conceptual gaps, isolates error misconceptions, and updates Ebbinghaus memory retention.',
+            },
+          ].map((item, idx) => (
+            <div key={idx} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl border ${item.color}`}>
+                  <item.icon className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-bold text-white">{item.type}</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
 export default LearningIntelligencePage
+

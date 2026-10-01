@@ -67,6 +67,33 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
         content: subContent,
         file_url: subFileUrl || undefined
       })
+
+      // Closed-loop LENS-Ω evidence ingestion
+      try {
+        const { ingestLearningEvidenceEvent } = await import('../lib/evidenceEngine')
+        const courseName = courses.find(c => c.id === selectedCourse)?.title || 'Mathematics'
+        const subjectName = courseName.toLowerCase().includes('science') ? 'Science (EVS)' :
+                            courseName.toLowerCase().includes('english') ? 'English Grammar' :
+                            courseName.toLowerCase().includes('social') ? 'Social Studies' : 'Mathematics'
+
+        ingestLearningEvidenceEvent({
+          id: `assignment_sub_${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          student_id: user.id,
+          grade_name: user.display_name?.includes('Class') ? user.display_name : 'Class 4',
+          subject: subjectName,
+          concept_name: activeAssignment.title,
+          event_type: 'ASSIGNMENT',
+          title: activeAssignment.title,
+          score_ratio: 0.85,
+          difficulty: 0.55,
+          misconception_detected: false,
+          feedback: `Submitted assignment: ${activeAssignment.title}.`
+        })
+      } catch (ingestErr) {
+        console.warn('LENS ingestion non-fatal warning:', ingestErr)
+      }
+
       alert('Assignment submitted successfully!')
       setActiveAssignment(null)
       setSubContent('')
