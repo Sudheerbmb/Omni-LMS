@@ -1,22 +1,19 @@
 import React, { useState } from 'react'
 import {
   Brain,
-  Sparkles,
   Zap,
-  AlertTriangle,
   Clock,
   Send,
-  Calendar,
   Activity,
-  CheckCircle2,
-  BookOpen,
   ArrowRight,
-  ShieldAlert,
   Play,
-  Check,
-  RefreshCw,
   Loader2,
-  Award
+  Award,
+  Users,
+  Search,
+  AlertTriangle,
+  TrendingUp,
+  Target
 } from 'lucide-react'
 import type { User } from '../lib/api'
 import {
@@ -33,7 +30,8 @@ import type {
 } from '../lib/langgraphAgent'
 import { fetchSubjectBenchmarkQuestions } from '../lib/subjectQuestions'
 import type { SubjectQuestion } from '../lib/subjectQuestions'
-import { ingestLearningEvidenceEvent } from '../lib/evidenceEngine'
+import { getCohortForGrade } from '../lib/evidenceEngine'
+import type { CohortStudentProfile } from '../lib/evidenceEngine'
 
 // ── Initial Grade Configurations ─────────────────────────────────────────────
 
@@ -140,136 +138,377 @@ function initializeCurriculumStructure(gradeNumber: number, studentId: string, s
 }
 
 export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user }) => {
-  const gradeMatch = user?.display_name?.match(/Class\s*(\d+)/i)
-  const detectedGrade = gradeMatch ? parseInt(gradeMatch[1], 10) : 4
-  const storageKey = `lens_granular_v3_${user?.id || 'demo'}_grade_${detectedGrade}`
+  const isTeacher = user?.role === 'teacher' || user?.role === 'admin'
 
-  // Multi-Subject Granular State Graph
+  // ── TEACHER COHORT VIEW STATE ─────────────────────────────────────────────
+  const [selectedClassGrade, setSelectedClassGrade] = useState<number>(10)
+  const [cohortSearch, setCohortSearch] = useState('')
+  const [filterBottleneck, setFilterBottleneck] = useState<string>('ALL')
+  const [selectedStudentForModal, setSelectedStudentForModal] = useState<CohortStudentProfile | null>(null)
+  const [cohortData, setCohortData] = useState<CohortStudentProfile[]>(() => getCohortForGrade(10))
+
+  const handleClassSwitch = (gradeNum: number) => {
+    setSelectedClassGrade(gradeNum)
+    setCohortData(getCohortForGrade(gradeNum))
+    setSelectedStudentForModal(null)
+  }
+
+  // ── STUDENT VIEW STATE ───────────────────────────────────────────────────
+  const userGradeMatch = user?.display_name?.match(/Class\s*(\d+)/i) || user?.display_name?.match(/(\d+)/)
+  const gradeNumber = userGradeMatch ? parseInt(userGradeMatch[1], 10) : 4
+  const storageKey = `lens_granular_v3_${user?.id || 'demo'}_grade_${gradeNumber}`
+
   const [neuralState, setNeuralState] = useState<FullStudentNeuralState>(() => {
     const saved = localStorage.getItem(storageKey)
     if (saved) {
       try {
         return JSON.parse(saved)
-      } catch {
-        // pass
+      } catch (e) {
+        console.error(e)
       }
     }
-    return initializeCurriculumStructure(detectedGrade, user?.id || 'std_demo', user?.display_name || 'Student')
+    return initializeCurriculumStructure(gradeNumber, user?.id || 'demo_student', user?.display_name || 'Student')
   })
 
-  // Active Selected Subject Filter for View
-  const subjectList = Object.keys(neuralState.subjects)
   const [activeSubjectTab, setActiveSubjectTab] = useState<string>('All Subjects')
-
-  // Subject Benchmark Test Modal State
   const [benchmarkModalOpen, setBenchmarkModalOpen] = useState(false)
   const [activeTestSubject, setActiveTestSubject] = useState<string>('')
-  const [loadingQuestions, setLoadingQuestions] = useState(false)
   const [questions, setQuestions] = useState<SubjectQuestion[]>([])
   const [qIndex, setQIndex] = useState(0)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({})
+  const [loadingQuestions, setLoadingQuestions] = useState(false)
   const [testSubmitting, setTestSubmitting] = useState(false)
-  const [testSummary, setTestSummary] = useState<{
-    subject: string
-    scorePercent: number
-    correctCount: number
-    totalCount: number
-    conceptBreakdown: Record<string, { correct: number; total: number; mastery: number }>
-  } | null>(null)
+  const [testSummary, setTestSummary] = useState<any>(null)
 
-  // Interactive Drill Modal for Roadmap Items
+  // Interactive Drill Modal
   const [drillModalOpen, setDrillModalOpen] = useState(false)
   const [activeDrillConcept, setActiveDrillConcept] = useState<ConceptEvidence | null>(null)
-  const [drillCompleted, setDrillCompleted] = useState(false)
 
-  // LangGraph SN1 Chat State
+  // Chat State
+  const [chatInput, setChatInput] = useState('')
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'agent'; text: string; time: string }>>([
     {
       sender: 'agent',
-      text: neuralState.total_evidence_events === 0
-        ? `Hello ${user?.display_name || 'Learner'}! I am SN1, your autonomous Student Neural Intelligence agent. You are enrolled in **${neuralState.grade_name}** covering **${subjectList.join(', ')}**. Currently, I have zero baseline evidence for your subjects (Uncertainty: 95%). Please complete a benchmark test for each subject to calibrate your multi-dimensional state graph!`
-        : `Hello ${user?.display_name || 'Learner'}! I am SN1. Your **${neuralState.grade_name}** state vector has ingested **${neuralState.total_evidence_events} evidence events**. Overall Competency is at **${(neuralState.overall_competency * 100).toFixed(0)}%** with primary bottleneck **${neuralState.primary_bottleneck}**. How can I assist your study plan today?`,
+      text: `Hello ${user?.display_name || 'Learner'}! I am your Autonomous Learning Agent. Ask me about your study plan, learning bottlenecks, or exam preparation!`,
       time: 'Just now',
     },
   ])
-  const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [history, setHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
 
-  // Dynamic Daily Roadmap
-  const dynamicRoadmap = React.useMemo(() => {
-    // Find subjects with lowest competency or uncalibrated
-    const uncalibratedSubjs = subjectList.filter((s) => !neuralState.subjects[s].is_calibrated)
-    const weakSubjs = subjectList.filter((s) => neuralState.subjects[s].is_calibrated)
-      .sort((a, b) => neuralState.subjects[a].overall_competency - neuralState.subjects[b].overall_competency)
+  const subjectList = Object.keys(neuralState.subjects)
 
-    if (uncalibratedSubjs.length > 0) {
-      return [
-        {
-          time: '08:00 - 08:30',
-          type: 'DIAGNOSTIC' as const,
-          subject: uncalibratedSubjs[0],
-          title: `Initial Benchmark: ${uncalibratedSubjs[0]}`,
-          duration: 30,
-          grounding: `Uncertainty at ${(neuralState.subjects[uncalibratedSubjs[0]].overall_uncertainty * 100).toFixed(0)}%. Complete 8-question benchmark to calibrate.`,
-          priority: 'CRITICAL' as const,
-        },
-        {
-          time: '12:00 - 12:45',
-          type: 'DIAGNOSTIC' as const,
-          subject: uncalibratedSubjs[1] || uncalibratedSubjs[0],
-          title: `Diagnostic Evaluation: ${uncalibratedSubjs[1] || uncalibratedSubjs[0]}`,
-          duration: 45,
-          grounding: `Collect foundational baseline evidence across enrolled syllabus.`,
-          priority: 'HIGH' as const,
-        },
-        {
-          time: '17:00 - 17:30',
-          type: 'RETRIEVAL' as const,
-          subject: weakSubjs[0] || subjectList[0],
-          title: `Curriculum Orientation & Baseline Recall`,
-          duration: 30,
-          grounding: `Establish baseline retrieval confidence.`,
-          priority: 'MEDIUM' as const,
-        },
-      ]
+  // Teacher Cohort Analytics calculations
+  const classAvgCompetency = Math.round(
+    (cohortData.reduce((acc, s) => acc + s.state.overall_competency, 0) / Math.max(1, cohortData.length)) * 100
+  )
+  const classAvgMastery = Math.round(
+    (cohortData.reduce((acc, s) => acc + s.state.overall_mastery, 0) / Math.max(1, cohortData.length)) * 100
+  )
+  const misconceptionCount = cohortData.filter((s) => s.state.primary_bottleneck === 'MISCONCEPTION').length
+  const retrievalCount = cohortData.filter((s) => s.state.primary_bottleneck === 'RETRIEVAL_DECAY').length
+  const transferCount = cohortData.filter((s) => s.state.primary_bottleneck === 'TRANSFER_DEFICIT').length
+  const balancedCount = cohortData.filter((s) => s.state.primary_bottleneck === 'BALANCED').length
+
+  const filteredCohort = cohortData.filter((s) => {
+    const matchesName = s.student_name.toLowerCase().includes(cohortSearch.toLowerCase()) || s.email.toLowerCase().includes(cohortSearch.toLowerCase())
+    const matchesBottleneck = filterBottleneck === 'ALL' || s.state.primary_bottleneck === filterBottleneck
+    return matchesName && matchesBottleneck
+  })
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TEACHER PORTAL: COHORT COGNITIVE INTELLIGENCE & STUDENT RADAR
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (isTeacher) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
+        {/* Top Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 p-8 rounded-3xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
+          <div className="space-y-2 relative z-10">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
+              <Brain className="w-3.5 h-3.5" />
+              Teacher Cognitive Intelligence &bull; Multi-Class Student Radar
+            </div>
+            <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+              Class Cognitive Health & Telemetry
+            </h1>
+            <p className="text-slate-400 text-sm max-w-2xl">
+              Real-time psychometric state vectors across your assigned classes (Class 10, Class 7, Class 4). Monitor Bayesian mastery, isolate error misconceptions, and deploy class-wide unblocking interventions.
+            </p>
+          </div>
+
+          {/* Class Grade Switcher */}
+          <div className="flex items-center gap-2 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 relative z-10">
+            {[10, 7, 4].map((gNum) => (
+              <button
+                key={gNum}
+                onClick={() => handleClassSwitch(gNum)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  selectedClassGrade === gNum
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md font-extrabold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Class {gNum}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Class-Wide Macro Metrics ────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
+              <span>Mean Competency</span>
+              <TrendingUp className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div className="text-3xl font-black text-cyan-400 font-mono">{classAvgCompetency}%</div>
+            <div className="text-[11px] text-slate-500">Class {selectedClassGrade} Global C Index</div>
+          </div>
+
+          <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
+              <span>Bayesian Mastery</span>
+              <Award className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="text-3xl font-black text-emerald-400 font-mono">{classAvgMastery}%</div>
+            <div className="text-[11px] text-slate-500">Average Knowledge Density</div>
+          </div>
+
+          <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
+              <span>Active Misconceptions</span>
+              <AlertTriangle className="w-4 h-4 text-rose-400" />
+            </div>
+            <div className="text-3xl font-black text-rose-400 font-mono">{misconceptionCount} Students</div>
+            <div className="text-[11px] text-slate-500">Require Targeted Unblocking</div>
+          </div>
+
+          <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
+              <span>Memory Decay Alerts</span>
+              <Clock className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-3xl font-black text-amber-400 font-mono">{retrievalCount} Students</div>
+            <div className="text-[11px] text-slate-500">Ebbinghaus Spaced Recall Needed</div>
+          </div>
+        </div>
+
+        {/* ── Student Cohort Directory & Cognitive Radar ───────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-cyan-400" />
+                Class {selectedClassGrade} Enrolled Students Cognitive Directory
+              </h2>
+              <p className="text-xs text-slate-400">
+                Click on any student to inspect their granular Bayesian concept radar and active learning roadmaps.
+              </p>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+                <input
+                  type="text"
+                  value={cohortSearch}
+                  onChange={(e) => setCohortSearch(e.target.value)}
+                  placeholder="Search student name..."
+                  className="bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <select
+                value={filterBottleneck}
+                onChange={(e) => setFilterBottleneck(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              >
+                <option value="ALL">All Bottlenecks</option>
+                <option value="MISCONCEPTION">Misconceptions ({misconceptionCount})</option>
+                <option value="RETRIEVAL_DECAY">Memory Decay ({retrievalCount})</option>
+                <option value="TRANSFER_DEFICIT">Transfer Deficit ({transferCount})</option>
+                <option value="BALANCED">Balanced ({balancedCount})</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Student Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {filteredCohort.map((student) => {
+              const compPercent = Math.round(student.state.overall_competency * 100)
+              const mastPercent = Math.round(student.state.overall_mastery * 100)
+              const bColor =
+                student.state.primary_bottleneck === 'MISCONCEPTION'
+                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                  : student.state.primary_bottleneck === 'RETRIEVAL_DECAY'
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  : student.state.primary_bottleneck === 'TRANSFER_DEFICIT'
+                  ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+
+              return (
+                <div
+                  key={student.student_id}
+                  onClick={() => setSelectedStudentForModal(student)}
+                  className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition-all flex flex-col justify-between space-y-4 shadow-xl group hover:scale-[1.02]"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-2xl bg-gradient-to-tr ${student.avatar_color} text-white font-bold flex items-center justify-center shadow`}>
+                          {student.student_name.charAt(0)}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                            {student.student_name}
+                          </h4>
+                          <span className="text-[10px] text-slate-500 font-mono">Class {selectedClassGrade}</span>
+                        </div>
+                      </div>
+
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                        student.risk_level === 'HIGH'
+                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                          : student.risk_level === 'MEDIUM'
+                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                          : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                      }`}>
+                        {student.risk_level} RISK
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Competency:</span>
+                        <span className="font-mono font-bold text-cyan-400">{compPercent}%</span>
+                      </div>
+                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-cyan-500 h-full rounded-full transition-all"
+                          style={{ width: `${compPercent}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] pt-1">
+                        <span className="text-slate-500">Mastery:</span>
+                        <span className="font-mono text-emerald-400">{mastPercent}%</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-slate-400">Bottleneck:</span>
+                      <span className={`px-2 py-0.5 rounded border font-semibold ${bColor}`}>
+                        {student.state.primary_bottleneck}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-cyan-400 font-bold group-hover:translate-x-1 transition-transform">
+                    <span>Inspect Neural Radar</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ── Deep Student Neural State Radar Modal ────────────────────────────── */}
+        {selectedStudentForModal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl max-w-3xl w-full p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${selectedStudentForModal.avatar_color} text-white font-extrabold flex items-center justify-center text-lg shadow-lg`}>
+                    {selectedStudentForModal.student_name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      {selectedStudentForModal.student_name}
+                      <span className="text-xs font-mono font-normal text-cyan-400">({selectedStudentForModal.email})</span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Class {selectedClassGrade} &bull; Primary Bottleneck: <strong className="text-cyan-300">{selectedStudentForModal.state.primary_bottleneck}</strong> &bull; Total Evidence Events: {selectedStudentForModal.recent_events_count}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedStudentForModal(null)}
+                  className="text-slate-400 hover:text-white text-2xl font-bold p-1"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {/* Subject Breakdowns */}
+              <div className="space-y-3">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <Target className="w-4 h-4 text-cyan-400" />
+                  Subject-Wise Bayesian State Breakdown
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {Object.values(selectedStudentForModal.state.subjects).map((subj) => (
+                    <div key={subj.subject} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">{subj.subject}</span>
+                        <span className="font-mono text-cyan-400 text-xs font-bold">
+                          {Math.round(subj.overall_competency * 100)}% C
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {subj.concepts.map((c) => (
+                          <div key={c.concept_id} className="p-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-[11px]">
+                            <span className="text-slate-300 truncate max-w-[180px]">{c.concept_name}</span>
+                            <div className="flex items-center gap-2 font-mono">
+                              <span className="text-emerald-400">{Math.round(c.mastery * 100)}% M</span>
+                              <span className="text-slate-500">|</span>
+                              <span className="text-cyan-400">{Math.round(c.competency * 100)}% C</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons for Teacher */}
+              <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
+                <button
+                  onClick={() => {
+                    alert(`Targeted unblocking assignment dispatched to ${selectedStudentForModal.student_name}!`)
+                    setSelectedStudentForModal(null)
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Assign Targeted Remediation Drill</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STUDENT PERSONAL LEARNING INTELLIGENCE VIEW
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Filter concepts based on selected subject tab
+  const displayedConcepts = React.useMemo(() => {
+    if (activeSubjectTab === 'All Subjects') {
+      return Object.values(neuralState.subjects).flatMap((s) => s.concepts)
     }
+    return neuralState.subjects[activeSubjectTab]?.concepts || []
+  }, [neuralState, activeSubjectTab])
 
-    // If calibrated, generate targeting the weakest concept
-    const targetSubj = weakSubjs[0] || subjectList[0]
-    const subjState = neuralState.subjects[targetSubj]
-    const targetConcept = subjState.concepts.slice().sort((a, b) => a.competency - b.competency)[0]
-
-    return [
-      {
-        time: '08:00 - 08:30',
-        type: 'RETRIEVAL' as const,
-        subject: targetSubj,
-        title: `Spaced Recall: ${targetConcept?.concept_name || targetSubj}`,
-        duration: 30,
-        grounding: `Memory retention reinforcement (R = ${(targetConcept?.retention * 100 || 85).toFixed(0)}%).`,
-        priority: 'HIGH' as const,
-      },
-      {
-        time: '12:00 - 12:45',
-        type: 'REMEDIATION' as const,
-        subject: targetSubj,
-        title: `Targeted Problem Solving: ${targetConcept?.concept_name || targetSubj}`,
-        duration: 45,
-        grounding: `Unblocks active bottleneck (${subjState.active_bottleneck}) and clears error misconceptions.`,
-        priority: 'CRITICAL' as const,
-      },
-      {
-        time: '17:00 - 17:45',
-        type: 'TRANSFER' as const,
-        subject: weakSubjs[1] || subjectList[1] || targetSubj,
-        title: `Transfer Challenge: ${weakSubjs[1] || subjectList[1]} Applied Reasoning`,
-        duration: 45,
-        grounding: `Cross-context generalization challenge across unseen formulations.`,
-        priority: 'HIGH' as const,
-      },
-    ]
-  }, [neuralState, subjectList])
+  const currentQ = questions[qIndex]
 
   // Launch Subject Benchmark Test
   const handleStartSubjectBenchmark = async (subjectName: string) => {
@@ -281,7 +520,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
     setLoadingQuestions(true)
 
     try {
-      const qList = await fetchSubjectBenchmarkQuestions(neuralState.grade_name, subjectName, 8)
+      const qList = await fetchSubjectBenchmarkQuestions(neuralState.grade_name, subjectName, 6)
       setQuestions(qList)
     } catch (err) {
       console.error(err)
@@ -299,59 +538,54 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
     let totalCorrect = 0
     const conceptStats: Record<string, { correct: number; total: number; diffSum: number; misconceptions: string[] }> = {}
 
-    // Initialize map
     currentSubjectState.concepts.forEach((c) => {
       conceptStats[c.concept_id] = { correct: 0, total: 0, diffSum: 0, misconceptions: [] }
     })
 
-    questions.forEach((q, idx) => {
-      // Map question to concept
-      const targetConcept = currentSubjectState.concepts.find(c =>
-        c.concept_id === q.concept_id || q.concept_name.toLowerCase().includes(c.concept_name.split(' ')[0].toLowerCase())
-      ) || currentSubjectState.concepts[idx % currentSubjectState.concepts.length]
-
-      if (!conceptStats[targetConcept.concept_id]) {
-        conceptStats[targetConcept.concept_id] = { correct: 0, total: 0, diffSum: 0, misconceptions: [] }
-      }
-
+    questions.forEach((q) => {
       const isCorrect = selectedAnswers[q.id] === q.correct_index
-      conceptStats[targetConcept.concept_id].total += 1
-      conceptStats[targetConcept.concept_id].diffSum += q.difficulty
+      if (isCorrect) totalCorrect++
 
-      if (isCorrect) {
-        totalCorrect += 1
-        conceptStats[targetConcept.concept_id].correct += 1
-      } else {
-        conceptStats[targetConcept.concept_id].misconceptions.push(q.misconception_tag)
+      const cId = q.concept_id
+      if (conceptStats[cId]) {
+        conceptStats[cId].total += 1
+        conceptStats[cId].diffSum += q.difficulty
+        if (isCorrect) {
+          conceptStats[cId].correct += 1
+        } else if (q.misconception_tag) {
+          conceptStats[cId].misconceptions.push(q.misconception_tag)
+        }
       }
     })
 
     const totalQuestions = questions.length
-    const overallScoreRatio = totalCorrect / Math.max(1, totalQuestions)
+    const overallScoreRatio = totalQuestions > 0 ? totalCorrect / totalQuestions : 0
 
-    // Update EACH individual concept using real individual evidence!
+    // Calibrate each concept in this subject individually
     const updatedConcepts: ConceptEvidence[] = currentSubjectState.concepts.map((c) => {
-      const stat = conceptStats[c.concept_id]
-      if (!stat || stat.total === 0) {
-        // Unassessed concept retains previous or neutral
-        return c
-      }
+      const s = conceptStats[c.concept_id]
+      if (!s || s.total === 0) return c
 
-      const cRatio = stat.correct / stat.total
-      const avgDiff = stat.diffSum / stat.total
-      const newM = computeBayesianMastery(c.mastery > 0 ? c.mastery : 0.15, cRatio, avgDiff, true)
-      const newR = 0.85
-      const newT = Math.max(0.10, cRatio * 0.75)
-      const newMS = stat.misconceptions.length > 0 ? Math.min(0.60, 0.15 + 0.25 * stat.misconceptions.length) : 0.02
+      const conceptScoreRatio = s.correct / s.total
+      const avgDiff = s.diffSum / s.total
+      const prevM = c.mastery > 0 ? c.mastery : 0.20
+      const newM = computeBayesianMastery(prevM, conceptScoreRatio, avgDiff, true)
+      const newR = Math.min(1.0, 0.85 + (conceptScoreRatio >= 0.7 ? 0.08 : -0.15))
+      const newT = Math.min(1.0, 0.40 + conceptScoreRatio * 0.45)
+      const newMS = s.misconceptions.length > 0 ? 0.35 : Math.max(0.01, c.misconception * 0.7)
+      const newAttempts = c.attempts_count + s.total
+      const newCorrect = c.correct_count + s.correct
+      const newU = computeUncertainty(newAttempts)
+      const newI = Math.min(1.0, 0.50 + newAttempts * 0.08)
       const newC = computeCompetency(newM, newR, newT, newMS)
-      const newU = computeUncertainty(stat.total)
-      const newI = 0.60
       const { bottleneck, mode } = classifyBottleneck(newM, newR, newT, newMS, newU, newI)
+
+      const mergedMisconceptions = Array.from(new Set([...c.active_misconceptions, ...s.misconceptions]))
 
       return {
         ...c,
-        attempts_count: c.attempts_count + stat.total,
-        correct_count: c.correct_count + stat.correct,
+        attempts_count: newAttempts,
+        correct_count: newCorrect,
         mastery: Number(newM.toFixed(4)),
         retention: Number(newR.toFixed(4)),
         transfer: Number(newT.toFixed(4)),
@@ -361,43 +595,34 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         identifiability: Number(newI.toFixed(4)),
         bottleneck: bottleneck as any,
         learning_mode: mode as any,
-        active_misconceptions: stat.misconceptions,
+        active_misconceptions: mergedMisconceptions,
         last_updated: new Date().toISOString(),
       }
     })
 
-    // Compute Subject Aggregate
     const avgMastery = updatedConcepts.reduce((acc, c) => acc + c.mastery, 0) / updatedConcepts.length
-    const avgRetention = 0.85
-    const avgTransfer = updatedConcepts.reduce((acc, c) => acc + c.transfer, 0) / updatedConcepts.length
-    const avgMisconception = updatedConcepts.reduce((acc, c) => acc + c.misconception, 0) / updatedConcepts.length
-    const avgCompetency = computeCompetency(avgMastery, avgRetention, avgTransfer, avgMisconception)
+    const avgCompetency = updatedConcepts.reduce((acc, c) => acc + c.competency, 0) / updatedConcepts.length
     const avgUncertainty = updatedConcepts.reduce((acc, c) => acc + c.uncertainty, 0) / updatedConcepts.length
-    const { bottleneck: subjBottleneck, mode: subjMode } = classifyBottleneck(avgMastery, avgRetention, avgTransfer, avgMisconception, avgUncertainty, 0.7)
+    const { bottleneck: subjBottleneck, mode: subjMode } = classifyBottleneck(avgMastery, 0.85, 0.60, 0.05, avgUncertainty, 0.80)
 
     const updatedSubject: SubjectBenchmarkState = {
-      subject: activeTestSubject,
+      ...currentSubjectState,
       is_calibrated: true,
       overall_mastery: Number(avgMastery.toFixed(4)),
-      overall_retention: Number(avgRetention.toFixed(4)),
-      overall_transfer: Number(avgTransfer.toFixed(4)),
-      overall_misconception: Number(avgMisconception.toFixed(4)),
       overall_competency: Number(avgCompetency.toFixed(4)),
       overall_uncertainty: Number(avgUncertainty.toFixed(4)),
-      identifiability: 0.70,
       active_bottleneck: subjBottleneck,
       active_mode: subjMode,
       concepts: updatedConcepts,
-      benchmark_score_percent: Math.round(overallScoreRatio * 100),
       last_assessed: new Date().toISOString(),
     }
 
     const nextSubjects = { ...neuralState.subjects, [activeTestSubject]: updatedSubject }
-
-    // Compute Global Student Aggregate across all subjects
     const allSubjects = Object.values(nextSubjects)
-    const calibratedSubjs = allSubjects.filter(s => s.is_calibrated)
-    const globalCompetency = allSubjects.reduce((acc, s) => acc + s.overall_competency, 0) / allSubjects.length
+    const calibratedSubjs = allSubjects.filter((s) => s.is_calibrated)
+    const globalCompetency = calibratedSubjs.length > 0
+      ? calibratedSubjs.reduce((acc, s) => acc + s.overall_competency, 0) / calibratedSubjs.length
+      : 0
     const globalMastery = allSubjects.reduce((acc, s) => acc + s.overall_mastery, 0) / allSubjects.length
     const globalUncertainty = allSubjects.reduce((acc, s) => acc + s.overall_uncertainty, 0) / allSubjects.length
     const primaryBottleneck = calibratedSubjs.length === 0 ? 'INSUFFICIENT_EVIDENCE' : updatedSubject.active_bottleneck
@@ -416,7 +641,6 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
     setNeuralState(nextFullState)
     localStorage.setItem(storageKey, JSON.stringify(nextFullState))
 
-    // Concept breakdown summary
     const breakdown: Record<string, { correct: number; total: number; mastery: number }> = {}
     updatedConcepts.forEach((c) => {
       const s = conceptStats[c.concept_id]
@@ -433,19 +657,6 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
       conceptBreakdown: breakdown,
     })
     setTestSubmitting(false)
-
-    // Append LangGraph Agent Notification
-    const agentMsg = `Benchmark Completed for **${activeTestSubject}**! You scored **${Math.round(overallScoreRatio * 100)}%** (${totalCorrect}/${totalQuestions} correct).
-• **${activeTestSubject} Mastery**: ${(avgMastery * 100).toFixed(0)}%
-• **Competency**: ${(avgCompetency * 100).toFixed(0)}%
-• **Epistemic Uncertainty**: reduced to ${(avgUncertainty * 100).toFixed(0)}%
-• **Active Bottleneck**: **${subjBottleneck}** (Mode: ${subjMode})
-
-Your per-concept breakdown has been updated below.`
-    setChatMessages((prev) => [
-      ...prev,
-      { sender: 'agent', text: agentMsg, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-    ])
   }
 
   // Handle SN1 LangGraph Autonomous Chat
@@ -491,26 +702,10 @@ Your per-concept breakdown has been updated below.`
     }
   }
 
-  const handleResetCalibration = () => {
-    localStorage.removeItem(storageKey)
-    window.location.reload()
-  }
-
-  // Filter concepts based on selected subject tab
-  const displayedConcepts = React.useMemo(() => {
-    if (activeSubjectTab === 'All Subjects') {
-      return Object.values(neuralState.subjects).flatMap(s => s.concepts)
-    }
-    return neuralState.subjects[activeSubjectTab]?.concepts || []
-  }, [neuralState, activeSubjectTab])
-
-  const currentQ = questions[qIndex]
-
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 p-8 rounded-3xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="space-y-2 relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
             <Brain className="w-3.5 h-3.5" />
@@ -548,88 +743,38 @@ Your per-concept breakdown has been updated below.`
 
       {/* ── Subject-Wise Benchmark Assessment Hub ──────────────────────────────── */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-base font-extrabold text-white flex items-center gap-2">
-              <Award className="w-5 h-5 text-amber-400" />
-              Subject-Wise Benchmark Assessment Hub &bull; {neuralState.grade_name}
-            </h2>
-            <p className="text-xs text-slate-400">
-              Each subject tracks its own calibrated state vector. Take a benchmark test to calibrate each individual subject.
-            </p>
-          </div>
-          <button
-            onClick={handleResetCalibration}
-            className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-850 hover:bg-slate-800 border border-slate-700 transition-colors w-fit"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Reset All Subject Baselines</span>
-          </button>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+            <Award className="w-5 h-5 text-amber-400" />
+            Subject-Wise Benchmark Assessment Hub &bull; {neuralState.grade_name}
+          </h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {subjectList.map((subjName) => {
             const subj = neuralState.subjects[subjName]
             return (
-              <div
-                key={subjName}
-                className={`p-5 rounded-3xl border transition-all relative overflow-hidden flex flex-col justify-between space-y-4 ${
-                  subj.is_calibrated
-                    ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
-                    : 'bg-gradient-to-b from-slate-900 to-amber-950/20 border-amber-500/30 shadow-lg shadow-amber-500/5'
-                }`}
-              >
+              <div key={subjName} className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between space-y-4 shadow-xl">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-cyan-400 font-mono">{subjName}</span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        subj.is_calibrated
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                      }`}
-                    >
-                      {subj.is_calibrated ? `Score: ${subj.benchmark_score_percent}%` : 'UNCALIBRATED'}
+                    <span className="text-xs font-bold text-white">{subjName}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                      subj.is_calibrated ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
+                    }`}>
+                      {subj.is_calibrated ? 'Calibrated' : 'Uncalibrated'}
                     </span>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-center">
-                    <div>
-                      <div className="text-[10px] text-slate-500">Mastery</div>
-                      <div className="text-sm font-bold text-emerald-400 font-mono">
-                        {(subj.overall_mastery * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-500">Competency</div>
-                      <div className="text-sm font-bold text-cyan-400 font-mono">
-                        {(subj.overall_competency * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-500">Uncertainty</div>
-                      <div className={`text-sm font-bold font-mono ${subj.overall_uncertainty > 0.5 ? 'text-rose-400' : 'text-slate-300'}`}>
-                        {(subj.overall_uncertainty * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-[11px] text-slate-400 pt-1 flex items-center justify-between">
-                    <span>Bottleneck:</span>
-                    <span className="font-bold text-amber-400">{subj.active_bottleneck}</span>
+                  <div className="text-2xl font-black text-cyan-400 font-mono">
+                    {Math.round(subj.overall_competency * 100)}% <span className="text-xs font-normal text-slate-400">Competency</span>
                   </div>
                 </div>
 
                 <button
                   onClick={() => handleStartSubjectBenchmark(subjName)}
-                  className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                    subj.is_calibrated
-                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                      : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 text-slate-950 shadow-md shadow-amber-500/20'
-                  }`}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md"
                 >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>{subj.is_calibrated ? `Retake ${subjName} Test` : `Take ${subjName} Benchmark`}</span>
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Start Benchmark Test</span>
                 </button>
               </div>
             )
@@ -637,551 +782,214 @@ Your per-concept breakdown has been updated below.`
         </div>
       </div>
 
-      {/* ── Granular Concepts Matrix with Subject Tabs ─────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          {/* Concept Matrix */}
-          <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="font-bold text-white text-base flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-cyan-400" />
-                  Granular Concept Evidence & Bottleneck Matrix
-                </h3>
-                <p className="text-xs text-slate-400">Individual concept progress updated strictly per question answered.</p>
-              </div>
-
-              {/* Subject Tabs */}
-              <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-                {['All Subjects', ...subjectList].map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveSubjectTab(tab)}
-                    className={`px-3 py-1 rounded-lg font-medium transition-all ${
-                      activeSubjectTab === tab
-                        ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
-                    <th className="pb-3">Subject & Concept</th>
-                    <th className="pb-3 text-center">Mastery</th>
-                    <th className="pb-3 text-center">Retention</th>
-                    <th className="pb-3 text-center">Transfer</th>
-                    <th className="pb-3 text-center">Misconception</th>
-                    <th className="pb-3 text-center">Bottleneck</th>
-                    <th className="pb-3 text-right">Mode</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {displayedConcepts.map((c) => (
-                    <tr key={c.concept_id} className="hover:bg-slate-850/50 transition-colors">
-                      <td className="py-3">
-                        <div className="font-semibold text-slate-200">{c.concept_name}</div>
-                        <div className="text-[10px] text-cyan-400 font-mono">{c.subject}</div>
-                      </td>
-                      <td className="py-3 text-center font-mono text-emerald-400 font-bold">
-                        {(c.mastery * 100).toFixed(0)}%
-                      </td>
-                      <td className="py-3 text-center font-mono text-cyan-400">
-                        {(c.retention * 100).toFixed(0)}%
-                      </td>
-                      <td className="py-3 text-center font-mono text-indigo-400">
-                        {(c.transfer * 100).toFixed(0)}%
-                      </td>
-                      <td className={`py-3 text-center font-mono ${c.misconception > 0.2 ? 'text-rose-400 font-bold' : 'text-slate-400'}`}>
-                        {(c.misconception * 100).toFixed(0)}%
-                      </td>
-                      <td className="py-3 text-center">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-amber-300 border border-slate-700">
-                          {c.bottleneck}
-                        </span>
-                      </td>
-                      <td className="py-3 text-right">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-                          {c.learning_mode}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {/* ── Subject Granular Concepts Matrix ───────────────────────────────────── */}
+      <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="font-bold text-white text-base flex items-center gap-2">
+              <Activity className="w-4 h-4 text-cyan-400" />
+              Granular Concept-Level Knowledge Tracing Matrix
+            </h3>
           </div>
 
-          {/* Dynamic Daily Roadmap (Section 86) */}
-          <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-white text-base flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-indigo-400" />
-                  Today's Dynamic Roadmap &bull; {neuralState.grade_name}
-                </h3>
-                <p className="text-xs text-slate-400">Synthesized by LangGraph policy optimizer targeting your active bottlenecks.</p>
-              </div>
-              <span className="text-xs text-slate-400 font-mono">Total: 2.0 hrs</span>
-            </div>
-
-            <div className="space-y-3">
-              {dynamicRoadmap.map((block, idx) => (
-                <div key={idx} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold shrink-0 text-xs">
-                      {block.type === 'RETRIEVAL' && <Clock className="w-5 h-5" />}
-                      {block.type === 'DIAGNOSTIC' && <ShieldAlert className="w-5 h-5 text-amber-400" />}
-                      {block.type === 'REMEDIATION' && <AlertTriangle className="w-5 h-5 text-rose-400" />}
-                      {block.type === 'TRANSFER' && <Zap className="w-5 h-5 text-indigo-400" />}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono font-bold text-indigo-300">{block.time}</span>
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 uppercase">
-                          {block.subject} &bull; {block.type}
-                        </span>
-                        {block.priority === 'CRITICAL' && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400">
-                            Critical
-                          </span>
-                        )}
-                      </div>
-                      <h4 className="text-sm font-bold text-white mt-0.5">{block.title}</h4>
-                      <p className="text-xs text-slate-400 mt-1">{block.grounding}</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      if (block.type === 'DIAGNOSTIC') {
-                        handleStartSubjectBenchmark(block.subject)
-                      } else {
-                        const targetC = neuralState.subjects[block.subject]?.concepts[0]
-                        if (targetC) {
-                          setActiveDrillConcept(targetC)
-                          setDrillCompleted(false)
-                          setDrillModalOpen(true)
-                        }
-                      }
-                    }}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shrink-0 transition-all hover:scale-105 active:scale-95"
-                  >
-                    Start Drill
-                  </button>
-                </div>
-              ))}
-            </div>
+          <div className="flex flex-wrap gap-2">
+            {['All Subjects', ...subjectList].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveSubjectTab(tab)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  activeSubjectTab === tab
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                    : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Right Col: Autonomous LangGraph SN1 Agent */}
-        <div className="space-y-6">
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl p-6 space-y-4 shadow-xl flex flex-col h-[680px]">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-sm">SN1 Autonomous Agent</h3>
-                  <p className="text-[10px] text-cyan-400 font-mono">LangGraph + Groq Cloud LPU</p>
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {displayedConcepts.map((concept) => (
+            <div key={concept.concept_id} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono text-cyan-400">{concept.subject}</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-amber-300">
+                  {concept.learning_mode}
+                </span>
               </div>
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            </div>
-
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
-              {chatMessages.map((m, idx) => (
-                <div key={idx} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div
-                    className={`p-3.5 rounded-2xl max-w-[88%] leading-relaxed ${
-                      m.sender === 'user'
-                        ? 'bg-cyan-500 text-slate-950 font-semibold shadow-md shadow-cyan-500/10'
-                        : 'bg-slate-950 border border-slate-800 text-slate-200'
-                    }`}
-                  >
-                    <div className="whitespace-pre-wrap">{m.text}</div>
-                  </div>
-                  <span className="text-[10px] text-slate-500 mt-1 px-1">{m.time}</span>
-                </div>
-              ))}
-              {chatLoading && (
-                <div className="flex items-center gap-2 text-xs text-cyan-400 p-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  SN1 LangGraph Agent is synthesizing answer...
-                </div>
-              )}
-            </div>
-
-            {/* Quick Prompts */}
-            <div className="pt-2 border-t border-slate-800 space-y-2">
-              <div className="text-[11px] font-semibold text-slate-400">Grounded Prompts:</div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  'What is my weakest subject right now?',
-                  'Why is my uncertainty high?',
-                  'How do I improve my Mathematics mastery?',
-                  'What should I study today?',
-                ].map((q, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSendChat(q)}
-                    className="text-[10px] px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700 transition-colors"
-                  >
-                    {q}
-                  </button>
-                ))}
+              <h4 className="text-xs font-bold text-white line-clamp-1">{concept.concept_name}</h4>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Mastery:</span>
+                <span className="font-mono text-emerald-400 font-bold">{Math.round(concept.mastery * 100)}%</span>
               </div>
-            </div>
-
-            {/* Input Bar */}
-            <div className="flex items-center gap-2 pt-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                placeholder={`Ask SN1 about ${neuralState.grade_name} concepts, math derivations...`}
-                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-              />
               <button
-                onClick={() => handleSendChat()}
-                disabled={chatLoading || !chatInput.trim()}
-                className="p-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all disabled:opacity-50 shrink-0"
+                onClick={() => {
+                  setActiveDrillConcept(concept)
+                  setDrillModalOpen(true)
+                }}
+                className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200"
               >
-                <Send className="w-4 h-4" />
+                Start Practice Drill
               </button>
             </div>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* ── Subject Benchmark Test Modal ─────────────────────────────────────── */}
+      {/* ── Interactive SN1 AI Assistant Chat ─────────────────────────────────── */}
+      <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 space-y-4">
+        <h3 className="font-bold text-white text-base flex items-center gap-2">
+          <Brain className="w-4 h-4 text-cyan-400" />
+          Interactive Learning Agent Assistant (SN1 LangGraph)
+        </h3>
+        <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+          {chatMessages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`p-3 rounded-2xl max-w-lg text-xs ${
+                msg.sender === 'user' ? 'bg-cyan-500 text-slate-950 font-medium' : 'bg-slate-950 border border-slate-800 text-slate-200'
+              }`}>
+                {msg.text}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+            placeholder="Ask your learning agent a question..."
+            className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+          />
+          <button
+            onClick={() => handleSendChat()}
+            disabled={chatLoading}
+            className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5"
+          >
+            {chatLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            <span>Send</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Subject Benchmark Test Modal ────────────────────────────────────── */}
       {benchmarkModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl max-w-2xl w-full p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold">
-                  <Brain className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-base">
-                    {neuralState.grade_name} &bull; {activeTestSubject} Benchmark Test
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    {loadingQuestions
-                      ? 'Groq Cloud LPU synthesizing psychometric test items...'
-                      : testSummary
-                      ? 'Benchmark Assessment Evaluated'
-                      : `Question ${qIndex + 1} of ${questions.length} • Concept: ${currentQ?.concept_name}`}
-                  </p>
-                </div>
+              <div>
+                <h3 className="font-bold text-white text-base">Benchmark: {activeTestSubject}</h3>
+                <p className="text-xs text-slate-400">
+                  {testSummary ? 'Diagnostic Complete' : `Question ${qIndex + 1} of ${questions.length}`}
+                </p>
               </div>
-              <button
-                onClick={() => setBenchmarkModalOpen(false)}
-                className="text-slate-400 hover:text-white text-xl p-1 font-bold"
-              >
+              <button onClick={() => setBenchmarkModalOpen(false)} className="text-slate-400 hover:text-white text-xl">
                 &times;
               </button>
             </div>
 
             {loadingQuestions ? (
-              <div className="p-12 text-center space-y-4">
-                <Loader2 className="w-12 h-12 text-cyan-400 animate-spin mx-auto" />
-                <div className="space-y-1">
-                  <h4 className="font-bold text-white text-base">Generating {activeTestSubject} Benchmark Items...</h4>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Synthesizing psychometric questions covering {activeTestSubject} standards for {neuralState.grade_name}.
-                  </p>
-                </div>
+              <div className="p-12 text-center text-xs text-slate-400 space-y-2">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto text-cyan-400" />
+                <p>Generating psychometrically calibrated benchmark items...</p>
               </div>
             ) : testSummary ? (
-              <div className="p-6 rounded-2xl bg-slate-950 border border-emerald-500/30 text-center space-y-6">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center font-bold">
-                  <CheckCircle2 className="w-8 h-8" />
+              <div className="p-6 rounded-2xl bg-slate-950 border border-emerald-500/30 text-center space-y-4">
+                <div className="text-2xl font-black text-emerald-400 font-mono">
+                  Score: {testSummary.scorePercent}% ({testSummary.correctCount}/{testSummary.totalCount})
                 </div>
-                <div className="space-y-1">
-                  <h4 className="text-xl font-bold text-white">{testSummary.subject} Benchmark Evaluated!</h4>
-                  <p className="text-sm text-slate-300">
-                    Overall Score: <strong className="text-emerald-400 text-lg">{testSummary.scorePercent}%</strong> ({testSummary.correctCount}/{testSummary.totalCount} correct)
-                  </p>
-                </div>
-
-                {/* Per-Concept Detailed Breakdown */}
-                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-left space-y-3">
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Per-Concept Calibration:</div>
-                  <div className="space-y-2">
-                    {Object.entries(testSummary.conceptBreakdown).map(([cName, data]) => (
-                      <div key={cName} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
-                        <div>
-                          <div className="font-medium text-slate-200">{cName}</div>
-                          <div className="text-[10px] text-slate-500">{data.correct}/{data.total} items correct</div>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-mono font-bold text-emerald-400 text-sm">{data.mastery}%</span>
-                          <div className="text-[10px] text-cyan-400 font-mono">Mastery</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
+                <p className="text-xs text-slate-300">
+                  Bayesian state vectors calibrated for all concepts under {testSummary.subject}.
+                </p>
                 <button
                   onClick={() => setBenchmarkModalOpen(false)}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-extrabold text-sm transition-all shadow-lg shadow-cyan-500/20"
+                  className="w-full py-2.5 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
                 >
-                  View Updated State Vector & Roadmap
+                  Close & View Updated Matrix
                 </button>
               </div>
             ) : currentQ ? (
-              <>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span className="px-2.5 py-1 rounded bg-slate-800 text-cyan-300 font-bold">
-                      Concept: {currentQ.concept_name}
-                    </span>
-                    <span className="px-2.5 py-1 rounded bg-slate-800 text-amber-300 font-bold">
-                      Level: {currentQ.cognitive_level}
-                    </span>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800">
-                    <p className="text-sm font-semibold text-white leading-relaxed">{currentQ.prompt}</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    {currentQ.options.map((opt, optIdx) => {
-                      const isSelected = selectedAnswers[currentQ.id] === optIdx
-                      return (
-                        <button
-                          key={optIdx}
-                          onClick={() => setSelectedAnswers((prev) => ({ ...prev, [currentQ.id]: optIdx }))}
-                          className={`w-full p-3.5 rounded-xl border text-left text-xs font-medium flex items-center justify-between transition-all ${
-                            isSelected
-                              ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md shadow-cyan-500/10'
-                              : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                          }`}
-                        >
-                          <span>{opt}</span>
-                          {isSelected && <Check className="w-4 h-4 text-cyan-400" />}
-                        </button>
-                      )
-                    })}
-                  </div>
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800">
+                  <p className="text-sm font-semibold text-white">{currentQ.prompt}</p>
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+                <div className="space-y-2">
+                  {currentQ.options.map((opt, optIdx) => (
+                    <button
+                      key={optIdx}
+                      onClick={() => setSelectedAnswers((prev) => ({ ...prev, [currentQ.id]: optIdx }))}
+                      className={`w-full p-3 rounded-xl border text-left text-xs font-medium transition-all ${
+                        selectedAnswers[currentQ.id] === optIdx
+                          ? 'bg-cyan-500/20 border-cyan-500 text-white'
+                          : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-slate-800">
                   <button
-                    type="button"
                     disabled={qIndex === 0}
                     onClick={() => setQIndex((prev) => prev - 1)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white disabled:opacity-40"
+                    className="text-xs text-slate-400 hover:text-white disabled:opacity-40"
                   >
                     Previous
                   </button>
 
                   {qIndex < questions.length - 1 ? (
                     <button
-                      type="button"
                       disabled={selectedAnswers[currentQ.id] === undefined}
                       onClick={() => setQIndex((prev) => prev + 1)}
-                      className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
                     >
-                      <span>Next Question</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      Next
                     </button>
                   ) : (
                     <button
-                      type="button"
-                      disabled={Object.keys(selectedAnswers).length < questions.length || testSubmitting}
+                      disabled={testSubmitting}
                       onClick={handleSubmitBenchmark}
-                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 hover:scale-105"
+                      className="px-5 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs"
                     >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{testSubmitting ? 'Computing Bayesian Updates...' : `Submit ${activeTestSubject} Benchmark`}</span>
+                      {testSubmitting ? 'Calibrating...' : 'Submit Benchmark'}
                     </button>
                   )}
                 </div>
-              </>
+              </div>
             ) : null}
           </div>
         </div>
       )}
 
-      {/* ── Interactive Practice Drill Modal for Specific Concepts ────────────── */}
+      {/* ── Interactive Practice Drill Modal ─────────────────────────────────── */}
       {drillModalOpen && activeDrillConcept && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-base">Practice Drill: {activeDrillConcept.concept_name}</h3>
-                  <p className="text-xs text-indigo-400 font-mono">{activeDrillConcept.subject} &bull; Mode: {activeDrillConcept.learning_mode}</p>
-                </div>
-              </div>
-              <button onClick={() => setDrillModalOpen(false)} className="text-slate-400 hover:text-white text-xl p-1">
+              <h3 className="font-bold text-white text-base">Practice Drill: {activeDrillConcept.concept_name}</h3>
+              <button onClick={() => setDrillModalOpen(false)} className="text-slate-400 hover:text-white text-xl">
                 &times;
               </button>
             </div>
-
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-              <div className="text-xs font-bold text-slate-400 uppercase">Target Intervention:</div>
-              <p className="text-xs text-slate-200 leading-relaxed">
-                Complete 5 focused practice items on <strong>{activeDrillConcept.concept_name}</strong> to resolve active bottleneck <strong>{activeDrillConcept.bottleneck}</strong>.
-              </p>
-              <div className="text-[11px] text-slate-400 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-                <strong>Current State:</strong> Mastery: {(activeDrillConcept.mastery * 100).toFixed(0)}%, Competency: {(activeDrillConcept.competency * 100).toFixed(0)}%.
-              </div>
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs text-slate-300">
+              <p>Reinforcing memory retention stability for <strong>{activeDrillConcept.concept_name}</strong>.</p>
             </div>
-
-            {drillCompleted ? (
-              <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-center space-y-2">
-                <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
-                <h4 className="text-sm font-bold text-white">Drill Successfully Recorded!</h4>
-                <p className="text-xs text-slate-300">Bayesian belief updated (+4% mastery boost on this concept).</p>
-                <button
-                  onClick={() => setDrillModalOpen(false)}
-                  className="mt-2 w-full py-2.5 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
-                >
-                  Return to Dashboard
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setDrillCompleted(true)
-                  // Apply targeted concept Bayesian update
-                  setNeuralState((prev) => {
-                    const subj = prev.subjects[activeDrillConcept.subject]
-                    if (!subj) return prev
-                    const updatedC = subj.concepts.map(c => {
-                      if (c.concept_id === activeDrillConcept.concept_id) {
-                        const newM = Math.min(1.0, c.mastery + 0.04)
-                        const newC = computeCompetency(newM, c.retention || 0.85, c.transfer || 0.5, c.misconception || 0.02)
-                        return { ...c, mastery: newM, competency: newC }
-                      }
-                      return c
-                    })
-                    const avgM = updatedC.reduce((a, b) => a + b.mastery, 0) / updatedC.length
-                    const avgC = updatedC.reduce((a, b) => a + b.competency, 0) / updatedC.length
-                    const updatedSubj = { ...subj, concepts: updatedC, overall_mastery: avgM, overall_competency: avgC }
-                    const nextS = { ...prev.subjects, [activeDrillConcept.subject]: updatedSubj }
-                    const nextFull = { ...prev, subjects: nextS, total_evidence_events: prev.total_evidence_events + 5 }
-                    localStorage.setItem(storageKey, JSON.stringify(nextFull))
-                    return nextFull
-                  })
-                }}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20"
-              >
-                <Check className="w-4 h-4" />
-                <span>Log Practice Completion & Record Evidence</span>
-              </button>
-            )}
+            <button
+              onClick={() => {
+                setDrillModalOpen(false)
+              }}
+              className="w-full py-3 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
+            >
+              Complete Drill
+            </button>
           </div>
         </div>
       )}
-      {/* ── Live Closed-Loop Evidence Stream & Multi-Modal Audit Feed ─────────── */}
-      <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h3 className="font-bold text-white text-base flex items-center gap-2">
-              <Activity className="w-4 h-4 text-emerald-400" />
-              Live Multi-Modal Evidence Stream & Closed-Loop Telemetry
-            </h3>
-            <p className="text-xs text-slate-400">
-              Every quiz, benchmark test, homework assignment, and doubt asked feeds directly into the Bayesian state engine.
-            </p>
-          </div>
-
-          <button
-            onClick={() => {
-              // Simulate 6 multi-modal realistic events (Quizzes, Assignments, Doubts, Practice)
-              const subjs = Object.keys(neuralState.subjects)
-              const eventsToSimulate = [
-                { type: 'QUIZ' as const, subj: subjs[0], concept: 'Multi-digit Arithmetic & Place Values', score: 0.90, diff: 0.40, title: 'Weekly Speed Math Quiz' },
-                { type: 'ASSIGNMENT' as const, subj: subjs[0], concept: 'Fractions, Decimals & Geometry Basics', score: 0.85, diff: 0.55, title: 'Fractions Problem Set 1' },
-                { type: 'TEST' as const, subj: subjs[1] || subjs[0], concept: 'Plant Nutrition & Photosynthesis', score: 0.88, diff: 0.60, title: 'Science Term Benchmark' },
-                { type: 'DOUBT' as const, subj: subjs[1] || subjs[0], concept: 'States of Matter & Water Cycle', score: 0.50, diff: 0.50, title: 'Asked AI: Why does evaporation cause cooling?' },
-                { type: 'PRACTICE' as const, subj: subjs[2] || subjs[0], concept: 'Parts of Speech (Nouns, Verbs, Adjectives)', score: 0.95, diff: 0.35, title: 'Spaced Retrieval Flashcards' },
-              ]
-
-              let latestState = neuralState
-
-              eventsToSimulate.forEach((evt, idx) => {
-                latestState = ingestLearningEvidenceEvent({
-                  id: `sim_event_${Date.now()}_${idx}`,
-                  timestamp: new Date().toISOString(),
-                  student_id: user?.id || 'demo_student',
-                  grade_name: neuralState.grade_name,
-                  subject: evt.subj,
-                  concept_name: evt.concept,
-                  event_type: evt.type,
-                  title: evt.title,
-                  score_ratio: evt.score,
-                  difficulty: evt.diff,
-                  misconception_detected: evt.score < 0.60,
-                  misconception_tag: evt.score < 0.60 ? 'application_error' : undefined,
-                  feedback: `Ingested ${evt.type}: ${evt.title} (Score: ${Math.round(evt.score * 100)}%)`
-                })
-              })
-
-              setNeuralState(latestState)
-              alert('Successfully ingested 5 multi-modal learning evidence events into the LENS-Ω closed-loop engine!')
-            }}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 text-white font-bold text-xs flex items-center gap-2 shadow-md transition-all hover:scale-105"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Simulate Multi-Modal Evidence Events (+5 Events)</span>
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
-          {[
-            {
-              type: 'DIAGNOSTIC / BENCHMARK',
-              icon: Award,
-              color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-              desc: 'High Bayesian weight calibration. Eliminates initial epistemic uncertainty from 95% down to 20%.',
-            },
-            {
-              type: 'QUIZZES & ASSIGNMENTS',
-              icon: BookOpen,
-              color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
-              desc: 'Continuous measurement of deliberate problem solving, accuracy, and cross-context transfer.',
-            },
-            {
-              type: 'DOUBTS & SPATIAL PRACTICE',
-              icon: Brain,
-              color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
-              desc: 'Flags conceptual gaps, isolates error misconceptions, and updates Ebbinghaus memory retention.',
-            },
-          ].map((item, idx) => (
-            <div key={idx} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
-              <div className="flex items-center gap-2.5">
-                <div className={`p-2 rounded-xl border ${item.color}`}>
-                  <item.icon className="w-4 h-4" />
-                </div>
-                <span className="text-xs font-bold text-white">{item.type}</span>
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }
 export default LearningIntelligencePage
-

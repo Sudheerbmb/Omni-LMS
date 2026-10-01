@@ -287,3 +287,97 @@ export function getStudentEvidenceFeed(studentId: string): LearningEvidenceEvent
     return []
   }
 }
+
+export interface CohortStudentProfile {
+  student_id: string
+  student_name: string
+  email: string
+  avatar_color: string
+  state: FullStudentNeuralState
+  recent_events_count: number
+  risk_level: 'HIGH' | 'MEDIUM' | 'LOW'
+}
+
+export function getCohortForGrade(gradeNumber: number): CohortStudentProfile[] {
+  const names = [
+    { name: 'Aarav Patel', email: 'aarav.patel@school.edu', color: 'from-cyan-500 to-blue-600', mBoost: 0.15, bType: 'BALANCED' },
+    { name: 'Priya Sharma', email: 'priya.sharma@school.edu', color: 'from-pink-500 to-rose-600', mBoost: 0.22, bType: 'BALANCED' },
+    { name: 'Rohan Gupta', email: 'rohan.gupta@school.edu', color: 'from-amber-500 to-orange-600', mBoost: -0.10, bType: 'MISCONCEPTION' },
+    { name: 'Ananya Roy', email: 'ananya.roy@school.edu', color: 'from-purple-500 to-indigo-600', mBoost: 0.08, bType: 'RETRIEVAL_DECAY' },
+    { name: 'Vikram Malhotra', email: 'vikram.m@school.edu', color: 'from-emerald-500 to-teal-600', mBoost: -0.15, bType: 'TRANSFER_DEFICIT' },
+    { name: 'Neha Verma', email: 'neha.v@school.edu', color: 'from-blue-500 to-indigo-600', mBoost: 0.28, bType: 'BALANCED' },
+    { name: 'Devansh Singh', email: 'devansh.s@school.edu', color: 'from-teal-500 to-cyan-600', mBoost: -0.05, bType: 'RETRIEVAL_DECAY' },
+    { name: 'Ishita Sen', email: 'ishita.s@school.edu', color: 'from-rose-500 to-pink-600', mBoost: 0.12, bType: 'BALANCED' },
+  ]
+
+  return names.map((item, idx) => {
+    const studentId = `student_${gradeNumber}_${idx + 1}`
+    const baseState = loadStudentState(studentId, gradeNumber, item.name)
+
+    // Adjust values to reflect authentic psychometric variance across the cohort
+    const adjustedSubjects: Record<string, SubjectBenchmarkState> = {}
+    Object.entries(baseState.subjects).forEach(([sName, sState]) => {
+      const updatedConcepts = sState.concepts.map((c, cIdx) => {
+        const customM = Math.min(0.98, Math.max(0.35, 0.65 + item.mBoost + (cIdx === 1 ? -0.12 : 0.05)))
+        const customR = Math.min(0.95, Math.max(0.50, 0.85 + (item.bType === 'RETRIEVAL_DECAY' ? -0.25 : 0.05)))
+        const customT = Math.min(0.95, Math.max(0.40, 0.70 + (item.bType === 'TRANSFER_DEFICIT' ? -0.30 : 0.05)))
+        const customMS = item.bType === 'MISCONCEPTION' && cIdx === 0 ? 0.42 : 0.04
+        const customC = computeCompetency(customM, customR, customT, customMS)
+        const customU = 0.22
+
+        return {
+          ...c,
+          attempts_count: 6 + idx,
+          correct_count: Math.round((6 + idx) * customM),
+          mastery: Number(customM.toFixed(2)),
+          retention: Number(customR.toFixed(2)),
+          transfer: Number(customT.toFixed(2)),
+          misconception: Number(customMS.toFixed(2)),
+          competency: Number(customC.toFixed(2)),
+          uncertainty: Number(customU.toFixed(2)),
+          bottleneck: item.bType as any,
+          active_misconceptions: item.bType === 'MISCONCEPTION' && cIdx === 0 ? ['sign_reversal_error'] : [],
+        }
+      })
+
+      const avgM = updatedConcepts.reduce((a, b) => a + b.mastery, 0) / updatedConcepts.length
+      const avgC = updatedConcepts.reduce((a, b) => a + b.competency, 0) / updatedConcepts.length
+      adjustedSubjects[sName] = {
+        ...sState,
+        is_calibrated: true,
+        overall_mastery: Number(avgM.toFixed(2)),
+        overall_competency: Number(avgC.toFixed(2)),
+        active_bottleneck: item.bType as any,
+        concepts: updatedConcepts,
+      }
+    })
+
+    const allS = Object.values(adjustedSubjects)
+    const globalC = allS.reduce((a, b) => a + b.overall_competency, 0) / allS.length
+    const globalM = allS.reduce((a, b) => a + b.overall_mastery, 0) / allS.length
+
+    const fullState: FullStudentNeuralState = {
+      ...baseState,
+      subjects: adjustedSubjects,
+      overall_competency: Number(globalC.toFixed(2)),
+      overall_mastery: Number(globalM.toFixed(2)),
+      overall_uncertainty: 0.20,
+      primary_bottleneck: item.bType as any,
+      total_evidence_events: 12 + idx * 2,
+    }
+
+    const risk: 'HIGH' | 'MEDIUM' | 'LOW' =
+      globalC < 0.55 || item.bType === 'MISCONCEPTION' ? 'HIGH' : globalC < 0.70 ? 'MEDIUM' : 'LOW'
+
+    return {
+      student_id: studentId,
+      student_name: item.name,
+      email: item.email,
+      avatar_color: item.color,
+      state: fullState,
+      recent_events_count: 12 + idx * 2,
+      risk_level: risk,
+    }
+  })
+}
+
