@@ -17,7 +17,6 @@ import { DashboardPage } from './pages/DashboardPage'
 import { CoursesPage } from './pages/CoursesPage'
 import { AssessmentsPage } from './pages/AssessmentsPage'
 import { AssignmentsPage } from './pages/AssignmentsPage'
-import { CertificatesPage } from './pages/CertificatesPage'
 import { OrganizationsPage } from './pages/OrganizationsPage'
 import { CodingPage } from './pages/CodingPage'
 import { ClassroomPage } from './pages/ClassroomPage'
@@ -335,7 +334,6 @@ export function App() {
           {currentTab === 'courses' && <CoursesPage user={user} />}
           {currentTab === 'assessments' && <AssessmentsPage user={user} />}
           {currentTab === 'assignments' && <AssignmentsPage user={user} />}
-          {currentTab === 'certificates' && <CertificatesPage user={user} />}
           {currentTab === 'organizations' && <OrganizationsPage user={user} />}
           {currentTab === 'coding' && <CodingPage user={user} />}
           {currentTab === 'classroom' && <ClassroomPage user={user} />}

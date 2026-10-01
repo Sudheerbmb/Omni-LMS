@@ -725,21 +725,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
               </p>
             </div>
 
-            <div
-              onClick={() => setCurrentTab('certificates')}
-              className="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-5 cursor-pointer transition-all hover:scale-[1.02] group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold text-slate-400">Earned Certificates</span>
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
-                  <Award className="w-5 h-5" />
-                </div>
-              </div>
-              <p className="text-3xl font-black text-white">{statsData.certificates ?? 0}</p>
-              <p className="text-[11px] text-amber-400 mt-2 font-medium flex items-center gap-1">
-                View awards &rarr;
-              </p>
-            </div>
           </>
         )}
       </div>
