@@ -1,3 +1,5 @@
 version: 2
-agent:
-  authtoken: 3K0lQDs5ob1UL5FOZZuVwu3jiXm_7JPXJkYSvPewTxKTenB5T
+
+# Keep credentials out of source control. Configure ngrok locally with:
+#   ngrok config add-authtoken <your-token>
+# or provide NGROK_AUTHTOKEN through your deployment environment.
