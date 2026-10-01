@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import type { User } from '../lib/api'
 import {
   CheckSquare,
   Plus,
   CheckCircle,
-  AlertCircle,
   Sparkles,
   Upload,
   Clock,
@@ -14,7 +13,14 @@ import {
   Check,
   Loader2,
   Trash2,
-  ArrowRight
+  ArrowRight,
+  Shield,
+  Camera,
+  Mic,
+  AlertTriangle,
+  Eye,
+  FileCheck,
+  Zap
 } from 'lucide-react'
 import {
   getScheduledAssessments,
@@ -23,7 +29,8 @@ import {
   getAssessmentsForStudent,
   generateAIQuestionSet,
   submitStudentAssessment,
-  getAllSubmissions
+  getAllSubmissions,
+  isAssessmentCompletedByStudent
 } from '../lib/assessmentStore'
 import type {
   ScheduledAssessment,
@@ -58,6 +65,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
   const [durationMinutes, setDurationMinutes] = useState(45)
   const [passingScore, setPassingScore] = useState(70)
   const [pdfFileName, setPdfFileName] = useState<string | null>(null)
+  const [documentContent, setDocumentContent] = useState<string>('')
 
   // Question Items for Creation
   const [questionItems, setQuestionItems] = useState<QuestionItem[]>([])
@@ -71,12 +79,26 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
   const [manPoints, setManPoints] = useState(10)
   const [manLevel, setManLevel] = useState<'FOUNDATION' | 'APPLICATION' | 'REASONING' | 'TRANSFER'>('APPLICATION')
 
-  // Student Taking Test State
+  // Student Examination & AI Proctoring State
   const [takingTest, setTakingTest] = useState<ScheduledAssessment | null>(null)
   const [currentQIndex, setCurrentQIndex] = useState(0)
   const [studentAnswers, setStudentAnswers] = useState<Record<string, string | number>>({})
   const [submittingTest, setSubmittingTest] = useState(false)
   const [testResult, setTestResult] = useState<StudentSubmission | null>(null)
+  const [viewingPastSubmission, setViewingPastSubmission] = useState<StudentSubmission | null>(null)
+
+  // AI Proctoring Security Telemetry
+  const [proctorActive, setProctorActive] = useState(false)
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
+  const [violations, setViolations] = useState<string[]>([])
+  const [violationCount, setViolationCount] = useState(0)
+  const [showWarningModal, setShowWarningModal] = useState<string | null>(null)
+  const [isDisqualified, setIsDisqualified] = useState(false)
+  const [micVolumeLevel, setMicVolumeLevel] = useState(0)
+
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
 
   useEffect(() => {
     refreshData()
@@ -91,11 +113,152 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
     setSubmissionsList(getAllSubmissions())
   }
 
+  // ── AI Proctoring Video & Audio Hardware Setup ────────────────────────────
+  const startProctoringSession = async () => {
+    try {
+      // 1. Request Webcam and Mic
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      setCameraStream(stream)
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+      }
+
+      // 2. Setup Audio Decibel Meter
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+        const audioCtx = new AudioCtx()
+        audioContextRef.current = audioCtx
+        const analyser = audioCtx.createAnalyser()
+        analyserRef.current = analyser
+        analyser.fftSize = 256
+        const source = audioCtx.createMediaStreamSource(stream)
+        source.connect(analyser)
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount)
+        const checkVolume = () => {
+          if (!analyserRef.current) return
+          analyserRef.current.getByteFrequencyData(dataArray)
+          let sum = 0
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
+          const avg = sum / dataArray.length
+          setMicVolumeLevel(Math.min(100, Math.round((avg / 128) * 100)))
+
+          // If sustained loud noise occurs
+          if (avg > 90) {
+            recordViolation('Loud background noise / voice assistance detected')
+          }
+          if (proctorActive) {
+            requestAnimationFrame(checkVolume)
+          }
+        }
+        requestAnimationFrame(checkVolume)
+      } catch (audioErr) {
+        console.warn('Audio analyser fallback:', audioErr)
+      }
+
+      // 3. Request Fullscreen
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {})
+      }
+
+      setProctorActive(true)
+      setViolations([])
+      setViolationCount(0)
+      setIsDisqualified(false)
+    } catch (err) {
+      console.warn('Camera/Mic permission warning:', err)
+      // Allow proceeding with soft proctoring fallback
+      setProctorActive(true)
+    }
+  }
+
+  const stopProctoringSession = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop())
+      setCameraStream(null)
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {})
+      audioContextRef.current = null
+    }
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {})
+    }
+    setProctorActive(false)
+  }
+
+  // ── Anti-Cheat Event Listeners (Tab switch, Blur, Fullscreen exit) ────────
+  useEffect(() => {
+    if (!proctorActive || !takingTest || testResult || isDisqualified) return
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        recordViolation('Browser tab switch / application minimized')
+      }
+    }
+
+    const handleWindowBlur = () => {
+      recordViolation('Focus lost / mouse exited examination window')
+    }
+
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && proctorActive) {
+        recordViolation('Exited fullscreen examination security mode')
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('blur', handleWindowBlur)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('blur', handleWindowBlur)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [proctorActive, takingTest, testResult, isDisqualified, violationCount])
+
+  const recordViolation = (reason: string) => {
+    if (isDisqualified || testResult) return
+
+    const newCount = violationCount + 1
+    const newViolations = [...violations, `${reason} (at ${new Date().toLocaleTimeString()})`]
+    setViolations(newViolations)
+    setViolationCount(newCount)
+
+    if (newCount >= 3) {
+      // 3 Strikes => Immediate Disqualification
+      setIsDisqualified(true)
+      setShowWarningModal(null)
+      if (takingTest) {
+        const sub = submitStudentAssessment(
+          takingTest,
+          user?.id || 'demo_student',
+          user?.display_name || 'Student',
+          studentGrade,
+          studentAnswers,
+          { cheated: true, violations: newViolations, count: newCount }
+        )
+        setTestResult(sub)
+        refreshData()
+      }
+      stopProctoringSession()
+    } else {
+      setShowWarningModal(`⚠️ SECURITY ALERT (Strike ${newCount}/3): ${reason}. Please remain focused on the exam screen.`)
+    }
+  }
+
   // Handle AI Question Generation
   const handleAIGenerate = async () => {
     setIsGeneratingAI(true)
     try {
-      const generated = await generateAIQuestionSet(targetGrade, subject, topicSyllabus, 5)
+      const generated = await generateAIQuestionSet(
+        targetGrade,
+        subject,
+        topicSyllabus,
+        5,
+        documentContent || undefined
+      )
       setQuestionItems(generated)
     } catch (err) {
       console.error(err)
@@ -147,6 +310,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
       total_points: totalPts || 30,
       submissions_count: 0,
       status: 'PUBLISHED',
+      requires_proctoring: true,
       pdf_attachment_name: pdfFileName || undefined,
       question_sets: [
         {
@@ -154,9 +318,9 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
           questions: questionItems.length > 0 ? questionItems : [
             {
               id: 'q_default_1',
-              question_text: `Fundamental conceptual verification for ${topicSyllabus || subject}.`,
+              question_text: `Fundamental analytical theorem verification for ${topicSyllabus || subject}.`,
               question_type: 'multiple_choice',
-              options: ['Option A (Correct)', 'Option B', 'Option C', 'Option D'],
+              options: ['Core Derivation (Correct)', 'Misconception A', 'Misconception B', 'Misconception C'],
               correct_answer: 0,
               points: 10,
               cognitive_level: 'FOUNDATION',
@@ -174,7 +338,29 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
     setTitle('')
     setDescription('')
     setQuestionItems([])
+    setDocumentContent('')
     alert(`Assessment "${newAssessment.title}" successfully scheduled and published for ${targetGrade}!`)
+  }
+
+  // Handle Student Start Test with Proctoring
+  const handleStartTest = async (asmt: ScheduledAssessment) => {
+    // Check if already completed
+    const existing = isAssessmentCompletedByStudent(asmt.id, user?.id || 'demo_student')
+    if (existing) {
+      setViewingPastSubmission(existing)
+      return
+    }
+
+    setTakingTest(asmt)
+    setCurrentQIndex(0)
+    setStudentAnswers({})
+    setTestResult(null)
+    setViolations([])
+    setViolationCount(0)
+    setIsDisqualified(false)
+
+    // Launch Proctoring
+    await startProctoringSession()
   }
 
   // Handle Student Submit Test
@@ -187,11 +373,13 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
       user?.id || 'demo_student',
       user?.display_name || 'Student',
       studentGrade,
-      studentAnswers
+      studentAnswers,
+      { cheated: false, violations, count: violationCount }
     )
 
     setTestResult(submission)
     setSubmittingTest(false)
+    stopProctoringSession()
     refreshData()
   }
 
@@ -211,16 +399,16 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 p-8 rounded-3xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
         <div className="space-y-2 relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
-            <CheckSquare className="w-3.5 h-3.5" />
-            {isTeacher ? 'Teacher Examination & Scheduling Studio' : `Student Assessment Hub • Enrolled in ${studentGrade}`}
+            <Shield className="w-3.5 h-3.5" />
+            {isTeacher ? 'Teacher Examination & Security Studio' : `Secure Examination Portal • Enrolled in ${studentGrade}`}
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
-            {isTeacher ? 'Dynamic Assessment & Test Scheduling' : 'My Scheduled Tests & Quizzes'}
+            {isTeacher ? 'Assessment Scheduling & AI Proctoring' : 'My Scheduled Tests & Security Hub'}
           </h1>
           <p className="text-slate-400 text-sm max-w-2xl">
             {isTeacher
-              ? 'Schedule high-precision tests for your classes (Class 10, Class 7, Class 4) with AI generation, PDF drop, and closed-loop telemetry.'
-              : `Access and complete your scheduled tests for ${studentGrade}. All results update your cognitive state vector in real-time.`}
+              ? 'Schedule high-precision tests for your classes (Class 10, Class 7, Class 4) with syllabus-grounded AI generation, PDF document parsing, and anti-cheat telemetry.'
+              : `Access your scheduled examinations for ${studentGrade}. One attempt per assessment with active camera and screen security.`}
           </p>
         </div>
 
@@ -231,6 +419,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                 setShowCreateModal(true)
                 setCreateStep('details')
                 setQuestionItems([])
+                setDocumentContent('')
               }}
               className="px-5 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
             >
@@ -264,7 +453,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Student Submissions & Telemetry ({submissionsList.length})</span>
+            <span>Student Submissions & Security Audit ({submissionsList.length})</span>
           </button>
         </div>
       )}
@@ -275,7 +464,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-white text-base flex items-center gap-2">
               <Award className="w-4 h-4 text-amber-400" />
-              {isTeacher ? 'Active & Scheduled Tests Across Classes' : `Available Assessments for ${studentGrade}`}
+              {isTeacher ? 'Active & Scheduled Tests Across Classes' : `Examinations for ${studentGrade}`}
             </h3>
             <span className="text-xs text-slate-400 font-mono">Total: {assessmentsList.length} Tests</span>
           </div>
@@ -294,6 +483,9 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {assessmentsList.map((asmt) => {
                 const totalQs = asmt.question_sets[0]?.questions.length || 0
+                const pastSub = !isTeacher ? isAssessmentCompletedByStudent(asmt.id, user?.id || 'demo_student') : null
+                const isCompleted = !!pastSub
+
                 return (
                   <div
                     key={asmt.id}
@@ -304,9 +496,17 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                         <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                           {asmt.target_grade} &bull; {asmt.subject}
                         </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">
-                          {asmt.status}
-                        </span>
+                        {isCompleted ? (
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <FileCheck className="w-3 h-3" />
+                            Completed ({pastSub?.score_percent}%)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase flex items-center gap-1">
+                            <Shield className="w-3 h-3" />
+                            Proctored
+                          </span>
+                        )}
                       </div>
 
                       <div>
@@ -331,7 +531,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                         </div>
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-slate-500">Questions:</span>
-                          <span className="font-mono text-slate-200">{totalQs} Questions ({asmt.total_points} Pts)</span>
+                          <span className="font-mono text-slate-200">{totalQs} Items ({asmt.total_points} Pts)</span>
                         </div>
                       </div>
                     </div>
@@ -349,18 +549,21 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </>
+                      ) : isCompleted ? (
+                        <button
+                          onClick={() => setViewingPastSubmission(pastSub)}
+                          className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-emerald-400 border border-emerald-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span>View Completed Submission ({pastSub?.score_percent}%)</span>
+                        </button>
                       ) : (
                         <button
-                          onClick={() => {
-                            setTakingTest(asmt)
-                            setCurrentQIndex(0)
-                            setStudentAnswers({})
-                            setTestResult(null)
-                          }}
+                          onClick={() => handleStartTest(asmt)}
                           className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-cyan-500/10 hover:scale-105"
                         >
-                          <CheckSquare className="w-4 h-4" />
-                          <span>Start Assessment</span>
+                          <Shield className="w-4 h-4" />
+                          <span>Start Proctored Exam &rarr;</span>
                         </button>
                       )}
                     </div>
@@ -372,17 +575,17 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
         </div>
       )}
 
-      {/* ── Submissions & Telemetry Tab (For Teachers) ───────────────────────── */}
+      {/* ── Submissions & Anti-Cheat Audit Tab (For Teachers) ───────────────── */}
       {isTeacher && activeTab === 'submissions' && (
         <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <Users className="w-4 h-4 text-cyan-400" />
-                Live Student Test Submissions & Cognitive Calibration
+                Live Student Test Submissions & Anti-Cheat Audit Telemetry
               </h3>
               <p className="text-xs text-slate-400">
-                Every completed test automatically updates the student's Bayesian mastery and competency in the closed-loop engine.
+                Live inspection of student submissions, cognitive state adjustments, and automated proctoring violation alerts.
               </p>
             </div>
           </div>
@@ -397,8 +600,8 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                     <th className="pb-3">Student & Grade</th>
                     <th className="pb-3">Assessment Title</th>
                     <th className="pb-3 text-center">Score</th>
-                    <th className="pb-3 text-center">Points</th>
-                    <th className="pb-3 text-center">Result</th>
+                    <th className="pb-3 text-center">Security Status</th>
+                    <th className="pb-3 text-center">Violations</th>
                     <th className="pb-3 text-right">Timestamp</th>
                   </tr>
                 </thead>
@@ -410,22 +613,33 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                         <div className="text-[10px] text-cyan-400 font-mono">{sub.student_grade}</div>
                       </td>
                       <td className="py-3 text-slate-300 font-medium">{sub.assessment_title}</td>
-                      <td className="py-3 text-center font-mono font-bold text-emerald-400 text-sm">
-                        {sub.score_percent}%
-                      </td>
-                      <td className="py-3 text-center font-mono text-slate-400">
-                        {sub.total_points_earned} / {sub.max_points}
+                      <td className="py-3 text-center font-mono font-bold text-sm">
+                        {sub.cheated ? (
+                          <span className="text-rose-400 font-black">0% (DQ)</span>
+                        ) : (
+                          <span className="text-emerald-400">{sub.score_percent}%</span>
+                        )}
                       </td>
                       <td className="py-3 text-center">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            sub.passed
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                          }`}
-                        >
-                          {sub.passed ? 'PASSED' : 'RETRY'}
-                        </span>
+                        {sub.cheated ? (
+                          <span className="px-2.5 py-1 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-extrabold text-[10px] flex items-center gap-1 justify-center">
+                            <AlertTriangle className="w-3 h-3" />
+                            FLAGGED CHEATING
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            PASSED SECURE
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 text-center">
+                        {sub.cheated ? (
+                          <div className="text-[10px] text-rose-300 max-w-xs truncate mx-auto" title={sub.cheating_reasons?.join('; ')}>
+                            {sub.violation_count} Strikes: {sub.cheating_reasons?.[0] || 'Tab switch'}
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 text-[10px]">0 Infractions</span>
+                        )}
                       </td>
                       <td className="py-3 text-right text-slate-500 text-[10px] font-mono">
                         {new Date(sub.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -597,7 +811,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                   type="button"
                   onClick={() => {
                     if (!title) {
-                      setTitle(`${targetGrade} ${subject}: ${topicSyllabus || 'Unit Test'}`)
+                      setTitle(`${targetGrade} ${subject}: ${topicSyllabus || 'Examination Paper'}`)
                     }
                     setCreateStep('questions')
                   }}
@@ -614,7 +828,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                   <div className="flex gap-2">
                     {[
                       { id: 'AI', label: 'AI Auto-Generate (Groq LPU)', icon: Sparkles },
-                      { id: 'PDF', label: 'Drop PDF / Document', icon: Upload },
+                      { id: 'PDF', label: 'Drop PDF / Document Parser', icon: Upload },
                       { id: 'MANUAL', label: 'Manual Question Builder', icon: Plus },
                     ].map((mode) => (
                       <button
@@ -647,10 +861,10 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                     <Sparkles className="w-8 h-8 text-cyan-400 mx-auto" />
                     <div className="space-y-1">
                       <h4 className="font-bold text-white text-sm">
-                        Generate Psychometric Question Paper for {targetGrade} {subject}
+                        Synthesize Deeply Calibrated Examination Items for {targetGrade} {subject}
                       </h4>
                       <p className="text-xs text-slate-400 max-w-md mx-auto">
-                        Groq Cloud LPU will synthesize calibrated items on "{topicSyllabus}" with balanced difficulty.
+                        Groq Cloud LPU will generate high-precision mathematical derivations, scientific mechanisms, and misconception distractors for "{topicSyllabus}".
                       </p>
                     </div>
 
@@ -661,43 +875,52 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                       className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 mx-auto disabled:opacity-50 transition-all hover:scale-105"
                     >
                       {isGeneratingAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                      <span>{isGeneratingAI ? 'Generating Items...' : 'Generate 5 Questions with AI'}</span>
+                      <span>{isGeneratingAI ? 'Synthesizing Rigorous Items...' : 'Generate 5 Examination Questions with AI'}</span>
                     </button>
                   </div>
                 )}
 
-                {/* PDF Drop View */}
+                {/* PDF Drop View with Content Parsing */}
                 {creationMode === 'PDF' && (
-                  <div className="p-8 rounded-2xl bg-slate-950 border-2 border-dashed border-slate-800 hover:border-cyan-500/50 text-center space-y-3 transition-colors cursor-pointer">
-                    <Upload className="w-8 h-8 text-slate-500 mx-auto" />
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-white text-sm">Drag & Drop Question Paper (PDF / DOCX)</h4>
-                      <p className="text-xs text-slate-400">
-                        {pdfFileName ? `Selected: ${pdfFileName}` : 'Upload pre-existing school exam papers or question banks'}
-                      </p>
-                    </div>
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.txt"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) {
-                          setPdfFileName(file.name)
-                          // Automatically populate sample questions for the PDF
-                          setQuestionItems([
-                            {
-                              id: `q_pdf_1`,
-                              question_text: `Extracted from ${file.name}: State the core formula and solve for given parameters.`,
-                              question_type: 'descriptive',
-                              points: 15,
-                              cognitive_level: 'REASONING',
-                              concept_name: topicSyllabus,
+                  <div className="space-y-3">
+                    <div className="p-6 rounded-2xl bg-slate-950 border-2 border-dashed border-slate-800 hover:border-cyan-500/50 text-center space-y-3 transition-colors cursor-pointer">
+                      <Upload className="w-8 h-8 text-slate-500 mx-auto" />
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-white text-sm">Upload & Parse Syllabus Notes or Question Bank</h4>
+                        <p className="text-xs text-slate-400">
+                          {pdfFileName ? `Parsed File: ${pdfFileName}` : 'Select a PDF, DOCX, or text file to extract exam questions with AI'}
+                        </p>
+                      </div>
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            setPdfFileName(file.name)
+                            const reader = new FileReader()
+                            reader.onload = (ev) => {
+                              const text = ev.target?.result as string || ''
+                              setDocumentContent(text)
                             }
-                          ])
-                        }
-                      }}
-                      className="text-xs text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-cyan-500 file:text-slate-950 hover:file:bg-cyan-400 cursor-pointer"
-                    />
+                            reader.readAsText(file)
+                          }
+                        }}
+                        className="text-xs text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-cyan-500 file:text-slate-950 hover:file:bg-cyan-400 cursor-pointer"
+                      />
+                    </div>
+
+                    {pdfFileName && (
+                      <button
+                        type="button"
+                        disabled={isGeneratingAI}
+                        onClick={handleAIGenerate}
+                        className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md"
+                      >
+                        {isGeneratingAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                        <span>Extract & Generate Questions from {pdfFileName}</span>
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -709,7 +932,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                       type="text"
                       value={manQText}
                       onChange={(e) => setManQText(e.target.value)}
-                      placeholder="Enter question text..."
+                      placeholder="Enter question text (e.g. Solve 2x² - 7x + 3 = 0)..."
                       className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                     />
 
@@ -751,7 +974,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
 
                     {manQType === 'multiple_choice' && (
                       <div className="space-y-2 pt-2">
-                        <label className="text-[10px] text-slate-400 font-bold">Options (Check the correct radio):</label>
+                        <label className="text-[10px] text-slate-400 font-bold">Options (Select correct radio):</label>
                         {manOptions.map((opt, idx) => (
                           <div key={idx} className="flex items-center gap-2">
                             <input
@@ -840,92 +1063,171 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
         </div>
       )}
 
-      {/* ── Student Taking Test Modal ────────────────────────────────────────── */}
-      {takingTest && (
+      {/* ── View Completed Submission Modal ──────────────────────────────────── */}
+      {viewingPastSubmission && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl max-w-2xl w-full p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-base">{takingTest.title}</h3>
-                  <p className="text-xs text-slate-400">
-                    {testResult
-                      ? 'Assessment Evaluation Completed'
-                      : `Question ${currentQIndex + 1} of ${currentQuestions.length} • Duration: ${takingTest.duration_minutes} Mins`}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setTakingTest(null)}
-                className="text-slate-400 hover:text-white text-xl p-1 font-bold"
-              >
-                &times;
-              </button>
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl text-center">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center font-bold">
+              <CheckCircle className="w-8 h-8" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-xl font-bold text-white">{viewingPastSubmission.assessment_title}</h4>
+              <p className="text-xs text-slate-400">
+                Submitted on {new Date(viewingPastSubmission.submitted_at).toLocaleString()}
+              </p>
             </div>
 
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+              <div className="text-3xl font-black text-emerald-400 font-mono">
+                {viewingPastSubmission.score_percent}%
+              </div>
+              <div className="text-xs text-slate-300">
+                Earned {viewingPastSubmission.total_points_earned} of {viewingPastSubmission.max_points} Points
+              </div>
+              <p className="text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+                {viewingPastSubmission.feedback}
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950 text-xs text-slate-400">
+              🔒 <strong>Single-Attempt Policy:</strong> Assessment completed. Results have been calibrated in your LENS-Ω state vector.
+            </div>
+
+            <button
+              onClick={() => setViewingPastSubmission(null)}
+              className="w-full py-2.5 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
+            >
+              Close Summary
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Student Taking Proctored Test Modal with Live HUD ────────────────── */}
+      {takingTest && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col justify-between p-6 animate-in fade-in select-none">
+          {/* Top Proctoring Security Bar */}
+          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">{takingTest.title}</h3>
+                <p className="text-xs text-slate-400">
+                  Question {currentQIndex + 1} of {currentQuestions.length} &bull; Security Level: SECURE PROCTORED
+                </p>
+              </div>
+            </div>
+
+            {/* Live Camera Feed & Status HUD */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300">
+                <Camera className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <span>Cam Active</span>
+                <span className="text-slate-600">|</span>
+                <Mic className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Mic: {micVolumeLevel}%</span>
+              </div>
+
+              {/* Live Picture-in-Picture Video */}
+              <div className="w-24 h-16 rounded-xl bg-black border border-cyan-500/40 overflow-hidden relative shadow-lg">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute top-1 left-1 px-1 rounded bg-rose-500 text-[8px] font-bold text-white uppercase tracking-wider">
+                  REC
+                </div>
+              </div>
+
+              <div className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 ${
+                violationCount > 0 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              }`}>
+                <Shield className="w-3.5 h-3.5" />
+                <span>Strikes: {violationCount}/3</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Center Question View */}
+          <div className="max-w-3xl w-full mx-auto my-auto space-y-6">
             {testResult ? (
-              <div className="p-6 rounded-2xl bg-slate-950 border border-emerald-500/30 text-center space-y-4">
+              <div className="p-8 rounded-3xl bg-slate-900 border border-indigo-500/30 text-center space-y-5">
                 <div
                   className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center font-bold ${
-                    testResult.passed
+                    testResult.cheated
+                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                      : testResult.passed
                       ? 'bg-emerald-500/20 text-emerald-400'
-                      : 'bg-rose-500/20 text-rose-400'
+                      : 'bg-amber-500/20 text-amber-400'
                   }`}
                 >
-                  {testResult.passed ? <CheckCircle className="w-8 h-8" /> : <AlertCircle className="w-8 h-8" />}
+                  {testResult.cheated ? <AlertTriangle className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
                 </div>
+
                 <div className="space-y-1">
-                  <h4 className="text-xl font-bold text-white">
-                    {testResult.passed ? 'Assessment Passed!' : 'Assessment Attempt Recorded'}
+                  <h4 className="text-2xl font-bold text-white">
+                    {testResult.cheated ? 'DISQUALIFIED / FLAGGED FOR CHEATING' : 'Examination Submitted Successfully!'}
                   </h4>
                   <p className="text-sm text-slate-300">
-                    Score: <strong className="text-emerald-400 text-lg">{testResult.score_percent}%</strong> (
+                    Final Score: <strong className="text-emerald-400 text-xl">{testResult.score_percent}%</strong> (
                     {testResult.total_points_earned}/{testResult.max_points} Points)
                   </p>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto pt-1">{testResult.feedback}</p>
+                  <p className="text-xs text-slate-400 max-w-lg mx-auto pt-2">{testResult.feedback}</p>
                 </div>
 
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-cyan-300">
-                  ⚡ <strong>Closed-Loop Ingestion:</strong> Your Bayesian state vector and dynamic daily roadmap have been updated!
-                </div>
+                {testResult.cheated && (
+                  <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-xs text-rose-300 text-left">
+                    <strong>Recorded Infractions:</strong>
+                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                      {testResult.cheating_reasons?.map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 <button
-                  onClick={() => setTakingTest(null)}
-                  className="w-full py-3 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
+                  onClick={() => {
+                    setTakingTest(null)
+                    stopProctoringSession()
+                  }}
+                  className="px-8 py-3 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs hover:bg-cyan-400 transition-all"
                 >
-                  Return to Dashboard
+                  Return to Examination Hub
                 </button>
               </div>
             ) : activeQ ? (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span className="px-2.5 py-1 rounded bg-slate-800 text-cyan-300 font-bold">
+                  <span className="px-3 py-1 rounded-lg bg-slate-900 text-cyan-300 font-bold border border-slate-800">
                     Concept: {activeQ.concept_name}
                   </span>
-                  <span className="px-2.5 py-1 rounded bg-slate-800 text-amber-300 font-bold">
-                    {activeQ.cognitive_level} &bull; {activeQ.points} Pts
+                  <span className="px-3 py-1 rounded-lg bg-slate-900 text-amber-300 font-bold border border-slate-800">
+                    {activeQ.cognitive_level} &bull; {activeQ.points} Points
                   </span>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800">
-                  <p className="text-sm font-semibold text-white leading-relaxed">{activeQ.question_text}</p>
+                <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
+                  <p className="text-base font-semibold text-white leading-relaxed">{activeQ.question_text}</p>
                 </div>
 
                 {activeQ.question_type === 'multiple_choice' && activeQ.options ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {activeQ.options.map((opt, optIdx) => {
                       const isSelected = studentAnswers[activeQ.id] === optIdx
                       return (
                         <button
                           key={optIdx}
                           onClick={() => setStudentAnswers((prev) => ({ ...prev, [activeQ.id]: optIdx }))}
-                          className={`w-full p-3.5 rounded-xl border text-left text-xs font-medium flex items-center justify-between transition-all ${
+                          className={`w-full p-4 rounded-2xl border text-left text-xs font-medium flex items-center justify-between transition-all ${
                             isSelected
-                              ? 'bg-cyan-500/20 border-cyan-500 text-white shadow'
-                              : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                              ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-lg shadow-cyan-500/10'
+                              : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700'
                           }`}
                         >
                           <span>{opt}</span>
@@ -936,52 +1238,72 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <label className="text-xs text-slate-400">Your Answer / Derivation:</label>
+                    <label className="text-xs text-slate-400">Your Analytical Derivation:</label>
                     <textarea
-                      rows={4}
+                      rows={5}
                       value={(studentAnswers[activeQ.id] as string) || ''}
                       onChange={(e) => setStudentAnswers((prev) => ({ ...prev, [activeQ.id]: e.target.value }))}
-                      placeholder="Type your explanation, steps, or answer..."
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      placeholder="Type your derivation steps, formulas, and final answer..."
+                      className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs text-white focus:outline-none focus:border-cyan-500"
                     />
                   </div>
                 )}
-
-                <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-                  <button
-                    type="button"
-                    disabled={currentQIndex === 0}
-                    onClick={() => setCurrentQIndex((prev) => prev - 1)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white disabled:opacity-40"
-                  >
-                    Previous
-                  </button>
-
-                  {currentQIndex < currentQuestions.length - 1 ? (
-                    <button
-                      type="button"
-                      disabled={studentAnswers[activeQ.id] === undefined}
-                      onClick={() => setCurrentQIndex((prev) => prev + 1)}
-                      className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2"
-                    >
-                      <span>Next</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={submittingTest}
-                      onClick={handleSubmitTest}
-                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-105"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      <span>{submittingTest ? 'Evaluating...' : 'Submit Assessment'}</span>
-                    </button>
-                  )}
-                </div>
               </div>
             ) : null}
           </div>
+
+          {/* Bottom Navigation */}
+          {!testResult && activeQ && (
+            <div className="flex items-center justify-between pt-4 border-t border-slate-800 max-w-3xl w-full mx-auto">
+              <button
+                type="button"
+                disabled={currentQIndex === 0}
+                onClick={() => setCurrentQIndex((prev) => prev - 1)}
+                className="px-5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              {currentQIndex < currentQuestions.length - 1 ? (
+                <button
+                  type="button"
+                  disabled={studentAnswers[activeQ.id] === undefined}
+                  onClick={() => setCurrentQIndex((prev) => prev + 1)}
+                  className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2"
+                >
+                  <span>Next Question</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={submittingTest}
+                  onClick={handleSubmitTest}
+                  className="px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-105"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>{submittingTest ? 'Evaluating...' : 'Submit Proctored Exam'}</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Warning Modal / Alert Overlay */}
+          {showWarningModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 animate-in fade-in">
+              <div className="p-6 rounded-3xl bg-rose-950/90 border border-rose-500 max-w-md w-full text-center space-y-4 shadow-2xl">
+                <AlertTriangle className="w-12 h-12 text-rose-400 mx-auto animate-bounce" />
+                <h4 className="text-lg font-bold text-white">Examination Security Infraction</h4>
+                <p className="text-xs text-rose-200 leading-relaxed">{showWarningModal}</p>
+                <button
+                  onClick={() => setShowWarningModal(null)}
+                  className="w-full py-2.5 rounded-xl bg-rose-500 text-white font-bold text-xs hover:bg-rose-400"
+                >
+                  I Understand • Return to Examination
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
