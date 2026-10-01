@@ -1,3 +1,7 @@
+"""
+Omni-LMS Enterprise Backend Service
+Production Release Sync
+"""
 import hashlib
 import hmac
 import os
