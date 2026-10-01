@@ -56,7 +56,8 @@ import {
   ShieldCheck,
   Cpu,
   Check,
-  Loader2
+  Loader2,
+  BrainCircuit
 } from 'lucide-react'
 import { AiRecordingPlayerModal } from '../components/AiRecordingPlayerModal'
 
@@ -1306,7 +1307,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
             <p className="text-xs text-slate-400 mt-1">Run Python & algorithms</p>
           </button>
 
-          <button
+          {user.role === 'admin' ? (
+            <button
+              onClick={() => setCurrentTab('learning-intelligence')}
+              className="p-4 bg-slate-950/70 hover:bg-slate-800/80 rounded-2xl border border-slate-800 hover:border-purple-500/40 text-left transition-all hover:scale-[1.02] group"
+            >
+              <BrainCircuit className="w-5 h-5 text-purple-400 mb-2 group-hover:scale-110 transition-transform" />
+              <p className="font-bold text-sm text-slate-100">School Cognitive Radar</p>
+              <p className="text-xs text-slate-400 mt-1">Audit school-wide learning</p>
+            </button>
+          ) : (
+  <button
             onClick={() => setCurrentTab('assessments')}
             className="p-4 bg-slate-950/70 hover:bg-slate-800/80 rounded-2xl border border-slate-800 hover:border-purple-500/40 text-left transition-all hover:scale-[1.02] group"
           >
@@ -1314,6 +1325,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
             <p className="font-bold text-sm text-slate-100">Quizzes & Tests</p>
             <p className="text-xs text-slate-400 mt-1">Check assessment scores</p>
           </button>
+          )}
         </div>
       </div>
 

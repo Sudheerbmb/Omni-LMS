@@ -50,6 +50,13 @@ export function App() {
     }
   }, [token])
 
+  // Safeguard: Ensure Admin is redirected if on removed tabs (Assessments / Assignments)
+  useEffect(() => {
+    if (user?.role === 'admin' && (currentTab === 'assessments' || currentTab === 'assignments')) {
+      setCurrentTab('overview')
+    }
+  }, [user?.role, currentTab])
+
   const loadInitialData = async () => {
     try {
       setLoading(true)
@@ -333,9 +340,9 @@ export function App() {
           )}
           {currentTab === 'timetable' && <TimetablePage user={user} />}
           {currentTab === 'courses' && <CoursesPage user={user} />}
-          {currentTab === 'assessments' && <AssessmentsPage user={user} />}
+          {currentTab === 'assessments' && user.role !== 'admin' && <AssessmentsPage user={user} />}
           {currentTab === 'learning-intelligence' && <LearningIntelligencePage user={user} />}
-          {currentTab === 'assignments' && <AssignmentsPage user={user} />}
+          {currentTab === 'assignments' && user.role !== 'admin' && <AssignmentsPage user={user} />}
           {currentTab === 'organizations' && <OrganizationsPage user={user} />}
           {currentTab === 'coding' && <CodingPage user={user} />}
           {currentTab === 'classroom' && <ClassroomPage user={user} />}

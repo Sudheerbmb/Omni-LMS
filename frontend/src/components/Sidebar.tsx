@@ -36,9 +36,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'timetable', label: timetableLabel, icon: CalendarDays },
     { id: 'courses', label: 'Course Catalog', icon: BookOpen },
-    { id: 'assessments', label: 'Assessments & Quizzes', icon: CheckSquare },
-    { id: 'learning-intelligence', label: userRole === 'student' ? 'My Learning Agent' : 'Learning Intelligence', icon: BrainCircuit },
-    { id: 'assignments', label: 'Assignments Desk', icon: FileText },
+    ...(userRole !== 'admin' ? [{ id: 'assessments', label: 'Assessments & Quizzes', icon: CheckSquare }] : []),
+    {
+      id: 'learning-intelligence',
+      label: userRole === 'student' ? 'My Learning Agent' : userRole === 'admin' ? 'School Cognitive Radar' : 'Learning Intelligence',
+      icon: BrainCircuit
+    },
+    ...(userRole !== 'admin' ? [{ id: 'assignments', label: 'Assignments Desk', icon: FileText }] : []),
     { id: 'organizations', label: 'Organizations', icon: Building2 },
     { id: 'coding', label: 'Coding Playground', icon: Code2 },
     { id: 'classroom', label: 'Live Classrooms', icon: Video },
@@ -92,3 +96,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
   )
 }
+export default Sidebar

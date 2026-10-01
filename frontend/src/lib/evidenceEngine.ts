@@ -291,15 +291,25 @@ export function getStudentEvidenceFeed(studentId: string): LearningEvidenceEvent
 export interface CohortStudentProfile {
   student_id: string
   student_name: string
+  grade_number: number
+  grade_name: string
   email: string
   avatar_color: string
   state: FullStudentNeuralState
   recent_events_count: number
   risk_level: 'HIGH' | 'MEDIUM' | 'LOW'
+  admin_override?: {
+    risk_level?: 'HIGH' | 'MEDIUM' | 'LOW'
+    bottleneck?: string
+    competency?: number
+    mastery?: number
+    notes?: string
+    updated_at?: string
+  }
 }
 
-export function getCohortForGrade(gradeNumber: number): CohortStudentProfile[] {
-  const names = [
+const GRADE_STUDENT_NAMES: Record<number, Array<{ name: string; email: string; color: string; mBoost: number; bType: string }>> = {
+  10: [
     { name: 'Aarav Patel', email: 'aarav.patel@school.edu', color: 'from-cyan-500 to-blue-600', mBoost: 0.15, bType: 'BALANCED' },
     { name: 'Priya Sharma', email: 'priya.sharma@school.edu', color: 'from-pink-500 to-rose-600', mBoost: 0.22, bType: 'BALANCED' },
     { name: 'Rohan Gupta', email: 'rohan.gupta@school.edu', color: 'from-amber-500 to-orange-600', mBoost: -0.10, bType: 'MISCONCEPTION' },
@@ -308,9 +318,43 @@ export function getCohortForGrade(gradeNumber: number): CohortStudentProfile[] {
     { name: 'Neha Verma', email: 'neha.v@school.edu', color: 'from-blue-500 to-indigo-600', mBoost: 0.28, bType: 'BALANCED' },
     { name: 'Devansh Singh', email: 'devansh.s@school.edu', color: 'from-teal-500 to-cyan-600', mBoost: -0.05, bType: 'RETRIEVAL_DECAY' },
     { name: 'Ishita Sen', email: 'ishita.s@school.edu', color: 'from-rose-500 to-pink-600', mBoost: 0.12, bType: 'BALANCED' },
+  ],
+  7: [
+    { name: 'Harsh Vardhan', email: 'harsh.v@school.edu', color: 'from-amber-500 to-red-600', mBoost: -0.12, bType: 'MISCONCEPTION' },
+    { name: 'Prisha Mehra', email: 'prisha.m@school.edu', color: 'from-fuchsia-500 to-purple-600', mBoost: 0.18, bType: 'BALANCED' },
+    { name: 'Aditya Nair', email: 'aditya.n@school.edu', color: 'from-blue-500 to-cyan-600', mBoost: 0.05, bType: 'RETRIEVAL_DECAY' },
+    { name: 'Sneha Kapoor', email: 'sneha.k@school.edu', color: 'from-rose-500 to-orange-600', mBoost: 0.24, bType: 'BALANCED' },
+    { name: 'Rahul Joshi', email: 'rahul.j@school.edu', color: 'from-emerald-500 to-teal-600', mBoost: -0.18, bType: 'TRANSFER_DEFICIT' },
+    { name: 'Pooja Bhat', email: 'pooja.b@school.edu', color: 'from-indigo-500 to-violet-600', mBoost: 0.10, bType: 'BALANCED' },
+  ],
+  4: [
+    { name: 'Kabir Das', email: 'kabir.d@school.edu', color: 'from-cyan-500 to-sky-600', mBoost: 0.20, bType: 'BALANCED' },
+    { name: 'Tanvi Shah', email: 'tanvi.s@school.edu', color: 'from-pink-500 to-rose-600', mBoost: -0.14, bType: 'MISCONCEPTION' },
+    { name: 'Atharv Kulkarni', email: 'atharv.k@school.edu', color: 'from-amber-500 to-yellow-600', mBoost: -0.05, bType: 'RETRIEVAL_DECAY' },
+    { name: 'Meera Pillai', email: 'meera.p@school.edu', color: 'from-purple-500 to-indigo-600', mBoost: 0.15, bType: 'BALANCED' },
+    { name: 'Samar Khan', email: 'samar.k@school.edu', color: 'from-emerald-500 to-green-600', mBoost: 0.02, bType: 'BALANCED' },
+  ]
+}
+
+export function getCohortForGrade(gradeNumber: number): CohortStudentProfile[] {
+  const gradeName = `Class ${gradeNumber}`
+  const templateList = GRADE_STUDENT_NAMES[gradeNumber] || [
+    { name: `Student Alpha (${gradeName})`, email: `alpha.${gradeNumber}@school.edu`, color: 'from-cyan-500 to-blue-600', mBoost: 0.10, bType: 'BALANCED' },
+    { name: `Student Beta (${gradeName})`, email: `beta.${gradeNumber}@school.edu`, color: 'from-rose-500 to-pink-600', mBoost: -0.15, bType: 'MISCONCEPTION' },
+    { name: `Student Gamma (${gradeName})`, email: `gamma.${gradeNumber}@school.edu`, color: 'from-amber-500 to-orange-600', mBoost: -0.08, bType: 'RETRIEVAL_DECAY' },
+    { name: `Student Delta (${gradeName})`, email: `delta.${gradeNumber}@school.edu`, color: 'from-emerald-500 to-teal-600', mBoost: 0.22, bType: 'BALANCED' },
   ]
 
-  return names.map((item, idx) => {
+  // Retrieve any admin overrides
+  const overridesKey = 'omni_admin_student_overrides'
+  let overridesMap: Record<string, any> = {}
+  try {
+    overridesMap = JSON.parse(localStorage.getItem(overridesKey) || '{}')
+  } catch {
+    overridesMap = {}
+  }
+
+  return templateList.map((item, idx) => {
     const studentId = `student_${gradeNumber}_${idx + 1}`
     const baseState = loadStudentState(studentId, gradeNumber, item.name)
 
@@ -353,8 +397,21 @@ export function getCohortForGrade(gradeNumber: number): CohortStudentProfile[] {
     })
 
     const allS = Object.values(adjustedSubjects)
-    const globalC = allS.reduce((a, b) => a + b.overall_competency, 0) / allS.length
-    const globalM = allS.reduce((a, b) => a + b.overall_mastery, 0) / allS.length
+    let globalC = allS.reduce((a, b) => a + b.overall_competency, 0) / allS.length
+    let globalM = allS.reduce((a, b) => a + b.overall_mastery, 0) / allS.length
+    let primaryBottleneck = item.bType as any
+
+    let risk: 'HIGH' | 'MEDIUM' | 'LOW' =
+      globalC < 0.55 || item.bType === 'MISCONCEPTION' ? 'HIGH' : globalC < 0.70 ? 'MEDIUM' : 'LOW'
+
+    // Apply Admin Override if present
+    const override = overridesMap[studentId]
+    if (override) {
+      if (override.risk_level) risk = override.risk_level
+      if (override.bottleneck) primaryBottleneck = override.bottleneck
+      if (typeof override.competency === 'number') globalC = override.competency
+      if (typeof override.mastery === 'number') globalM = override.mastery
+    }
 
     const fullState: FullStudentNeuralState = {
       ...baseState,
@@ -362,22 +419,77 @@ export function getCohortForGrade(gradeNumber: number): CohortStudentProfile[] {
       overall_competency: Number(globalC.toFixed(2)),
       overall_mastery: Number(globalM.toFixed(2)),
       overall_uncertainty: 0.20,
-      primary_bottleneck: item.bType as any,
+      primary_bottleneck: primaryBottleneck,
       total_evidence_events: 12 + idx * 2,
     }
-
-    const risk: 'HIGH' | 'MEDIUM' | 'LOW' =
-      globalC < 0.55 || item.bType === 'MISCONCEPTION' ? 'HIGH' : globalC < 0.70 ? 'MEDIUM' : 'LOW'
 
     return {
       student_id: studentId,
       student_name: item.name,
+      grade_number: gradeNumber,
+      grade_name: gradeName,
       email: item.email,
       avatar_color: item.color,
       state: fullState,
       recent_events_count: 12 + idx * 2,
       risk_level: risk,
+      admin_override: override,
     }
   })
 }
+
+export function getAllSchoolStudents(): CohortStudentProfile[] {
+  const grades = [10, 7, 4, 1, 2, 3, 5, 6, 8, 9, 11, 12]
+  const all: CohortStudentProfile[] = []
+  grades.forEach((g) => {
+    all.push(...getCohortForGrade(g))
+  })
+  return all
+}
+
+export function updateStudentCognitiveProfile(
+  studentId: string,
+  gradeNumber: number,
+  updates: {
+    risk_level: 'HIGH' | 'MEDIUM' | 'LOW'
+    bottleneck: string
+    competency_percent: number
+    mastery_percent: number
+    notes?: string
+  }
+): void {
+  const overridesKey = 'omni_admin_student_overrides'
+  let overridesMap: Record<string, any> = {}
+  try {
+    overridesMap = JSON.parse(localStorage.getItem(overridesKey) || '{}')
+  } catch {
+    overridesMap = {}
+  }
+
+  overridesMap[studentId] = {
+    risk_level: updates.risk_level,
+    bottleneck: updates.bottleneck,
+    competency: updates.competency_percent / 100,
+    mastery: updates.mastery_percent / 100,
+    notes: updates.notes,
+    updated_at: new Date().toISOString(),
+  }
+  localStorage.setItem(overridesKey, JSON.stringify(overridesMap))
+
+  // Also update student storage key if present
+  const studentKey = getStorageKeyForStudent(studentId, gradeNumber)
+  const existingRaw = localStorage.getItem(studentKey)
+  if (existingRaw) {
+    try {
+      const state: FullStudentNeuralState = JSON.parse(existingRaw)
+      state.overall_competency = updates.competency_percent / 100
+      state.overall_mastery = updates.mastery_percent / 100
+      state.primary_bottleneck = updates.bottleneck as any
+      localStorage.setItem(studentKey, JSON.stringify(state))
+    } catch (e) {
+      console.warn('Error updating student state in storage:', e)
+    }
+  }
+}
+
 

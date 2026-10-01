@@ -13,7 +13,11 @@ import {
   Search,
   AlertTriangle,
   TrendingUp,
-  Target
+  Target,
+  Edit3,
+  Sliders,
+  CheckCircle2,
+  ShieldCheck
 } from 'lucide-react'
 import type { User } from '../lib/api'
 import {
@@ -30,7 +34,11 @@ import type {
 } from '../lib/langgraphAgent'
 import { fetchSubjectBenchmarkQuestions } from '../lib/subjectQuestions'
 import type { SubjectQuestion } from '../lib/subjectQuestions'
-import { getCohortForGrade } from '../lib/evidenceEngine'
+import {
+  getCohortForGrade,
+  getAllSchoolStudents,
+  updateStudentCognitiveProfile
+} from '../lib/evidenceEngine'
 import type { CohortStudentProfile } from '../lib/evidenceEngine'
 
 // ── Initial Grade Configurations ─────────────────────────────────────────────
@@ -138,19 +146,83 @@ function initializeCurriculumStructure(gradeNumber: number, studentId: string, s
 }
 
 export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user }) => {
-  const isTeacher = user?.role === 'teacher' || user?.role === 'admin'
+  const isAdmin = user?.role === 'admin'
+  const isTeacher = user?.role === 'teacher'
+  const isStaff = isAdmin || isTeacher
 
-  // ── TEACHER COHORT VIEW STATE ─────────────────────────────────────────────
-  const [selectedClassGrade, setSelectedClassGrade] = useState<number>(10)
+  // ── STAFF (ADMIN / TEACHER) COHORT VIEW STATE ─────────────────────────────
+  // Admin defaults to 0 (Entire School), Teacher defaults to 10 (Class 10)
+  const [selectedClassGrade, setSelectedClassGrade] = useState<number>(isAdmin ? 0 : 10)
   const [cohortSearch, setCohortSearch] = useState('')
   const [filterBottleneck, setFilterBottleneck] = useState<string>('ALL')
+  const [filterRisk, setFilterRisk] = useState<string>('ALL')
   const [selectedStudentForModal, setSelectedStudentForModal] = useState<CohortStudentProfile | null>(null)
-  const [cohortData, setCohortData] = useState<CohortStudentProfile[]>(() => getCohortForGrade(10))
+
+  // Admin Profile Edit Modal State
+  const [editingStudent, setEditingStudent] = useState<CohortStudentProfile | null>(null)
+  const [editRiskLevel, setEditRiskLevel] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('LOW')
+  const [editBottleneck, setEditBottleneck] = useState<string>('BALANCED')
+  const [editCompetencyPercent, setEditCompetencyPercent] = useState<number>(75)
+  const [editMasteryPercent, setEditMasteryPercent] = useState<number>(75)
+  const [editNotes, setEditNotes] = useState<string>('')
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null)
+
+  const [cohortData, setCohortData] = useState<CohortStudentProfile[]>(() => {
+    if (isAdmin) {
+      return getAllSchoolStudents()
+    }
+    return getCohortForGrade(10)
+  })
+
+  const refreshStaffData = (gradeNum: number) => {
+    if (isAdmin) {
+      if (gradeNum === 0) {
+        setCohortData(getAllSchoolStudents())
+      } else {
+        setCohortData(getCohortForGrade(gradeNum))
+      }
+    } else {
+      setCohortData(getCohortForGrade(gradeNum))
+    }
+  }
 
   const handleClassSwitch = (gradeNum: number) => {
     setSelectedClassGrade(gradeNum)
-    setCohortData(getCohortForGrade(gradeNum))
+    refreshStaffData(gradeNum)
     setSelectedStudentForModal(null)
+  }
+
+  // Open Edit Modal for Admin
+  const handleOpenEditModal = (student: CohortStudentProfile, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    setEditingStudent(student)
+    setEditRiskLevel(student.risk_level)
+    setEditBottleneck(student.state.primary_bottleneck)
+    setEditCompetencyPercent(Math.round(student.state.overall_competency * 100))
+    setEditMasteryPercent(Math.round(student.state.overall_mastery * 100))
+    setEditNotes(student.admin_override?.notes || '')
+    setSaveSuccessMessage(null)
+  }
+
+  // Save Admin Cognitive Profile Edit
+  const handleSaveAdminOverride = () => {
+    if (!editingStudent) return
+    updateStudentCognitiveProfile(editingStudent.student_id, editingStudent.grade_number, {
+      risk_level: editRiskLevel,
+      bottleneck: editBottleneck,
+      competency_percent: editCompetencyPercent,
+      mastery_percent: editMasteryPercent,
+      notes: editNotes,
+    })
+
+    // Refresh data in view
+    refreshStaffData(selectedClassGrade)
+
+    setSaveSuccessMessage(`Successfully updated and saved cognitive profile for ${editingStudent.student_name}.`)
+    setTimeout(() => {
+      setEditingStudent(null)
+      setSaveSuccessMessage(null)
+    }, 1200)
   }
 
   // ── STUDENT VIEW STATE ───────────────────────────────────────────────────
@@ -198,7 +270,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
 
   const subjectList = Object.keys(neuralState.subjects)
 
-  // Teacher Cohort Analytics calculations
+  // Staff Cohort Analytics calculations
   const classAvgCompetency = Math.round(
     (cohortData.reduce((acc, s) => acc + s.state.overall_competency, 0) / Math.max(1, cohortData.length)) * 100
   )
@@ -209,17 +281,22 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
   const retrievalCount = cohortData.filter((s) => s.state.primary_bottleneck === 'RETRIEVAL_DECAY').length
   const transferCount = cohortData.filter((s) => s.state.primary_bottleneck === 'TRANSFER_DEFICIT').length
   const balancedCount = cohortData.filter((s) => s.state.primary_bottleneck === 'BALANCED').length
+  const highRiskCount = cohortData.filter((s) => s.risk_level === 'HIGH').length
+  const overriddenCount = cohortData.filter((s) => !!s.admin_override).length
 
   const filteredCohort = cohortData.filter((s) => {
-    const matchesName = s.student_name.toLowerCase().includes(cohortSearch.toLowerCase()) || s.email.toLowerCase().includes(cohortSearch.toLowerCase())
+    const matchesName =
+      s.student_name.toLowerCase().includes(cohortSearch.toLowerCase()) ||
+      s.email.toLowerCase().includes(cohortSearch.toLowerCase())
     const matchesBottleneck = filterBottleneck === 'ALL' || s.state.primary_bottleneck === filterBottleneck
-    return matchesName && matchesBottleneck
+    const matchesRisk = filterRisk === 'ALL' || s.risk_level === filterRisk
+    return matchesName && matchesBottleneck && matchesRisk
   })
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TEACHER PORTAL: COHORT COGNITIVE INTELLIGENCE & STUDENT RADAR
+  // STAFF PORTAL: ADMIN (WHOLE SCHOOL) / TEACHER COGNITIVE COHORT RADAR
   // ═══════════════════════════════════════════════════════════════════════════
-  if (isTeacher) {
+  if (isStaff) {
     return (
       <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
         {/* Top Header */}
@@ -227,23 +304,41 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           <div className="space-y-2 relative z-10">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
               <Brain className="w-3.5 h-3.5" />
-              Teacher Cognitive Intelligence &bull; Multi-Class Student Radar
+              {isAdmin
+                ? 'School Administrator • Whole-School Cognitive Intelligence'
+                : 'Teacher Cognitive Intelligence • Multi-Class Student Radar'}
             </div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
-              Class Cognitive Health & Telemetry
+              {isAdmin ? 'School-Wide Cognitive Health & Learning Curve Radar' : 'Class Cognitive Health & Telemetry'}
             </h1>
             <p className="text-slate-400 text-sm max-w-2xl">
-              Real-time psychometric state vectors across your assigned classes (Class 10, Class 7, Class 4). Monitor Bayesian mastery, isolate error misconceptions, and deploy class-wide unblocking interventions.
+              {isAdmin
+                ? 'Comprehensive learning curves and psychometric state vectors for all students across the entire institution (Class 1 to Class 12). Inspect bottlenecks, monitor cognitive baselines, and administratively edit student risk evaluations.'
+                : 'Real-time psychometric state vectors across your assigned classes (Class 10, Class 7, Class 4). Monitor Bayesian mastery, isolate error misconceptions, and deploy class-wide unblocking interventions.'}
             </p>
           </div>
 
           {/* Class Grade Switcher */}
-          <div className="flex items-center gap-2 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 relative z-10">
+          <div className="flex flex-wrap items-center gap-2 bg-slate-950/80 p-2 rounded-2xl border border-slate-800 relative z-10">
+            {isAdmin && (
+              <button
+                onClick={() => handleClassSwitch(0)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  selectedClassGrade === 0
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>All School</span>
+              </button>
+            )}
+
             {[10, 7, 4].map((gNum) => (
               <button
                 key={gNum}
                 onClick={() => handleClassSwitch(gNum)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
                   selectedClassGrade === gNum
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md font-extrabold'
                     : 'text-slate-400 hover:text-white'
@@ -252,18 +347,47 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 Class {gNum}
               </button>
             ))}
+
+            {isAdmin && (
+              <select
+                value={selectedClassGrade > 0 && ![10, 7, 4].includes(selectedClassGrade) ? selectedClassGrade : ''}
+                onChange={(e) => {
+                  const val = Number(e.target.value)
+                  if (val) handleClassSwitch(val)
+                }}
+                className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+              >
+                <option value="">Other Grades...</option>
+                {[1, 2, 3, 5, 6, 8, 9, 11, 12].map((g) => (
+                  <option key={g} value={g}>
+                    Class {g}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
-        {/* ── Class-Wide Macro Metrics ────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* ── Macro Telemetry Metric Cards ────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
+              <span>Students Evaluated</span>
+              <Users className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div className="text-3xl font-black text-cyan-400 font-mono">{cohortData.length}</div>
+            <div className="text-[11px] text-slate-500">
+              {selectedClassGrade === 0 ? 'Across Entire School' : `Enrolled in Class ${selectedClassGrade}`}
+            </div>
+          </div>
+
           <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
             <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
               <span>Mean Competency</span>
               <TrendingUp className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-3xl font-black text-cyan-400 font-mono">{classAvgCompetency}%</div>
-            <div className="text-[11px] text-slate-500">Class {selectedClassGrade} Global C Index</div>
+            <div className="text-[11px] text-slate-500">Global C Index</div>
           </div>
 
           <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
@@ -277,48 +401,65 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
 
           <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
             <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
-              <span>Active Misconceptions</span>
+              <span>High Risk Students</span>
               <AlertTriangle className="w-4 h-4 text-rose-400" />
             </div>
-            <div className="text-3xl font-black text-rose-400 font-mono">{misconceptionCount} Students</div>
-            <div className="text-[11px] text-slate-500">Require Targeted Unblocking</div>
+            <div className="text-3xl font-black text-rose-400 font-mono">{highRiskCount}</div>
+            <div className="text-[11px] text-slate-500">Require Direct Intervention</div>
           </div>
 
           <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
             <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
-              <span>Memory Decay Alerts</span>
+              <span>Active Misconceptions</span>
               <Clock className="w-4 h-4 text-amber-400" />
             </div>
-            <div className="text-3xl font-black text-amber-400 font-mono">{retrievalCount} Students</div>
-            <div className="text-[11px] text-slate-500">Ebbinghaus Spaced Recall Needed</div>
+            <div className="text-3xl font-black text-amber-400 font-mono">{misconceptionCount}</div>
+            <div className="text-[11px] text-slate-500">
+              {isAdmin ? `${overriddenCount} Admin Overrides Active` : 'Cognitive Deficiencies'}
+            </div>
           </div>
         </div>
 
         {/* ── Student Cohort Directory & Cognitive Radar ───────────────────────── */}
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h2 className="text-base font-extrabold text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-cyan-400" />
-                Class {selectedClassGrade} Enrolled Students Cognitive Directory
+                {isAdmin && selectedClassGrade === 0
+                  ? 'All-School Student Cognitive Directory (All Grades)'
+                  : `Class ${selectedClassGrade} Student Cognitive Directory`}
               </h2>
               <p className="text-xs text-slate-400">
-                Click on any student to inspect their granular Bayesian concept radar and active learning roadmaps.
+                {isAdmin
+                  ? 'As an Administrator, you can inspect each student and edit their cognitive risk level, bottleneck status, or competency baseline.'
+                  : 'Click on any student to inspect their granular Bayesian concept radar and active learning roadmaps.'}
               </p>
             </div>
 
             {/* Filter & Search Bar */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
                 <input
                   type="text"
                   value={cohortSearch}
                   onChange={(e) => setCohortSearch(e.target.value)}
-                  placeholder="Search student name..."
+                  placeholder="Search student or email..."
                   className="bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
+
+              <select
+                value={filterRisk}
+                onChange={(e) => setFilterRisk(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              >
+                <option value="ALL">All Risk Levels</option>
+                <option value="HIGH">High Risk ({highRiskCount})</option>
+                <option value="MEDIUM">Medium Risk</option>
+                <option value="LOW">Low Risk</option>
+              </select>
 
               <select
                 value={filterBottleneck}
@@ -352,32 +493,43 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 <div
                   key={student.student_id}
                   onClick={() => setSelectedStudentForModal(student)}
-                  className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition-all flex flex-col justify-between space-y-4 shadow-xl group hover:scale-[1.02]"
+                  className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition-all flex flex-col justify-between space-y-4 shadow-xl group hover:scale-[1.02] relative"
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-2xl bg-gradient-to-tr ${student.avatar_color} text-white font-bold flex items-center justify-center shadow`}>
+                        <div
+                          className={`w-10 h-10 rounded-2xl bg-gradient-to-tr ${student.avatar_color} text-white font-bold flex items-center justify-center shadow`}
+                        >
                           {student.student_name.charAt(0)}
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                          <h4 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors line-clamp-1">
                             {student.student_name}
                           </h4>
-                          <span className="text-[10px] text-slate-500 font-mono">Class {selectedClassGrade}</span>
+                          <span className="text-[10px] text-cyan-400 font-mono font-bold">{student.grade_name}</span>
                         </div>
                       </div>
 
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                        student.risk_level === 'HIGH'
-                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                          : student.risk_level === 'MEDIUM'
-                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                          : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                      }`}>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                          student.risk_level === 'HIGH'
+                            ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                            : student.risk_level === 'MEDIUM'
+                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                            : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                        }`}
+                      >
                         {student.risk_level} RISK
                       </span>
                     </div>
+
+                    {student.admin_override && (
+                      <div className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-[10px] text-indigo-300 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                        <span className="font-semibold">Admin Override Applied</span>
+                      </div>
+                    )}
 
                     <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-2">
                       <div className="flex items-center justify-between text-xs">
@@ -405,9 +557,27 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-cyan-400 font-bold group-hover:translate-x-1 transition-transform">
-                    <span>Inspect Neural Radar</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                    {isAdmin ? (
+                      <>
+                        <button
+                          onClick={(e) => handleOpenEditModal(student, e)}
+                          className="px-2.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <div className="flex items-center text-xs text-cyan-400 font-bold group-hover:translate-x-1 transition-transform">
+                          <span>Radar</span>
+                          <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-between text-xs text-cyan-400 font-bold group-hover:translate-x-1 transition-transform w-full">
+                        <span>Inspect Neural Radar</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -415,22 +585,167 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           </div>
         </div>
 
+        {/* ── ADMIN EDIT COGNITIVE PROFILE MODAL ──────────────────────────────── */}
+        {editingStudent && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-slate-900 border border-indigo-500/40 rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
+                    <Sliders className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-base">Edit Student Cognitive Profile</h3>
+                    <p className="text-xs text-slate-400">
+                      {editingStudent.student_name} &bull; {editingStudent.grade_name} ({editingStudent.email})
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setEditingStudent(null)}
+                  className="text-slate-400 hover:text-white text-2xl font-bold p-1"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {saveSuccessMessage && (
+                <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs text-center flex items-center justify-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{saveSuccessMessage}</span>
+                </div>
+              )}
+
+              <div className="space-y-4 text-xs">
+                {/* Risk Level Selector */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-300">Administrative Risk Classification:</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['LOW', 'MEDIUM', 'HIGH'] as const).map((lvl) => (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() => setEditRiskLevel(lvl)}
+                        className={`py-2 rounded-xl font-bold border transition-all ${
+                          editRiskLevel === lvl
+                            ? lvl === 'HIGH'
+                              ? 'bg-rose-500/20 border-rose-500 text-rose-300 shadow'
+                              : lvl === 'MEDIUM'
+                              ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow'
+                              : 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow'
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
+                      >
+                        {lvl} RISK
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Primary Bottleneck Selector */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-300">Primary Learning Bottleneck:</label>
+                  <select
+                    value={editBottleneck}
+                    onChange={(e) => setEditBottleneck(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="BALANCED">BALANCED (Steady learning progression)</option>
+                    <option value="MISCONCEPTION">MISCONCEPTION (Systemic error reversal needed)</option>
+                    <option value="RETRIEVAL_DECAY">RETRIEVAL_DECAY (Memory decay / recall deficiency)</option>
+                    <option value="TRANSFER_DEFICIT">TRANSFER_DEFICIT (Difficulty applying knowledge to new problems)</option>
+                    <option value="INSUFFICIENT_EVIDENCE">INSUFFICIENT_EVIDENCE (Requires diagnostic benchmark)</option>
+                  </select>
+                </div>
+
+                {/* Competency Slider */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-300">Competency Baseline ($C$ Index):</label>
+                    <span className="font-mono text-cyan-400 font-bold text-sm">{editCompetencyPercent}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    value={editCompetencyPercent}
+                    onChange={(e) => setEditCompetencyPercent(Number(e.target.value))}
+                    className="w-full accent-cyan-500 bg-slate-950 cursor-pointer"
+                  />
+                </div>
+
+                {/* Mastery Slider */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-300">Bayesian Knowledge Density ($M$ Index):</label>
+                    <span className="font-mono text-emerald-400 font-bold text-sm">{editMasteryPercent}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    value={editMasteryPercent}
+                    onChange={(e) => setEditMasteryPercent(Number(e.target.value))}
+                    className="w-full accent-emerald-500 bg-slate-950 cursor-pointer"
+                  />
+                </div>
+
+                {/* Notes */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-300">Administrative Override Rationale / Notes:</label>
+                  <textarea
+                    rows={3}
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="e.g. Risk level adjusted following remedial clinic and 1-on-1 counselor evaluation..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingStudent(null)}
+                  className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAdminOverride}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Save & Apply Override</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Deep Student Neural State Radar Modal ────────────────────────────── */}
         {selectedStudentForModal && (
           <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl max-w-3xl w-full p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${selectedStudentForModal.avatar_color} text-white font-extrabold flex items-center justify-center text-lg shadow-lg`}>
+                  <div
+                    className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${selectedStudentForModal.avatar_color} text-white font-extrabold flex items-center justify-center text-lg shadow-lg`}
+                  >
                     {selectedStudentForModal.student_name.charAt(0)}
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       {selectedStudentForModal.student_name}
-                      <span className="text-xs font-mono font-normal text-cyan-400">({selectedStudentForModal.email})</span>
+                      <span className="text-xs font-mono font-normal text-cyan-400">
+                        ({selectedStudentForModal.email})
+                      </span>
                     </h3>
                     <p className="text-xs text-slate-400">
-                      Class {selectedClassGrade} &bull; Primary Bottleneck: <strong className="text-cyan-300">{selectedStudentForModal.state.primary_bottleneck}</strong> &bull; Total Evidence Events: {selectedStudentForModal.recent_events_count}
+                      {selectedStudentForModal.grade_name} &bull; Primary Bottleneck:{' '}
+                      <strong className="text-cyan-300">{selectedStudentForModal.state.primary_bottleneck}</strong> &bull; Total Evidence Events:{' '}
+                      {selectedStudentForModal.recent_events_count}
                     </p>
                   </div>
                 </div>
@@ -441,6 +756,18 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   &times;
                 </button>
               </div>
+
+              {selectedStudentForModal.admin_override && (
+                <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl text-xs text-indigo-300 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                    <span>Administrator Override in Effect</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    {selectedStudentForModal.admin_override.notes || 'Manually reviewed and adjusted by School Administrator.'}
+                  </p>
+                </div>
+              )}
 
               {/* Subject Breakdowns */}
               <div className="space-y-3">
@@ -461,7 +788,10 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
 
                       <div className="space-y-1.5">
                         {subj.concepts.map((c) => (
-                          <div key={c.concept_id} className="p-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-[11px]">
+                          <div
+                            key={c.concept_id}
+                            className="p-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-[11px]"
+                          >
                             <span className="text-slate-300 truncate max-w-[180px]">{c.concept_name}</span>
                             <div className="flex items-center gap-2 font-mono">
                               <span className="text-emerald-400">{Math.round(c.mastery * 100)}% M</span>
@@ -476,18 +806,33 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 </div>
               </div>
 
-              {/* Action Buttons for Teacher */}
+              {/* Action Buttons */}
               <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
-                <button
-                  onClick={() => {
-                    alert(`Targeted unblocking assignment dispatched to ${selectedStudentForModal.student_name}!`)
-                    setSelectedStudentForModal(null)
-                  }}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg"
-                >
-                  <Zap className="w-4 h-4" />
-                  <span>Assign Targeted Remediation Drill</span>
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      const s = selectedStudentForModal
+                      setSelectedStudentForModal(null)
+                      handleOpenEditModal(s)
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center gap-2"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    <span>Edit Cognitive Profile</span>
+                  </button>
+                )}
+                {isTeacher && (
+                  <button
+                    onClick={() => {
+                      alert(`Targeted unblocking assignment dispatched to ${selectedStudentForModal.student_name}!`)
+                      setSelectedStudentForModal(null)
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg"
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span>Assign Targeted Remediation Drill</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -500,7 +845,6 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
   // STUDENT PERSONAL LEARNING INTELLIGENCE VIEW
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // Filter concepts based on selected subject tab
   const displayedConcepts = React.useMemo(() => {
     if (activeSubjectTab === 'All Subjects') {
       return Object.values(neuralState.subjects).flatMap((s) => s.concepts)
@@ -603,7 +947,14 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
     const avgMastery = updatedConcepts.reduce((acc, c) => acc + c.mastery, 0) / updatedConcepts.length
     const avgCompetency = updatedConcepts.reduce((acc, c) => acc + c.competency, 0) / updatedConcepts.length
     const avgUncertainty = updatedConcepts.reduce((acc, c) => acc + c.uncertainty, 0) / updatedConcepts.length
-    const { bottleneck: subjBottleneck, mode: subjMode } = classifyBottleneck(avgMastery, 0.85, 0.60, 0.05, avgUncertainty, 0.80)
+    const { bottleneck: subjBottleneck, mode: subjMode } = classifyBottleneck(
+      avgMastery,
+      0.85,
+      0.60,
+      0.05,
+      avgUncertainty,
+      0.80
+    )
 
     const updatedSubject: SubjectBenchmarkState = {
       ...currentSubjectState,
@@ -620,9 +971,10 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
     const nextSubjects = { ...neuralState.subjects, [activeTestSubject]: updatedSubject }
     const allSubjects = Object.values(nextSubjects)
     const calibratedSubjs = allSubjects.filter((s) => s.is_calibrated)
-    const globalCompetency = calibratedSubjs.length > 0
-      ? calibratedSubjs.reduce((acc, s) => acc + s.overall_competency, 0) / calibratedSubjs.length
-      : 0
+    const globalCompetency =
+      calibratedSubjs.length > 0
+        ? calibratedSubjs.reduce((acc, s) => acc + s.overall_competency, 0) / calibratedSubjs.length
+        : 0
     const globalMastery = allSubjects.reduce((acc, s) => acc + s.overall_mastery, 0) / allSubjects.length
     const globalUncertainty = allSubjects.reduce((acc, s) => acc + s.overall_uncertainty, 0) / allSubjects.length
     const primaryBottleneck = calibratedSubjs.length === 0 ? 'INSUFFICIENT_EVIDENCE' : updatedSubject.active_bottleneck
@@ -684,7 +1036,11 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
 
       setChatMessages((prev) => [
         ...prev,
-        { sender: 'agent', text: agentReply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+        {
+          sender: 'agent',
+          text: agentReply,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
       ])
       setHistory([...updatedHistory, { role: 'assistant', content: agentReply }])
     } catch (err) {
@@ -694,8 +1050,8 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         {
           sender: 'agent',
           text: `Grounded in your live ${neuralState.grade_name} neural state vector across ${subjectList.join(', ')}, your primary bottleneck is ${neuralState.primary_bottleneck}. Please follow today's scheduled roadmap blocks.`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
       ])
     } finally {
       setChatLoading(false)
@@ -715,7 +1071,8 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
             {user?.display_name || 'Student'} &bull; Cognitive Neural Engine
           </h1>
           <p className="text-slate-400 text-sm max-w-2xl">
-            Enrolled in <strong>{neuralState.grade_name}</strong> ({subjectList.join(', ')}). Psychometric state estimation tracking each subject individually with Bayesian updates.
+            Enrolled in <strong>{neuralState.grade_name}</strong> ({subjectList.join(', ')}). Psychometric state
+            estimation tracking each subject individually with Bayesian updates.
           </p>
         </div>
 
@@ -729,11 +1086,13 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           </div>
           <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-center min-w-[140px]">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Primary Bottleneck</div>
-            <div className={`text-xs font-black px-2 py-1 rounded mt-1 ${
-              neuralState.primary_bottleneck === 'INSUFFICIENT_EVIDENCE'
-                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-            }`}>
+            <div
+              className={`text-xs font-black px-2 py-1 rounded mt-1 ${
+                neuralState.primary_bottleneck === 'INSUFFICIENT_EVIDENCE'
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              }`}
+            >
               {neuralState.primary_bottleneck}
             </div>
             <div className="text-[10px] text-slate-500 mt-1">Events: {neuralState.total_evidence_events}</div>
@@ -754,18 +1113,24 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           {subjectList.map((subjName) => {
             const subj = neuralState.subjects[subjName]
             return (
-              <div key={subjName} className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between space-y-4 shadow-xl">
+              <div
+                key={subjName}
+                className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between space-y-4 shadow-xl"
+              >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-white">{subjName}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                      subj.is_calibrated ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
-                    }`}>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                        subj.is_calibrated ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
                       {subj.is_calibrated ? 'Calibrated' : 'Uncalibrated'}
                     </span>
                   </div>
                   <div className="text-2xl font-black text-cyan-400 font-mono">
-                    {Math.round(subj.overall_competency * 100)}% <span className="text-xs font-normal text-slate-400">Competency</span>
+                    {Math.round(subj.overall_competency * 100)}%{' '}
+                    <span className="text-xs font-normal text-slate-400">Competency</span>
                   </div>
                 </div>
 
@@ -846,9 +1211,13 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
           {chatMessages.map((msg, i) => (
             <div key={i} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`p-3 rounded-2xl max-w-lg text-xs ${
-                msg.sender === 'user' ? 'bg-cyan-500 text-slate-950 font-medium' : 'bg-slate-950 border border-slate-800 text-slate-200'
-              }`}>
+              <div
+                className={`p-3 rounded-2xl max-w-lg text-xs ${
+                  msg.sender === 'user'
+                    ? 'bg-cyan-500 text-slate-950 font-medium'
+                    : 'bg-slate-950 border border-slate-800 text-slate-200'
+                }`}
+              >
                 {msg.text}
               </div>
             </div>
@@ -976,7 +1345,9 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               </button>
             </div>
             <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs text-slate-300">
-              <p>Reinforcing memory retention stability for <strong>{activeDrillConcept.concept_name}</strong>.</p>
+              <p>
+                Reinforcing memory retention stability for <strong>{activeDrillConcept.concept_name}</strong>.
+              </p>
             </div>
             <button
               onClick={() => {
