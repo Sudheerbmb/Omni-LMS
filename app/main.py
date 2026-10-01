@@ -53,8 +53,9 @@ configure_logging()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if settings.environment == "development":
-        await init_database()
+    # create_all is additive and ensures newly introduced modules exist on
+    # lightweight Render deployments that do not yet run Alembic migrations.
+    await init_database()
     yield
 
 app = FastAPI(

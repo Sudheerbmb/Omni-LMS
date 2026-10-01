@@ -9,7 +9,8 @@ import {
   Video, 
   Users, 
   LogOut,
-  CalendarDays
+  CalendarDays,
+  BrainCircuit
 } from 'lucide-react'
 
 type SidebarProps = {
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'timetable', label: timetableLabel, icon: CalendarDays },
     { id: 'courses', label: 'Course Catalog', icon: BookOpen },
     { id: 'assessments', label: 'Assessments & Quizzes', icon: CheckSquare },
+    { id: 'learning-intelligence', label: userRole === 'student' ? 'My Learning Agent' : 'Learning Intelligence', icon: BrainCircuit },
     { id: 'assignments', label: 'Assignments Desk', icon: FileText },
     { id: 'organizations', label: 'Organizations', icon: Building2 },
     { id: 'coding', label: 'Coding Playground', icon: Code2 },

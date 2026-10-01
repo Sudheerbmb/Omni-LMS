@@ -8,6 +8,8 @@ from app.assessment.schemas import AssessmentCreate, AttemptCreate, QuestionCrea
 from app.courses.models import Course
 from app.identity.models import OrganizationMembership, User
 from app.enrollment.models import Enrollment
+from app.learning.adaptive import record_evidence
+from app.learning.schemas import EvidenceCreate
 
 
 class AssessmentNotFoundError(ValueError):
@@ -83,6 +85,15 @@ async def submit_attempt(session: AsyncSession, assessment_id: UUID, data: Attem
         passed=score >= assessment.passing_score,
     )
     session.add(attempt)
+    await session.flush()
+    await record_evidence(session, user, EvidenceCreate(
+        course_id=assessment.course_id,
+        concept=assessment.title,
+        evidence_type="quiz",
+        score=score / 100,
+        difficulty=0.5,
+        metadata={"assessment_id": str(assessment.id), "attempt_id": str(attempt.id)},
+    ))
     await session.commit()
     await session.refresh(attempt)
     return attempt

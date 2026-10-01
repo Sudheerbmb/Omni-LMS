@@ -22,6 +22,7 @@ import { CodingPage } from './pages/CodingPage'
 import { ClassroomPage } from './pages/ClassroomPage'
 import { AdminPage } from './pages/AdminPage'
 import { TimetablePage } from './pages/TimetablePage'
+import { LearningIntelligencePage } from './pages/LearningIntelligencePage'
 
 export function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('lms_access_token'))
@@ -333,6 +334,7 @@ export function App() {
           {currentTab === 'timetable' && <TimetablePage user={user} />}
           {currentTab === 'courses' && <CoursesPage user={user} />}
           {currentTab === 'assessments' && <AssessmentsPage user={user} />}
+          {currentTab === 'learning-intelligence' && <LearningIntelligencePage user={user} />}
           {currentTab === 'assignments' && <AssignmentsPage user={user} />}
           {currentTab === 'organizations' && <OrganizationsPage user={user} />}
           {currentTab === 'coding' && <CodingPage user={user} />}

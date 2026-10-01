@@ -152,6 +152,26 @@ export type Announcement = { id: string; course_id?: string; title: string; cont
 
 export type Review = { id: string; course_id: string; user_id: string; rating: number; comment?: string; created_at: string }
 
+export type AdaptiveState = {
+  id: string; user_id: string; course_id: string | null; concept: string
+  mastery: number; retention: number; transfer: number; competency: number
+  misconception: number; uncertainty: number; evidence_adequacy: number; velocity: number
+  evidence_count: number; evidence_types: string[]; bottleneck: string; learning_mode: string
+  recommendation: { action: string; reason: string; concept: string; mode: string; priority: number }
+  model_version: string
+}
+export type AdaptiveDashboard = { user_id: string; states: AdaptiveState[]; overall_competency: number; needs_diagnostic: boolean }
+export type CohortLearner = { user_id: string; display_name: string; email: string; concept_count: number; average_competency: number; high_risk_concepts: number; primary_bottleneck: string }
+
+export const getMyAdaptiveDashboard = () => request<AdaptiveDashboard>('/api/v1/learning/adaptive/me')
+export const getStudentAdaptiveDashboard = (studentId: string) => request<AdaptiveDashboard>(`/api/v1/learning/adaptive/students/${studentId}`)
+export const getAdaptiveCohort = () => request<CohortLearner[]>('/api/v1/learning/adaptive/cohort')
+export const submitLearningEvidence = (payload: {
+  user_id?: string; course_id?: string; concept: string
+  evidence_type: 'diagnostic' | 'quiz' | 'retrieval' | 'practice' | 'transfer' | 'project' | 'teacher_observation'
+  score: number; difficulty?: number; attempts?: number; transfer_distance?: number; misconception_code?: string
+}) => request<AdaptiveState>('/api/v1/learning/adaptive/evidence', { method: 'POST', body: JSON.stringify(payload) })
+
 // Identity & Auth
 
 export const register = (payload: { email: string; phone_number: string; display_name: string; password: string; role: 'student' | 'teacher' }) =>
