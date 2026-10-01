@@ -56,6 +56,7 @@ class TeacherProfileRead(BaseModel):
     rating_avg: float
     complaint_count: int
     skills: list[str] = []
+    reviews: list[dict] = []
     active_restrictions: list[dict] = []
 
 

@@ -1141,6 +1141,25 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
                     ))}
                   </div>
 
+                  {t.reviews && t.reviews.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-slate-800 space-y-2">
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        Reviews for {t.display_name}
+                      </div>
+                      {t.reviews.map((review) => (
+                        <div key={review.id} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-slate-200">{review.subject} &bull; {review.section}</span>
+                            <span className="shrink-0 text-amber-400 font-bold flex items-center gap-1">
+                              <Star className="w-3 h-3 fill-current" /> {review.rating}/5
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-1">{review.comments}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {t.active_restrictions && t.active_restrictions.length > 0 && (
                     <div className="mt-4 pt-3 border-t border-rose-900/30 space-y-2">
                       <div className="text-[11px] font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">

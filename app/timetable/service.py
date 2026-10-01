@@ -698,6 +698,8 @@ async def get_all_teachers_with_feedback(session: AsyncSession) -> List[Dict[str
             select(TeacherProfile)
             .options(
                 selectinload(TeacherProfile.skills).selectinload(TeacherSubjectSkill.subject),
+                selectinload(TeacherProfile.feedback).selectinload(TeacherFeedback.section).selectinload(SchoolSection.grade),
+                selectinload(TeacherProfile.feedback).selectinload(TeacherFeedback.subject),
                 selectinload(TeacherProfile.restrictions).selectinload(TeacherClassRestriction.section).selectinload(SchoolSection.grade),
                 selectinload(TeacherProfile.restrictions).selectinload(TeacherClassRestriction.subject),
             )
@@ -723,6 +725,27 @@ async def get_all_teachers_with_feedback(session: AsyncSession) -> List[Dict[str
             }
             for r in t.restrictions
         ]
+        reviews = [
+            {
+                "id": str(review.id),
+                "rating": review.rating,
+                "category": review.category,
+                "comments": review.comments,
+                "section": (
+                    f"{review.section.grade.name} - {review.section.name}"
+                    if review.section and review.section.grade
+                    else "Class"
+                ),
+                "subject": review.subject.name if review.subject else "Subject",
+                "created_at": review.created_at.isoformat() if review.created_at else None,
+            }
+            for review in sorted(t.feedback, key=lambda item: item.created_at, reverse=True)
+        ]
+        teacher_rating = (
+            sum(review.rating for review in t.feedback) / len(t.feedback)
+            if t.feedback
+            else t.rating_avg
+        )
 
         result.append({
             "id": t.id,
@@ -732,9 +755,10 @@ async def get_all_teachers_with_feedback(session: AsyncSession) -> List[Dict[str
             "employee_id": t.employee_id,
             "qualification": t.qualification,
             "max_daily_periods": t.max_daily_periods,
-            "rating_avg": t.rating_avg,
+            "rating_avg": round(teacher_rating, 1),
             "complaint_count": t.complaint_count,
             "skills": skills,
+            "reviews": reviews,
             "active_restrictions": restrictions,
         })
 

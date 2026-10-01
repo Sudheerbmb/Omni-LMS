@@ -409,6 +409,24 @@ export type TeacherProfile = {
 
   skills: string[]
 
+  reviews: Array<{
+
+    id: string
+
+    rating: number
+
+    category: string
+
+    comments: string
+
+    section: string
+
+    subject: string
+
+    created_at: string | null
+
+  }>
+
   active_restrictions: Array<{
 
     id: string

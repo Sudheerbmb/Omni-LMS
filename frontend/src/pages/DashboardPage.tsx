@@ -77,6 +77,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [availableCourses, setAvailableCourses] = useState<Course[]>([])
   const [studentTimetable, setStudentTimetable] = useState<TimetableSlot[]>([])
+  const [currentTime, setCurrentTime] = useState(() => new Date())
 
   // UI & Loading States
   const [loading, setLoading] = useState(true)
@@ -154,6 +155,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
   useEffect(() => {
     loadDashboardData()
   }, [loadDashboardData])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   // ── ADMIN WORKING FUNCTIONS ──────────────────────────────────────────────────
   const handleRunAiScheduler = async () => {
@@ -306,6 +312,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
   }
 
   const activeLiveClass = liveClasses.find(c => c.status === 'live')
+  const currentWeekday = currentTime.toLocaleDateString('en-US', { weekday: 'long' })
+  const todayTeacherSlots = teacherSlots
+    .filter(slot => slot.day_of_week.toLowerCase() === currentWeekday.toLowerCase())
+    .sort((a, b) => a.start_time.localeCompare(b.start_time))
+  const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes()
+  const isCurrentPeriod = (slot: TeacherTimetableSlot) => {
+    const toMinutes = (value: string) => {
+      const [hours, minutes] = value.split(':').map(Number)
+      return hours * 60 + minutes
+    }
+    return currentMinutes >= toMinutes(slot.start_time) && currentMinutes < toMinutes(slot.end_time)
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto min-h-screen">
@@ -601,7 +619,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
                   <Calendar className="w-5 h-5" />
                 </div>
               </div>
-              <p className="text-3xl font-black text-white">{teacherSlots.length}</p>
+              <p className="text-3xl font-black text-white">{todayTeacherSlots.length}</p>
               <p className="text-[11px] text-purple-400 mt-2 font-medium flex items-center gap-1">
                 Manage schedule &rarr;
               </p>
@@ -748,7 +766,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
             </button>
           </div>
 
-          {teacherSlots.length === 0 ? (
+          {todayTeacherSlots.length === 0 ? (
             <div className="p-8 text-center bg-slate-950/60 rounded-2xl border border-slate-800 space-y-3">
               <Sparkles className="w-8 h-8 text-purple-400 mx-auto opacity-50" />
               <p className="text-sm font-semibold text-slate-300">No timetable periods assigned to your profile today.</p>
@@ -764,7 +782,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {teacherSlots.map((slot, idx) => (
+              {todayTeacherSlots.map((slot, idx) => {
+                const canLaunch = isCurrentPeriod(slot)
+                return (
                 <div
                   key={idx}
                   className="bg-slate-950/70 border border-slate-800/80 hover:border-purple-500/40 rounded-2xl p-5 flex flex-col justify-between transition-all group"
@@ -798,15 +818,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
                   <div className="pt-4 flex items-center gap-2">
                     <button
                       onClick={() => handleInstantLaunchClass(slot)}
-                      disabled={actionLoading === `launch-${slot.period_number}`}
-                      className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs shadow-md shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                      disabled={!canLaunch || actionLoading === `launch-${slot.period_number}`}
+                      className={`flex-1 py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all ${
+                        canLaunch
+                          ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 shadow-md shadow-cyan-500/20 active:scale-95'
+                          : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                      }`}
                     >
                       {actionLoading === `launch-${slot.period_number}` ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-950" />
                       ) : (
                         <Play className="w-3.5 h-3.5 fill-slate-950" />
                       )}
-                      <span>Launch Class</span>
+                      <span>{canLaunch ? 'Launch Class' : 'Not Active'}</span>
                     </button>
 
                     <button
@@ -818,7 +842,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
                     </button>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
