@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.identity.permissions import require_roles
 from app.learning.service import ProgressAccessError, ResourceNotFoundError, update_progress
 from app.platform.database import get_session
+from app.platform.models import OutboxEvent
 
 
 router = APIRouter(prefix="/api/v1/learning", tags=["learning"])
@@ -47,8 +48,18 @@ async def adaptive_cohort(_current_user: User = Depends(require_roles("admin", "
 
 @router.post("/adaptive/states/{state_id}/feedback", status_code=201)
 async def adaptive_action_feedback(state_id: UUID, data: ActionFeedbackCreate, current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    await ensure_adaptive_schema(session)
-    state = await session.scalar(select(LearnerConceptState).where(LearnerConceptState.id == state_id))
+    schema_available = await ensure_adaptive_schema(session)
+    state = await session.scalar(select(LearnerConceptState).where(LearnerConceptState.id == state_id)) if schema_available else None
+    if not schema_available:
+        dashboard = await learner_dashboard(session, current_user.id)
+        state_read = next((item for item in dashboard.states if item.id == state_id), None)
+        if not state_read:
+            raise HTTPException(status_code=404, detail="Learner state not found")
+        feedback = OutboxEvent(event_type="lens.action.feedback", aggregate_type="learner", aggregate_id=current_user.id,
+            payload={"state_id": str(state_id), **data.model_dump(mode="json")})
+        session.add(feedback)
+        await session.commit()
+        return {"id": str(feedback.id), "status": "recorded"}
     if not state:
         raise HTTPException(status_code=404, detail="Learner state not found")
     if state.user_id != current_user.id:
