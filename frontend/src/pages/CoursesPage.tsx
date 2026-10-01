@@ -34,6 +34,7 @@ type CoursesPageProps = {
 export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
   const [courses, setCourses] = useState<SchoolCourse[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [selectedGrade, setSelectedGrade] = useState<number | 'all'>('all')
   const [activeCourse, setActiveCourse] = useState<SchoolCourse | null>(null)
@@ -70,6 +71,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
   const fetchCourses = async () => {
     try {
       setLoading(true)
+      setLoadError('')
       const params: any = {
         user_email: user.email,
         user_role: user.role
@@ -79,8 +81,10 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
       }
       const data = await getSchoolCourses(params)
       setCourses(data || [])
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load courses:', err)
+      setCourses([])
+      setLoadError(err.message || 'The curriculum service could not be reached.')
     } finally {
       setLoading(false)
     }
@@ -255,6 +259,13 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
         <div className="p-16 text-center text-slate-400 space-y-3">
           <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-sm">Loading curriculum and chapter syllabi...</p>
+        </div>
+      ) : loadError ? (
+        <div className="p-12 text-center bg-rose-950/20 rounded-2xl border border-rose-800/40 space-y-3">
+          <BookOpen className="w-8 h-8 mx-auto text-rose-400" />
+          <p className="text-sm font-semibold text-rose-300">Unable to load the curriculum catalog</p>
+          <p className="text-xs text-slate-400">{loadError}</p>
+          <button onClick={fetchCourses} className="px-4 py-2 rounded-xl bg-rose-500 text-white text-xs font-bold">Try Again</button>
         </div>
       ) : filteredCourses.length === 0 ? (
         <div className="p-12 text-center text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800 space-y-2">

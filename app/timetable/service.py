@@ -805,10 +805,44 @@ async def get_school_courses_and_syllabus(
             .order_by(SchoolGrade.grade_number)
         )
     ).all()
+    # A fresh hosted database has no curriculum rows yet. Materialize the
+    # idempotent default catalog on first access so every portal has content.
+    if not grades:
+        await seed_school_defaults(session)
+        grades = (
+            await session.scalars(
+                select(SchoolGrade)
+                .options(
+                    selectinload(SchoolGrade.curriculum).selectinload(GradeCurriculum.subject),
+                    selectinload(SchoolGrade.sections),
+                )
+                .order_by(SchoolGrade.grade_number)
+            )
+        ).all()
+
     grade_map = {g.grade_number: g for g in grades}
     grade_by_id = {g.id: g for g in grades}
 
-    overrides = (await session.scalars(select(CurriculumCourseOverride))).all()
+    # Do not take the whole catalog down if a rolling deployment reaches this
+    # code before the new override table has been created.
+    try:
+        overrides = (await session.scalars(select(CurriculumCourseOverride))).all()
+    except Exception as exc:
+        await session.rollback()
+        print(f"[Curriculum] Override table unavailable; serving built-in syllabus: {exc}")
+        overrides = []
+        grades = (
+            await session.scalars(
+                select(SchoolGrade)
+                .options(
+                    selectinload(SchoolGrade.curriculum).selectinload(GradeCurriculum.subject),
+                    selectinload(SchoolGrade.sections),
+                )
+                .order_by(SchoolGrade.grade_number)
+            )
+        ).all()
+        grade_map = {g.grade_number: g for g in grades}
+        grade_by_id = {g.id: g for g in grades}
     override_map = {(item.grade_id, item.subject_id): item for item in overrides}
 
     def curriculum_content(grade: SchoolGrade, subject: Subject) -> tuple[str, str, List[Dict[str, Any]]]:
