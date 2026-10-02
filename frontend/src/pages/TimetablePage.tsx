@@ -449,7 +449,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
       case 0: return { label: 'Morning Assembly & Prayer', time: '08:00 - 08:30', isBreak: true, bg: 'bg-emerald-950/40 border-emerald-800/40 text-emerald-400' }
       case 1: return { label: 'Period 1 (Instruction)', time: '08:30 - 09:20', isBreak: false }
       case 2: return { label: 'Period 2 (Instruction)', time: '09:20 - 10:10', isBreak: false }
-      case 3: return { label: 'Morning Recess Break', time: '10:10 - 10:30', isBreak: true, bg: 'bg-cyan-950/40 border-cyan-800/40 text-cyan-400' }
+      case 3: return { label: 'Morning Recess Break', time: '10:10 - 10:30', isBreak: true, bg: 'bg-cyan-950/40 border-cyan-800/40 text-amber-400' }
       case 4: return { label: 'Period 3 (Instruction)', time: '10:30 - 11:20', isBreak: false }
       case 5: return { label: 'Period 4 (Instruction)', time: '11:20 - 12:10', isBreak: false }
       case 6: return { label: 'Period 5 (Instruction)', time: '12:10 - 13:00', isBreak: false }
@@ -472,7 +472,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 p-8 rounded-2xl border border-slate-800 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="space-y-2 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-amber-400 text-xs font-semibold uppercase tracking-wider">
             {isAdmin && <Sparkles className="w-3.5 h-3.5" />}
             {isTeacher && <GraduationCap className="w-3.5 h-3.5" />}
             {isStudent && <BookOpen className="w-3.5 h-3.5" />}
@@ -511,14 +511,14 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
               disabled={seeding}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800/60 hover:bg-slate-800 text-slate-300 text-xs font-medium transition-all shadow-sm disabled:opacity-50"
             >
-              <Database className={`w-4 h-4 ${seeding ? 'animate-spin text-cyan-400' : ''}`} />
+              <Database className={`w-4 h-4 ${seeding ? 'animate-spin text-amber-400' : ''}`} />
               {seeding ? 'Seeding...' : 'Reset Defaults'}
             </button>
 
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 text-xs font-bold transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 text-xs font-bold transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
               {generating ? 'LangGraph Processing...' : 'Run AI Agent'}
@@ -529,28 +529,28 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
 
       {/* Status Toast */}
       {statusMessage && (
-        <div className="p-4 rounded-xl bg-cyan-950/30 border border-cyan-500/30 text-cyan-300 text-sm flex items-center justify-between gap-4 animate-in slide-in-from-top-2">
+        <div className="p-4 rounded-xl bg-cyan-950/30 border border-cyan-500/30 text-yellow-300 text-sm flex items-center justify-between gap-4 animate-in slide-in-from-top-2">
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-cyan-400 shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
             <span>{statusMessage}</span>
           </div>
-          <button onClick={() => setStatusMessage(null)} className="text-cyan-400 hover:text-cyan-200 text-xs font-bold">Dismiss</button>
+          <button onClick={() => setStatusMessage(null)} className="text-amber-400 hover:text-cyan-200 text-xs font-bold">Dismiss</button>
         </div>
       )}
 
       {/* Admin KPI Stats Grid */}
       {isAdmin && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-1">
+          <div className="p-5 rounded-2xl bg-slate-900/60 border border-amber-500/15 shadow-sm space-y-1">
             <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
               <span>School Grades & Sections</span>
-              <Building className="w-4 h-4 text-cyan-400" />
+              <Building className="w-4 h-4 text-amber-400" />
             </div>
             <div className="text-2xl font-black text-white">{grades.length || 10} Grades &bull; 20 Secs</div>
             <div className="text-xs text-slate-500">Class 1 to 10 (A & B)</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-1">
+          <div className="p-5 rounded-2xl bg-slate-900/60 border border-amber-500/15 shadow-sm space-y-1">
             <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
               <span>Dynamic Ground Limit</span>
               <Activity className="w-4 h-4 text-amber-400" />
@@ -559,16 +559,16 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
             <div className="text-xs text-slate-500">Configurable in Policy Rules tab</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-1">
+          <div className="p-5 rounded-2xl bg-slate-900/60 border border-amber-500/15 shadow-sm space-y-1">
             <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
               <span>Active Policy Rules</span>
-              <Sliders className="w-4 h-4 text-indigo-400" />
+              <Sliders className="w-4 h-4 text-orange-400" />
             </div>
-            <div className="text-2xl font-black text-indigo-400">{rules.filter(r => r.is_enabled).length} Enabled</div>
+            <div className="text-2xl font-black text-orange-400">{rules.filter(r => r.is_enabled).length} Enabled</div>
             <div className="text-xs text-slate-500">{rules.length} total defined in Neon DB</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-1">
+          <div className="p-5 rounded-2xl bg-slate-900/60 border border-amber-500/15 shadow-sm space-y-1">
             <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
               <span>Active Complaints / Blacklists</span>
               <ShieldAlert className="w-4 h-4 text-rose-400" />
@@ -584,7 +584,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
         <button
           onClick={() => setActiveTab('grid')}
           className={`pb-3 text-sm font-semibold transition-colors relative flex items-center gap-2 ${
-            activeTab === 'grid' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
+            activeTab === 'grid' ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <Calendar className="w-4 h-4" />
@@ -598,7 +598,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
           <button
             onClick={() => setActiveTab('rules')}
             className={`pb-3 text-sm font-semibold transition-colors relative flex items-center gap-2 ${
-              activeTab === 'rules' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
+              activeTab === 'rules' ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Settings2 className="w-4 h-4" />
@@ -616,7 +616,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
           <button
             onClick={() => setActiveTab('teachers')}
             className={`pb-3 text-sm font-semibold transition-colors relative flex items-center gap-2 ${
-              activeTab === 'teachers' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
+              activeTab === 'teachers' ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <GraduationCap className="w-4 h-4" />
@@ -634,7 +634,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
           <button
             onClick={() => setActiveTab('audit')}
             className={`pb-3 text-sm font-semibold transition-colors relative flex items-center gap-2 ${
-              activeTab === 'audit' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
+              activeTab === 'audit' ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Sparkles className="w-4 h-4" />
@@ -655,10 +655,10 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
       {activeTab === 'grid' && (
         <div className="space-y-6">
           {/* Controls: Only Admin and Students can select Grade/Section; Teachers see their personal schedule */}
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-slate-900 border border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-[#0B0F19] border border-amber-500/15">
             {isTeacher ? (
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 font-bold">
+                <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-amber-400 font-bold">
                   {myTeacherProfile?.employee_id || 'T'}
                 </div>
                 <div>
@@ -672,7 +672,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
               </div>
             ) : isStudent ? (
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 font-bold">
+                <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-amber-400 font-bold">
                   <BookOpen className="w-5 h-5" />
                 </div>
                 <div>
@@ -776,7 +776,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
           {/* Timetable Weekly Matrix */}
           {loading ? (
             <div className="h-96 flex items-center justify-center text-slate-400 gap-3">
-              <RefreshCw className="w-5 h-5 animate-spin text-cyan-400" />
+              <RefreshCw className="w-5 h-5 animate-spin text-amber-400" />
               Loading Schedule Grid...
             </div>
           ) : slots.length === 0 ? (
@@ -812,7 +812,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
                     if (meta.isBreak) {
                       return (
                         <tr key={pNum} className={meta.bg || 'bg-slate-900/40'}>
-                          <td className="p-4 font-mono text-xs border-r border-slate-800/80 font-bold">
+                          <td className="p-4 font-mono text-xs border-r border-amber-500/15 font-bold">
                             <div>{meta.time}</div>
                             <div className="text-[11px] opacity-80">{meta.label}</div>
                           </td>
@@ -902,7 +902,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
                                         : (slot.teacher_name || 'Assigned Faculty')}
                                     </span>
                                     {isAdmin && (
-                                      <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-100 text-cyan-400 shrink-0 ml-1" />
+                                      <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-100 text-amber-400 shrink-0 ml-1" />
                                     )}
                                     {isStudent && (
                                       <Star className="w-3 h-3 opacity-0 group-hover:opacity-100 text-amber-400 shrink-0 ml-1" />
@@ -932,7 +932,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Sliders className="w-5 h-5 text-indigo-400" />
+                <Sliders className="w-5 h-5 text-orange-400" />
                 Live Policy Rules & Scheduling Constraints
               </h2>
               <p className="text-xs text-slate-400">
@@ -941,9 +941,9 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
             </div>
             <button
               onClick={() => setShowAddRuleModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 transition-all"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-yellow-300 text-xs font-bold hover:bg-cyan-500/20 transition-all"
             >
-              <PlusCircle className="w-4 h-4 text-cyan-400" />
+              <PlusCircle className="w-4 h-4 text-amber-400" />
               Add Custom Policy Rule
             </button>
           </div>
@@ -961,7 +961,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full font-mono bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
+                      <span className="text-xs px-2 py-0.5 rounded-full font-mono bg-indigo-500/10 text-orange-400 border border-indigo-500/20 uppercase tracking-wider">
                         {r.category}
                       </span>
                       <h3 className="font-bold text-white text-sm">{r.name}</h3>
@@ -983,7 +983,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
                   </button>
                 </div>
 
-                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-2 text-xs">
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-amber-500/15 space-y-2 text-xs">
                   <div className="font-semibold text-slate-300">Live Parameters (Neon DB):</div>
                   {r.rule_type === 'ground_capacity' && (
                     <div className="flex items-center justify-between gap-4">
@@ -1029,7 +1029,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
 
                   {r.rule_type === 'post_lunch_blacklist' && (
                     <div className="text-slate-400">
-                      Blacklisted Period: <span className="font-mono text-cyan-400">Period {r.parameters?.forbidden_period || 8} (2:00 PM)</span>
+                      Blacklisted Period: <span className="font-mono text-amber-400">Period {r.parameters?.forbidden_period || 8} (2:00 PM)</span>
                     </div>
                   )}
 
@@ -1057,14 +1057,14 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
                   {r.rule_type === 'consecutive_subject_limit' && (
                     <div className="flex items-center justify-between gap-4">
                       <span className="text-slate-400">Max Consecutive Periods:</span>
-                      <span className="font-bold text-cyan-400">{r.parameters?.max_consecutive || 2} periods</span>
+                      <span className="font-bold text-amber-400">{r.parameters?.max_consecutive || 2} periods</span>
                     </div>
                   )}
 
                   {r.rule_type === 'custom_day_schedule' && (
                     <div className="space-y-1">
                       <span className="text-slate-400">Configured Day Overrides:</span>
-                      <div className="font-mono text-[11px] text-indigo-300">
+                      <div className="font-mono text-[11px] text-orange-300">
                         {JSON.stringify(r.parameters?.overrides || {})}
                       </div>
                     </div>
@@ -1147,7 +1147,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
                         Reviews for {t.display_name}
                       </div>
                       {t.reviews.map((review) => (
-                        <div key={review.id} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs">
+                        <div key={review.id} className="p-2.5 rounded-lg bg-[#0B0F19] border border-amber-500/15 text-xs">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold text-slate-200">{review.subject} &bull; {review.section}</span>
                             <span className="shrink-0 text-amber-400 font-bold flex items-center gap-1">
@@ -1201,7 +1201,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
             </p>
           </div>
 
-          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+          <div className="p-6 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-4">
             <div className="flex items-center gap-2 text-xs font-mono text-emerald-400">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               <span>Status: Zero Hard Clashes &bull; All 10 Grades Satisfied</span>
@@ -1217,9 +1217,9 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
               ]).map((dec, idx) => (
                 <div
                   key={idx}
-                  className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 font-mono flex items-start gap-3"
+                  className="p-4 rounded-xl bg-[#0B0F19] border border-amber-500/15 text-xs text-slate-300 font-mono flex items-start gap-3"
                 >
-                  <ChevronRight className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <ChevronRight className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <span>{dec}</span>
                 </div>
               ))}
@@ -1231,11 +1231,11 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
       {/* Period Management & Instant Substitute Finder Drawer (ADMIN ONLY) */}
       {isAdmin && activeSlotModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <h3 className="font-bold text-white text-base flex items-center gap-2">
-                  <Edit3 className="w-4 h-4 text-cyan-400" />
+                  <Edit3 className="w-4 h-4 text-amber-400" />
                   Period Management & Substitution Desk
                 </h3>
                 <p className="text-xs text-slate-400">
@@ -1250,11 +1250,11 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
               </button>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div className="p-4 rounded-xl bg-[#0B0F19] border border-amber-500/15 flex items-center justify-between">
               <div>
                 <div className="text-xs font-semibold text-slate-400">Current Subject</div>
                 <div className="text-sm font-bold text-white">{activeSlotModal.subject_name || 'Academic Class'}</div>
-                <div className="text-xs text-cyan-400 font-medium mt-0.5">Faculty: {activeSlotModal.teacher_name || 'Unassigned'}</div>
+                <div className="text-xs text-amber-400 font-medium mt-0.5">Faculty: {activeSlotModal.teacher_name || 'Unassigned'}</div>
               </div>
 
               <div className="w-48">
@@ -1274,11 +1274,11 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
                   <UserCheck className="w-4 h-4 text-emerald-400" />
                   Available Subject Qualified Substitutes
                 </div>
-                {loadingSubstitutes && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
+                {loadingSubstitutes && <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />}
               </div>
 
               {substitutes.length === 0 && !loadingSubstitutes ? (
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-400">
+                <div className="p-4 rounded-xl bg-[#0B0F19] border border-amber-500/15 text-center text-xs text-slate-400">
                   No alternate teachers found with matching subject qualifications.
                 </div>
               ) : (
@@ -1350,10 +1350,10 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
       {/* Add Custom Policy Rule Modal (ADMIN ONLY) */}
       {isAdmin && showAddRuleModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <PlusCircle className="w-4 h-4 text-cyan-400" />
+                <PlusCircle className="w-4 h-4 text-amber-400" />
                 Create New Scheduling Policy Rule
               </h3>
               <button
@@ -1439,7 +1439,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
       {/* Log Teacher Leave Modal (ADMIN ONLY) */}
       {isAdmin && showLeaveModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <UserX className="w-4 h-4 text-amber-400" />
@@ -1516,7 +1516,7 @@ export const TimetablePage: React.FC<{ user: User | null }> = ({ user: currentUs
       {/* File Student Review / Complaint Modal (Students & Admins) */}
       {showFeedbackModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-rose-400" />

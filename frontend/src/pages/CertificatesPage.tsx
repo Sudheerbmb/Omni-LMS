@@ -66,7 +66,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ user }) => {
     <div className="p-8 space-y-8 max-w-7xl mx-auto">
       <div>
         <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
-          <Award className="w-7 h-7 text-cyan-400" />
+          <Award className="w-7 h-7 text-amber-400" />
           Certificates & Credentials
         </h2>
         <p className="text-slate-400 text-sm mt-1">
@@ -76,9 +76,9 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ user }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Issue Certificate Box */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+        <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl p-6 space-y-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-amber-400 border border-cyan-500/20 flex items-center justify-center">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
@@ -106,7 +106,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ user }) => {
             <button
               onClick={handleIssueCertificate}
               disabled={issuing}
-              className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold py-3 rounded-xl shadow-lg shadow-cyan-500/20 transition-all text-sm"
+              className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-extrabold py-3 rounded-xl shadow-lg shadow-cyan-500/20 transition-all text-sm"
             >
               {issuing ? 'Generating Certificate...' : 'Generate Official Certificate'}
             </button>
@@ -118,14 +118,14 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ user }) => {
               <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full filter blur-2xl pointer-events-none" />
               <div className="flex justify-between items-start">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400">Official Certificate of Completion</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">Official Certificate of Completion</span>
                   <h4 className="text-lg font-black text-white mt-1">{user.display_name}</h4>
                 </div>
-                <Award className="w-8 h-8 text-cyan-400" />
+                <Award className="w-8 h-8 text-amber-400" />
               </div>
 
               <div className="pt-2 border-t border-slate-800 space-y-1 text-xs">
-                <p className="text-slate-400">Certificate No: <span className="font-mono text-cyan-300">{myCertificate.certificate_number}</span></p>
+                <p className="text-slate-400">Certificate No: <span className="font-mono text-yellow-300">{myCertificate.certificate_number}</span></p>
                 <p className="text-slate-400">Issued On: {new Date(myCertificate.issued_at).toLocaleDateString()}</p>
               </div>
 
@@ -134,7 +134,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ user }) => {
                   onClick={() => alert(`Certificate verified: ${myCertificate.certificate_number}`)}
                   className="bg-slate-800 text-slate-200 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-700 flex items-center gap-1.5"
                 >
-                  <Download className="w-3.5 h-3.5 text-cyan-400" /> Export PDF
+                  <Download className="w-3.5 h-3.5 text-amber-400" /> Export PDF
                 </button>
               </div>
             </div>
@@ -142,7 +142,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ user }) => {
         </div>
 
         {/* Certificate Verification Lookup */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+        <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl p-6 space-y-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center">
               <ShieldCheck className="w-5 h-5" />

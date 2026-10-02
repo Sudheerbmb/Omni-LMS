@@ -104,7 +104,7 @@ export const CodingPage: React.FC<CodingPageProps> = ({ user }) => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
-            <Code2 className="w-7 h-7 text-cyan-400" />
+            <Code2 className="w-7 h-7 text-amber-400" />
             Coding Playground & Sandbox
           </h2>
           <p className="text-slate-400 text-sm mt-1">
@@ -141,7 +141,7 @@ export const CodingPage: React.FC<CodingPageProps> = ({ user }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Problems Menu */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+        <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl p-6 space-y-4">
           <h3 className="font-bold text-slate-200 text-base flex items-center justify-between">
             <span>Exercises</span>
             <span className="text-xs text-slate-500">{exercises.length} Total</span>
@@ -173,9 +173,9 @@ export const CodingPage: React.FC<CodingPageProps> = ({ user }) => {
         {/* Code Editor & Execution Panel */}
         <div className="lg:col-span-2 space-y-6">
           {selectedEx ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl p-6 space-y-4 shadow-xl">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded border border-cyan-500/20">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-cyan-500/10 px-2.5 py-0.5 rounded border border-cyan-500/20">
                   {selectedEx.language}
                 </span>
                 <h3 className="text-xl font-bold text-white mt-1">{selectedEx.title}</h3>
@@ -200,17 +200,17 @@ export const CodingPage: React.FC<CodingPageProps> = ({ user }) => {
                 <textarea
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500 h-64 resize-none leading-relaxed"
+                  className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl p-4 text-xs font-mono text-yellow-300 focus:outline-none focus:border-cyan-500 h-64 resize-none leading-relaxed"
                   spellCheck={false}
                 />
               </div>
 
               {/* Terminal Output */}
               {output && (
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2 font-mono">
+                <div className="bg-[#0B0F19] border border-amber-500/15 rounded-xl p-4 space-y-2 font-mono">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                     <span className="text-[11px] font-bold text-slate-400 flex items-center gap-2">
-                      <Terminal className="w-3.5 h-3.5 text-cyan-400" /> Terminal Output
+                      <Terminal className="w-3.5 h-3.5 text-amber-400" /> Terminal Output
                     </span>
                     {passed !== null && (
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
@@ -234,7 +234,7 @@ export const CodingPage: React.FC<CodingPageProps> = ({ user }) => {
       {/* Create Exercise Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-white">Create Coding Exercise</h3>
             <form onSubmit={handleCreateExercise} className="space-y-4">
               <div>
@@ -266,7 +266,7 @@ export const CodingPage: React.FC<CodingPageProps> = ({ user }) => {
                   value={starterCode}
                   onChange={(e) => setStarterCode(e.target.value)}
                   placeholder="def solution(n): pass"
-                  className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs font-mono text-cyan-300 focus:border-cyan-500 h-24"
+                  className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs font-mono text-yellow-300 focus:border-cyan-500 h-24"
                 />
               </div>
 

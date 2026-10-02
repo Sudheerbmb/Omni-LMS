@@ -80,7 +80,7 @@ export const OrganizationsPage: React.FC<OrganizationsPageProps> = ({ user }) =>
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
-            <Building2 className="w-7 h-7 text-cyan-400" />
+            <Building2 className="w-7 h-7 text-amber-400" />
             Organization Control Center
           </h2>
           <p className="text-slate-400 text-sm mt-1">
@@ -101,7 +101,7 @@ export const OrganizationsPage: React.FC<OrganizationsPageProps> = ({ user }) =>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Organizations List */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+        <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl p-6 space-y-4">
           <h3 className="font-bold text-slate-200 text-base flex items-center justify-between">
             <span>Organizations</span>
             <span className="text-xs text-slate-500">{orgs.length} Active</span>
@@ -129,12 +129,12 @@ export const OrganizationsPage: React.FC<OrganizationsPageProps> = ({ user }) =>
         </div>
 
         {/* Selected Org Detail & Members */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+        <div className="lg:col-span-2 bg-[#0B0F19] border border-amber-500/15 rounded-2xl p-6 space-y-6">
           {selectedOrg ? (
             <>
               <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                 <div>
-                  <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Active Workspace</span>
+                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Active Workspace</span>
                   <h3 className="text-xl font-bold text-white mt-1">{selectedOrg.name}</h3>
                 </div>
 
@@ -142,13 +142,13 @@ export const OrganizationsPage: React.FC<OrganizationsPageProps> = ({ user }) =>
                   onClick={() => setShowInviteModal(true)}
                   className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-2 rounded-lg border border-slate-700"
                 >
-                  <Mail className="w-3.5 h-3.5 text-cyan-400" /> Invite Member
+                  <Mail className="w-3.5 h-3.5 text-amber-400" /> Invite Member
                 </button>
               </div>
 
               <div>
                 <h4 className="font-bold text-slate-300 text-sm mb-3 flex items-center gap-2">
-                  <Users className="w-4 h-4 text-cyan-400" /> Organization Members ({members.length})
+                  <Users className="w-4 h-4 text-amber-400" /> Organization Members ({members.length})
                 </h4>
 
                 <div className="space-y-2">
@@ -166,7 +166,7 @@ export const OrganizationsPage: React.FC<OrganizationsPageProps> = ({ user }) =>
                             <p className="text-[10px] text-slate-400">{m.user?.email}</p>
                           </div>
                         </div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded-full border border-cyan-500/20">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-cyan-500/10 px-2.5 py-0.5 rounded-full border border-cyan-500/20">
                           {m.role}
                         </span>
                       </div>
@@ -184,7 +184,7 @@ export const OrganizationsPage: React.FC<OrganizationsPageProps> = ({ user }) =>
       {/* Create Org Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-white">Create Organization</h3>
             <form onSubmit={handleCreateOrg} className="space-y-4">
               <div>
@@ -236,7 +236,7 @@ export const OrganizationsPage: React.FC<OrganizationsPageProps> = ({ user }) =>
       {/* Invite Member Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-white">Invite Member</h3>
             <form onSubmit={handleInvite} className="space-y-4">
               <div>

@@ -214,7 +214,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
       {/* Top Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 p-8 rounded-3xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
         <div className="space-y-2 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider">
             <Users className="w-3.5 h-3.5" />
             Enterprise Administration &bull; Security & Governance
           </div>
@@ -229,7 +229,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
         <div className="flex items-center gap-2 relative z-10">
           <button
             onClick={loadUsers}
-            className="px-4 py-2.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-bold flex items-center gap-2 transition-all"
+            className="px-4 py-2.5 rounded-2xl bg-[#0B0F19] border border-amber-500/15 hover:border-slate-700 text-slate-300 text-xs font-bold flex items-center gap-2 transition-all"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Sync Directory</span>
@@ -243,7 +243,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
           onClick={() => setActiveTab('users')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
             activeTab === 'users'
-              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+              ? 'bg-cyan-500/20 text-amber-400 border border-cyan-500/30'
               : 'text-slate-400 hover:text-white'
           }`}
         >
@@ -254,7 +254,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
           onClick={() => setActiveTab('telemetry')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
             activeTab === 'telemetry'
-              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+              ? 'bg-cyan-500/20 text-amber-400 border border-cyan-500/30'
               : 'text-slate-400 hover:text-white'
           }`}
         >
@@ -265,7 +265,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
           onClick={() => setActiveTab('audit')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
             activeTab === 'audit'
-              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+              ? 'bg-cyan-500/20 text-amber-400 border border-cyan-500/30'
               : 'text-slate-400 hover:text-white'
           }`}
         >
@@ -282,9 +282,9 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
             <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
               <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
                 <span>Total Accounts</span>
-                <Users className="w-4 h-4 text-cyan-400" />
+                <Users className="w-4 h-4 text-amber-400" />
               </div>
-              <div className="text-3xl font-black text-cyan-400 font-mono">{totalUsersCount}</div>
+              <div className="text-3xl font-black text-amber-400 font-mono">{totalUsersCount}</div>
               <div className="text-[11px] text-slate-500">Registered across system</div>
             </div>
 
@@ -300,9 +300,9 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
             <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
               <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
                 <span>Faculty Members</span>
-                <CheckCircle2 className="w-4 h-4 text-purple-400" />
+                <CheckCircle2 className="w-4 h-4 text-amber-400" />
               </div>
-              <div className="text-3xl font-black text-purple-400 font-mono">{teachersCount}</div>
+              <div className="text-3xl font-black text-amber-400 font-mono">{teachersCount}</div>
               <div className="text-[11px] text-slate-500">Certified Instructors</div>
             </div>
 
@@ -325,7 +325,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search user by display name or email..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
               />
             </div>
 
@@ -333,7 +333,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
               <select
                 value={filterRole}
                 onChange={(e) => setFilterRole(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                className="bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
               >
                 <option value="ALL">All Roles</option>
                 <option value="admin">Administrators</option>
@@ -344,7 +344,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                className="bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="approved">Approved</option>
@@ -358,7 +358,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
           {loading ? (
             <div className="text-center py-12 text-slate-400 text-sm">Loading users...</div>
           ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+            <div className="bg-[#0B0F19] border border-amber-500/15 rounded-3xl overflow-hidden shadow-xl">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-800/60 border-b border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -374,7 +374,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
                     <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 font-bold text-xs">
+                          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-slate-950 font-bold text-xs">
                             {u.display_name.charAt(0)}
                           </div>
                           <div>
@@ -384,7 +384,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className="uppercase tracking-wider font-mono text-cyan-400 font-bold px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-[10px]">
+                        <span className="uppercase tracking-wider font-mono text-amber-400 font-bold px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-[10px]">
                           {u.role}
                         </span>
                       </td>
@@ -445,10 +445,10 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
       {activeTab === 'telemetry' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+            <div className="p-6 rounded-3xl bg-[#0B0F19] border border-amber-500/15 space-y-4 shadow-xl">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-white text-sm flex items-center gap-2">
-                  <Database className="w-4 h-4 text-cyan-400" /> PostgreSQL Engine
+                  <Database className="w-4 h-4 text-amber-400" /> PostgreSQL Engine
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
                   HEALTHY
@@ -461,10 +461,10 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
               </div>
             </div>
 
-            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+            <div className="p-6 rounded-3xl bg-[#0B0F19] border border-amber-500/15 space-y-4 shadow-xl">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-white text-sm flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-purple-400" /> WebRTC Video Engine
+                  <Radio className="w-4 h-4 text-amber-400" /> WebRTC Video Engine
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
                   OPERATIONAL
@@ -473,11 +473,11 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
               <div className="space-y-1.5 text-xs text-slate-400">
                 <div className="flex justify-between"><span>WebSocket Signal:</span><strong className="text-emerald-400 font-mono">CONNECTED</strong></div>
                 <div className="flex justify-between"><span>Active Video Rooms:</span><strong className="text-white font-mono">3 Live</strong></div>
-                <div className="flex justify-between"><span>STUN/TURN RTT:</span><strong className="text-cyan-400 font-mono">24 ms</strong></div>
+                <div className="flex justify-between"><span>STUN/TURN RTT:</span><strong className="text-amber-400 font-mono">24 ms</strong></div>
               </div>
             </div>
 
-            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+            <div className="p-6 rounded-3xl bg-[#0B0F19] border border-amber-500/15 space-y-4 shadow-xl">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-white text-sm flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-amber-400" /> Groq Cloud LPU Agent
@@ -489,7 +489,7 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
               <div className="space-y-1.5 text-xs text-slate-400">
                 <div className="flex justify-between"><span>Model Architecture:</span><strong className="text-white font-mono">LLaMA 3.3 70B</strong></div>
                 <div className="flex justify-between"><span>Inference Throughput:</span><strong className="text-emerald-400 font-mono">310 tok/sec</strong></div>
-                <div className="flex justify-between"><span>State Graph:</span><strong className="text-cyan-400 font-mono">SN1 LangGraph</strong></div>
+                <div className="flex justify-between"><span>State Graph:</span><strong className="text-amber-400 font-mono">SN1 LangGraph</strong></div>
               </div>
             </div>
           </div>
@@ -498,10 +498,10 @@ export const AdminPage: React.FC<AdminPageProps> = () => {
 
       {/* ── TAB 3: AUDIT TRAIL ───────────────────────────────────────────────── */}
       {activeTab === 'audit' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
+        <div className="bg-[#0B0F19] border border-amber-500/15 rounded-3xl p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-white text-base flex items-center gap-2">
-              <FileCheck className="w-4 h-4 text-cyan-400" />
+              <FileCheck className="w-4 h-4 text-amber-400" />
               Real-Time Security & Administrative Audit Trail
             </h3>
             <span className="text-xs text-slate-500 font-mono">{auditLogs.length} events logged</span>

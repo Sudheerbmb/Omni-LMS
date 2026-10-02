@@ -314,7 +314,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         {/* Top Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 p-8 rounded-3xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
           <div className="space-y-2 relative z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider">
               <Brain className="w-3.5 h-3.5" />
               {isAdmin
                 ? 'School Administrator • Whole-School Cognitive Intelligence'
@@ -337,7 +337,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 onClick={() => handleClassSwitch(0)}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                   selectedClassGrade === 0
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md font-black'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 shadow-md font-black'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -352,7 +352,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 onClick={() => handleClassSwitch(gNum)}
                 className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
                   selectedClassGrade === gNum
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md font-extrabold'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 shadow-md font-extrabold'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -367,7 +367,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   const val = Number(e.target.value)
                   if (val) handleClassSwitch(val)
                 }}
-                className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+                className="bg-[#0B0F19] border border-amber-500/15 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
               >
                 <option value="">Other Grades...</option>
                 {[1, 2, 3, 5, 6, 8, 9, 11, 12].map((g) => (
@@ -385,9 +385,9 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
             <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
               <span>Students Evaluated</span>
-              <Users className="w-4 h-4 text-cyan-400" />
+              <Users className="w-4 h-4 text-amber-400" />
             </div>
-            <div className="text-3xl font-black text-cyan-400 font-mono">{cohortData.length}</div>
+            <div className="text-3xl font-black text-amber-400 font-mono">{cohortData.length}</div>
             <div className="text-[11px] text-slate-500">
               {selectedClassGrade === 0 ? 'Across Entire School' : `Enrolled in Class ${selectedClassGrade}`}
             </div>
@@ -396,9 +396,9 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-xl">
             <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
               <span>Mean Competency</span>
-              <TrendingUp className="w-4 h-4 text-cyan-400" />
+              <TrendingUp className="w-4 h-4 text-amber-400" />
             </div>
-            <div className="text-3xl font-black text-cyan-400 font-mono">{classAvgCompetency}%</div>
+            <div className="text-3xl font-black text-amber-400 font-mono">{classAvgCompetency}%</div>
             <div className="text-[11px] text-slate-500">Global C Index</div>
           </div>
 
@@ -437,7 +437,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h2 className="text-base font-extrabold text-white flex items-center gap-2">
-                <Users className="w-5 h-5 text-cyan-400" />
+                <Users className="w-5 h-5 text-amber-400" />
                 {isAdmin && selectedClassGrade === 0
                   ? 'All-School Student Cognitive Directory (All Grades)'
                   : `Class ${selectedClassGrade} Student Cognitive Directory`}
@@ -458,14 +458,14 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   value={cohortSearch}
                   onChange={(e) => setCohortSearch(e.target.value)}
                   placeholder="Search student or email..."
-                  className="bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  className="bg-[#0B0F19] border border-amber-500/15 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
               <select
                 value={filterRisk}
                 onChange={(e) => setFilterRisk(e.target.value)}
-                className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                className="bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
               >
                 <option value="ALL">All Risk Levels</option>
                 <option value="HIGH">High Risk ({highRiskCount})</option>
@@ -476,7 +476,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               <select
                 value={filterBottleneck}
                 onChange={(e) => setFilterBottleneck(e.target.value)}
-                className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                className="bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
               >
                 <option value="ALL">All Bottlenecks</option>
                 <option value="MISCONCEPTION">Misconceptions ({misconceptionCount})</option>
@@ -498,14 +498,14 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   : student.state.primary_bottleneck === 'RETRIEVAL_DECAY'
                   ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                   : student.state.primary_bottleneck === 'TRANSFER_DEFICIT'
-                  ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                  ? 'bg-purple-500/10 text-amber-400 border-purple-500/20'
                   : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
 
               return (
                 <div
                   key={student.student_id}
                   onClick={() => setSelectedStudentForModal(student)}
-                  className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition-all flex flex-col justify-between space-y-4 shadow-xl group hover:scale-[1.02] relative"
+                  className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-amber-500/40 cursor-pointer transition-all flex flex-col justify-between space-y-4 shadow-xl group hover:scale-[1.02] relative"
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -516,10 +516,10 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                           {student.student_name.charAt(0)}
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors line-clamp-1">
+                          <h4 className="text-sm font-bold text-white group-hover:text-yellow-300 transition-colors line-clamp-1">
                             {student.student_name}
                           </h4>
-                          <span className="text-[10px] text-cyan-400 font-mono font-bold">{student.grade_name}</span>
+                          <span className="text-[10px] text-amber-400 font-mono font-bold">{student.grade_name}</span>
                         </div>
                       </div>
 
@@ -537,16 +537,16 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                     </div>
 
                     {student.admin_override && (
-                      <div className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-[10px] text-indigo-300 flex items-center gap-1.5">
-                        <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                      <div className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-[10px] text-orange-300 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3 h-3 text-orange-400" />
                         <span className="font-semibold">Admin Override Applied</span>
                       </div>
                     )}
 
-                    <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-2">
+                    <div className="p-3 rounded-2xl bg-slate-950/80 border border-amber-500/15 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-slate-400">Competency:</span>
-                        <span className="font-mono font-bold text-cyan-400">{compPercent}%</span>
+                        <span className="font-mono font-bold text-amber-400">{compPercent}%</span>
                       </div>
                       <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
                         <div
@@ -569,23 +569,23 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                  <div className="pt-2 border-t border-amber-500/15 flex items-center justify-between gap-2">
                     {isAdmin ? (
                       <>
                         <button
                           onClick={(e) => handleOpenEditModal(student, e)}
-                          className="px-2.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105"
+                          className="px-2.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-orange-300 border border-indigo-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                           <span>Edit</span>
                         </button>
-                        <div className="flex items-center text-xs text-cyan-400 font-bold group-hover:translate-x-1 transition-transform">
+                        <div className="flex items-center text-xs text-amber-400 font-bold group-hover:translate-x-1 transition-transform">
                           <span>Radar</span>
                           <ArrowRight className="w-3.5 h-3.5 ml-1" />
                         </div>
                       </>
                     ) : (
-                      <div className="flex items-center justify-between text-xs text-cyan-400 font-bold group-hover:translate-x-1 transition-transform w-full">
+                      <div className="flex items-center justify-between text-xs text-amber-400 font-bold group-hover:translate-x-1 transition-transform w-full">
                         <span>Inspect Neural Radar</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </div>
@@ -603,7 +603,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
             <div className="bg-slate-900 border border-indigo-500/40 rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-orange-400 flex items-center justify-center font-bold">
                     <Sliders className="w-5 h-5" />
                   </div>
                   <div>
@@ -660,7 +660,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   <select
                     value={editBottleneck}
                     onChange={(e) => setEditBottleneck(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                   >
                     <option value="BALANCED">BALANCED (Steady learning progression)</option>
                     <option value="MISCONCEPTION">MISCONCEPTION (Systemic error reversal needed)</option>
@@ -674,7 +674,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="font-bold text-slate-300">Competency Baseline ($C$ Index):</label>
-                    <span className="font-mono text-cyan-400 font-bold text-sm">{editCompetencyPercent}%</span>
+                    <span className="font-mono text-amber-400 font-bold text-sm">{editCompetencyPercent}%</span>
                   </div>
                   <input
                     type="range"
@@ -710,7 +710,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                     value={editNotes}
                     onChange={(e) => setEditNotes(e.target.value)}
                     placeholder="e.g. Risk level adjusted following remedial clinic and 1-on-1 counselor evaluation..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500"
                   />
                 </div>
               </div>
@@ -726,7 +726,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 <button
                   type="button"
                   onClick={handleSaveAdminOverride}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20"
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-cyan-400 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>Save & Apply Override</span>
@@ -750,13 +750,13 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   <div>
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       {selectedStudentForModal.student_name}
-                      <span className="text-xs font-mono font-normal text-cyan-400">
+                      <span className="text-xs font-mono font-normal text-amber-400">
                         ({selectedStudentForModal.email})
                       </span>
                     </h3>
                     <p className="text-xs text-slate-400">
                       {selectedStudentForModal.grade_name} &bull; Primary Bottleneck:{' '}
-                      <strong className="text-cyan-300">{selectedStudentForModal.state.primary_bottleneck}</strong> &bull; Total Evidence Events:{' '}
+                      <strong className="text-yellow-300">{selectedStudentForModal.state.primary_bottleneck}</strong> &bull; Total Evidence Events:{' '}
                       {selectedStudentForModal.recent_events_count}
                     </p>
                   </div>
@@ -770,9 +770,9 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               </div>
 
               {selectedStudentForModal.admin_override && (
-                <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl text-xs text-indigo-300 space-y-1">
+                <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl text-xs text-orange-300 space-y-1">
                   <div className="font-bold flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                    <ShieldCheck className="w-4 h-4 text-orange-400" />
                     <span>Administrator Override in Effect</span>
                   </div>
                   <p className="text-[11px] text-slate-300">
@@ -784,16 +784,16 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               {/* Subject Breakdowns */}
               <div className="space-y-3">
                 <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                  <Target className="w-4 h-4 text-cyan-400" />
+                  <Target className="w-4 h-4 text-amber-400" />
                   Subject-Wise Bayesian State Breakdown
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {Object.values(selectedStudentForModal.state.subjects).map((subj) => (
-                    <div key={subj.subject} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div key={subj.subject} className="p-4 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-white">{subj.subject}</span>
-                        <span className="font-mono text-cyan-400 text-xs font-bold">
+                        <span className="font-mono text-amber-400 text-xs font-bold">
                           {Math.round(subj.overall_competency * 100)}% C
                         </span>
                       </div>
@@ -802,13 +802,13 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                         {subj.concepts.map((c) => (
                           <div
                             key={c.concept_id}
-                            className="p-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-[11px]"
+                            className="p-2 rounded-xl bg-[#0B0F19] border border-amber-500/15 flex items-center justify-between text-[11px]"
                           >
                             <span className="text-slate-300 truncate max-w-[180px]">{c.concept_name}</span>
                             <div className="flex items-center gap-2 font-mono">
                               <span className="text-emerald-400">{Math.round(c.mastery * 100)}% M</span>
                               <span className="text-slate-500">|</span>
-                              <span className="text-cyan-400">{Math.round(c.competency * 100)}% C</span>
+                              <span className="text-amber-400">{Math.round(c.competency * 100)}% C</span>
                             </div>
                           </div>
                         ))}
@@ -827,7 +827,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                       setSelectedStudentForModal(null)
                       handleOpenEditModal(s)
                     }}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center gap-2"
+                    className="px-5 py-2.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-orange-300 border border-indigo-500/40 font-bold text-xs flex items-center gap-2"
                   >
                     <Edit3 className="w-4 h-4" />
                     <span>Edit Cognitive Profile</span>
@@ -839,7 +839,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                       alert(`Targeted unblocking assignment dispatched to ${selectedStudentForModal.student_name}!`)
                       setSelectedStudentForModal(null)
                     }}
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg"
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg"
                   >
                     <Zap className="w-4 h-4" />
                     <span>Assign Targeted Remediation Drill</span>
@@ -1223,7 +1223,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 p-8 rounded-3xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
         <div className="space-y-2 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider">
             <Brain className="w-3.5 h-3.5" />
             LENS-Ω + SN1 &bull; {neuralState.grade_name} Granular Multi-Subject Graph
           </div>
@@ -1239,7 +1239,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         <div className="flex items-center gap-4 relative z-10">
           <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-center min-w-[120px]">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Holistic Competency</div>
-            <div className="text-3xl font-black text-cyan-400 font-mono">
+            <div className="text-3xl font-black text-amber-400 font-mono">
               {(neuralState.overall_competency * 100).toFixed(0)}%
             </div>
             <div className="text-[10px] text-slate-500">Global C Index</div>
@@ -1301,7 +1301,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
 
                   <div className="flex items-baseline justify-between">
                     <div>
-                      <div className="text-2xl font-black text-cyan-400 font-mono">
+                      <div className="text-2xl font-black text-amber-400 font-mono">
                         {Math.round(subj.overall_competency * 100)}%
                       </div>
                       <div className="text-[10px] text-slate-400">Bayesian Competency</div>
@@ -1319,7 +1319,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   {isTaken && (
                     <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] flex items-center justify-between text-slate-300">
                       <span>Neural Status:</span>
-                      <span className="font-mono text-cyan-300 font-bold uppercase">{subj.active_bottleneck}</span>
+                      <span className="font-mono text-yellow-300 font-bold uppercase">{subj.active_bottleneck}</span>
                     </div>
                   )}
                 </div>
@@ -1329,12 +1329,12 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                   className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md ${
                     isTaken
                       ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                      : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-extrabold shadow-cyan-500/20'
+                      : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-cyan-400 text-slate-950 font-extrabold shadow-cyan-500/20'
                   }`}
                 >
                   {isTaken ? (
                     <>
-                      <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+                      <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
                       <span>Retake Benchmark Test</span>
                     </>
                   ) : (
@@ -1355,7 +1355,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-white text-base flex items-center gap-2">
-              <Activity className="w-4 h-4 text-cyan-400" />
+              <Activity className="w-4 h-4 text-amber-400" />
               Granular Concept-Level Knowledge Tracing Matrix
             </h3>
           </div>
@@ -1368,7 +1368,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   activeSubjectTab === tab
                     ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                    : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                    : 'bg-[#0B0F19] border border-amber-500/15 text-slate-400 hover:text-white'
                 }`}
               >
                 {tab}
@@ -1381,7 +1381,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           {displayedConcepts.map((concept) => (
             <div key={concept.concept_id} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono text-cyan-400">{concept.subject}</span>
+                <span className="text-[10px] font-mono text-amber-400">{concept.subject}</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-amber-300">
                   {concept.learning_mode}
                 </span>
@@ -1393,7 +1393,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               </div>
               <button
                 onClick={() => handleStartPracticeDrill(concept)}
-                className="w-full py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:border-cyan-500/60 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                className="w-full py-1.5 rounded-lg bg-cyan-500/10 hover:bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:border-cyan-500/60 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
               >
                 <Play className="w-3 h-3 fill-current" />
                 <span>Start Practice Drill</span>
@@ -1406,7 +1406,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
       {/* ── Interactive SN1 AI Assistant Chat ─────────────────────────────────── */}
       <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 space-y-4">
         <h3 className="font-bold text-white text-base flex items-center gap-2">
-          <Brain className="w-4 h-4 text-cyan-400" />
+          <Brain className="w-4 h-4 text-amber-400" />
           Interactive Learning Agent Assistant (SN1 LangGraph)
         </h3>
         <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
@@ -1416,7 +1416,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 className={`p-3 rounded-2xl max-w-lg text-xs ${
                   msg.sender === 'user'
                     ? 'bg-cyan-500 text-slate-950 font-medium'
-                    : 'bg-slate-950 border border-slate-800 text-slate-200'
+                    : 'bg-[#0B0F19] border border-amber-500/15 text-slate-200'
                 }`}
               >
                 {msg.text}
@@ -1431,7 +1431,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
             placeholder="Ask your learning agent a question..."
-            className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+            className="flex-1 bg-[#0B0F19] border border-amber-500/15 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
           />
           <button
             onClick={() => handleSendChat()}
@@ -1462,7 +1462,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
 
             {loadingQuestions ? (
               <div className="p-12 text-center text-xs text-slate-400 space-y-2">
-                <Loader2 className="w-8 h-8 animate-spin mx-auto text-cyan-400" />
+                <Loader2 className="w-8 h-8 animate-spin mx-auto text-amber-400" />
                 <p>Generating psychometrically calibrated benchmark items...</p>
               </div>
             ) : testSummary ? (
@@ -1482,7 +1482,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
               </div>
             ) : currentQ ? (
               <div className="space-y-4">
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800">
+                <div className="p-4 rounded-2xl bg-[#0B0F19] border border-amber-500/15">
                   <p className="text-sm font-semibold text-white">{currentQ.prompt}</p>
                 </div>
 
@@ -1541,7 +1541,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
           <div className="bg-slate-900 border border-indigo-500/40 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
-                <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">{activeDrillConcept.subject} &bull; Practice Drill</span>
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">{activeDrillConcept.subject} &bull; Practice Drill</span>
                 <h3 className="font-bold text-white text-base">{activeDrillConcept.concept_name}</h3>
               </div>
               <button onClick={() => setDrillModalOpen(false)} className="text-slate-400 hover:text-white text-xl">
@@ -1551,7 +1551,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
 
             {drillLoading ? (
               <div className="p-10 text-center text-xs text-slate-400 space-y-2">
-                <Loader2 className="w-8 h-8 animate-spin mx-auto text-cyan-400" />
+                <Loader2 className="w-8 h-8 animate-spin mx-auto text-amber-400" />
                 <p>Generating psychometric conceptual drill items for {activeDrillConcept.concept_name}...</p>
               </div>
             ) : drillResult ? (
@@ -1565,10 +1565,10 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                     Score: {drillResult.scorePercent}% ({drillResult.correctCount}/{drillResult.totalCount} Correct)
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-[#0B0F19] border border-amber-500/15 text-xs">
                   <div>
                     <span className="text-slate-400">New Mastery:</span>
-                    <div className="text-base font-black text-cyan-400 font-mono">{drillResult.newMastery}%</div>
+                    <div className="text-base font-black text-amber-400 font-mono">{drillResult.newMastery}%</div>
                   </div>
                   <div>
                     <span className="text-slate-400">Memory Retention:</span>
@@ -1585,9 +1585,9 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
             ) : (
               <div className="space-y-4">
                 {drillQuestions.map((q, idx) => (
-                  <div key={q.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                  <div key={q.id} className="p-4 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-3">
                     <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span className="font-bold text-cyan-400">Question {idx + 1} of {drillQuestions.length}</span>
+                      <span className="font-bold text-amber-400">Question {idx + 1} of {drillQuestions.length}</span>
                       <span className="font-mono">Difficulty: {(q.difficulty * 100).toFixed(0)}%</span>
                     </div>
                     <p className="text-xs font-semibold text-white">{q.prompt}</p>
@@ -1613,7 +1613,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 <button
                   disabled={drillSubmitting || Object.keys(drillAnswers).length < drillQuestions.length}
                   onClick={handleSubmitPracticeDrill}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-black text-xs disabled:opacity-50 transition-all shadow-lg flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-cyan-400 text-slate-950 font-black text-xs disabled:opacity-50 transition-all shadow-lg flex items-center justify-center gap-2"
                 >
                   {drillSubmitting ? (
                     <>

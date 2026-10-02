@@ -176,7 +176,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 p-8 rounded-2xl border border-slate-800 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="space-y-2 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-amber-400 text-xs font-semibold uppercase tracking-wider">
             {isAdmin && <ShieldCheck className="w-3.5 h-3.5" />}
             {isTeacher && <GraduationCap className="w-3.5 h-3.5" />}
             {isStudent && <BookOpen className="w-3.5 h-3.5" />}
@@ -202,7 +202,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
 
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-right shrink-0 relative z-10 space-y-1">
           <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Active Courses</div>
-          <div className="text-3xl font-black text-cyan-400">{courses.length}</div>
+          <div className="text-3xl font-black text-amber-400">{courses.length}</div>
           <div className="text-[11px] text-slate-500">
             {isStudent ? 'Enrolled Subjects' : isTeacher ? 'Assigned Classes' : 'Grades 1-10 Total'}
           </div>
@@ -210,7 +210,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
       </div>
 
       {/* Controls & Search */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-slate-900 border border-slate-800">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-[#0B0F19] border border-amber-500/15">
         <div className="relative w-full md:w-96">
           <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -225,7 +225,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
         {isAdmin && (
           <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
             <span className="text-xs font-semibold text-slate-400 flex items-center gap-1 shrink-0">
-              <Filter className="w-3.5 h-3.5 text-cyan-400" /> Grade:
+              <Filter className="w-3.5 h-3.5 text-amber-400" /> Grade:
             </span>
             <button
               onClick={() => setSelectedGrade('all')}
@@ -283,7 +283,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
               <div
                 key={c.id}
                 onClick={() => setActiveCourse(c)}
-                className="group relative bg-slate-900 border border-slate-800 hover:border-cyan-500/50 rounded-2xl p-6 transition-all hover:shadow-2xl hover:shadow-cyan-500/10 cursor-pointer flex flex-col justify-between"
+                className="group relative bg-[#0B0F19] border border-amber-500/15 hover:border-cyan-500/50 rounded-2xl p-6 transition-all hover:shadow-2xl hover:shadow-cyan-500/10 cursor-pointer flex flex-col justify-between"
               >
                 <div className="space-y-4">
                   {/* Top Bar */}
@@ -307,7 +307,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
                             {c.grade_name}
                           </span>
                         </div>
-                        <h3 className="text-base font-extrabold text-white mt-1 group-hover:text-cyan-400 transition-colors line-clamp-1">
+                        <h3 className="text-base font-extrabold text-white mt-1 group-hover:text-amber-400 transition-colors line-clamp-1">
                           {c.subject_name}
                         </h3>
                       </div>
@@ -319,7 +319,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
                           event.stopPropagation()
                           openCourseEditor(c)
                         }}
-                        className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+                        className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-orange-300 hover:bg-indigo-500/20 transition-colors"
                         title="Edit curriculum course"
                       >
                         <Pencil className="w-4 h-4" />
@@ -328,19 +328,19 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
                   </div>
 
                   {/* Highlights */}
-                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-800/80">
+                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-amber-500/15">
                     <div className="flex items-center gap-1.5 text-slate-400">
-                      <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                       <span>{c.periods_per_week} Periods / Wk</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-slate-400">
-                      <Layers className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <Layers className="w-3.5 h-3.5 text-orange-400 shrink-0" />
                       <span>{c.total_chapters} Chapters ({c.estimated_weeks} Wks)</span>
                     </div>
                   </div>
 
                   {/* Instructor */}
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-between text-xs">
+                  <div className="p-2.5 rounded-xl bg-[#0B0F19] border border-amber-500/15/80 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 font-bold text-[10px]">
                         {c.instructor_name.charAt(0)}
@@ -359,7 +359,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
                   <div className="space-y-1.5 pt-1">
                     <div className="flex justify-between text-[11px] font-semibold">
                       <span className="text-slate-400">Syllabus Progress</span>
-                      <span className="text-cyan-400">{completedCount} / {c.total_chapters} Chapters ({percent}%)</span>
+                      <span className="text-amber-400">{completedCount} / {c.total_chapters} Chapters ({percent}%)</span>
                     </div>
                     <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                       <div
@@ -370,7 +370,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
                   </div>
                 </div>
 
-                <div className="mt-5 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-bold text-cyan-400 group-hover:text-cyan-300 transition-colors">
+                <div className="mt-5 pt-3 border-t border-amber-500/15 flex items-center justify-between text-xs font-bold text-amber-400 group-hover:text-yellow-300 transition-colors">
                   <span>Explore Chapters & Syllabus</span>
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>
@@ -433,7 +433,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
       {/* ── Chapter Syllabus Modal ─────────────────────────────────────────── */}
       {activeCourse && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-3xl w-full p-6 space-y-6 shadow-2xl my-8 max-h-[90vh] flex flex-col">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-3xl max-w-3xl w-full p-6 space-y-6 shadow-2xl my-8 max-h-[90vh] flex flex-col">
             {/* Modal Header */}
             <div className="flex items-start justify-between border-b border-slate-800 pb-4 shrink-0">
               <div className="flex items-center gap-3">
@@ -471,19 +471,19 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
 
             {/* Course Meta Info */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <div className="p-3 rounded-xl bg-[#0B0F19] border border-amber-500/15">
                 <div className="text-[10px] text-slate-500 font-semibold uppercase">Assigned Instructor</div>
                 <div className="text-xs font-bold text-slate-200 mt-0.5">{activeCourse.instructor_name}</div>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <div className="p-3 rounded-xl bg-[#0B0F19] border border-amber-500/15">
                 <div className="text-[10px] text-slate-500 font-semibold uppercase">Weekly Periods</div>
-                <div className="text-xs font-bold text-cyan-400 mt-0.5">{activeCourse.periods_per_week} Periods / Wk</div>
+                <div className="text-xs font-bold text-amber-400 mt-0.5">{activeCourse.periods_per_week} Periods / Wk</div>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <div className="p-3 rounded-xl bg-[#0B0F19] border border-amber-500/15">
                 <div className="text-[10px] text-slate-500 font-semibold uppercase">Total Chapters</div>
-                <div className="text-xs font-bold text-indigo-400 mt-0.5">{activeCourse.total_chapters} Chapters</div>
+                <div className="text-xs font-bold text-orange-400 mt-0.5">{activeCourse.total_chapters} Chapters</div>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <div className="p-3 rounded-xl bg-[#0B0F19] border border-amber-500/15">
                 <div className="text-[10px] text-slate-500 font-semibold uppercase">Estimated Pacing</div>
                 <div className="text-xs font-bold text-amber-400 mt-0.5">{activeCourse.estimated_weeks} Weeks Total</div>
               </div>
@@ -524,7 +524,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
                           </button>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-[11px] font-mono font-bold text-cyan-400">
+                              <span className="text-[11px] font-mono font-bold text-amber-400">
                                 Chapter {ch.num}
                               </span>
                               <span className="text-xs text-slate-500">&bull; {ch.duration_weeks} Weeks</span>
@@ -556,7 +556,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ user }) => {
 
                         {ch.outcomes && (
                           <div className="text-[11px] text-slate-400 flex items-start gap-1.5 pt-1">
-                            <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                             <span><strong className="text-slate-300">Target Outcome:</strong> {ch.outcomes}</span>
                           </div>
                         )}

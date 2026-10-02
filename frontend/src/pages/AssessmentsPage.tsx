@@ -398,7 +398,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 p-8 rounded-3xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
         <div className="space-y-2 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider">
             <Shield className="w-3.5 h-3.5" />
             {isTeacher ? 'Teacher Examination & Security Studio' : `Secure Examination Portal • Enrolled in ${studentGrade}`}
           </div>
@@ -421,7 +421,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                 setQuestionItems([])
                 setDocumentContent('')
               }}
-              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
+              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-extrabold text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
               <span>Schedule New Test</span>
@@ -437,7 +437,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
             onClick={() => setActiveTab('assessments')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === 'assessments'
-                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                ? 'bg-cyan-500/20 text-amber-400 border border-cyan-500/30'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -448,7 +448,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
             onClick={() => setActiveTab('submissions')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === 'submissions'
-                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                ? 'bg-cyan-500/20 text-amber-400 border border-cyan-500/30'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -493,7 +493,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                   >
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                        <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-amber-400 border border-cyan-500/20">
                           {asmt.target_grade} &bull; {asmt.subject}
                         </span>
                         {isCompleted ? (
@@ -510,20 +510,20 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                       </div>
 
                       <div>
-                        <h4 className="text-base font-bold text-white group-hover:text-cyan-300 transition-colors">
+                        <h4 className="text-base font-bold text-white group-hover:text-yellow-300 transition-colors">
                           {asmt.title}
                         </h4>
                         <p className="text-xs text-slate-400 mt-1 line-clamp-2">{asmt.description}</p>
                       </div>
 
-                      <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-1.5 text-xs text-slate-300">
+                      <div className="p-3 rounded-2xl bg-slate-950/80 border border-amber-500/15 space-y-1.5 text-xs text-slate-300">
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-slate-500">Topic:</span>
                           <span className="font-semibold text-slate-200">{asmt.topic_syllabus}</span>
                         </div>
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-slate-500">Duration:</span>
-                          <span className="font-mono text-cyan-400">{asmt.duration_minutes} Mins</span>
+                          <span className="font-mono text-amber-400">{asmt.duration_minutes} Mins</span>
                         </div>
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-slate-500">Passing Score:</span>
@@ -536,7 +536,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                    <div className="pt-2 border-t border-amber-500/15 flex items-center justify-between gap-2">
                       {isTeacher ? (
                         <>
                           <div className="text-[11px] text-slate-400">
@@ -560,7 +560,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                       ) : (
                         <button
                           onClick={() => handleStartTest(asmt)}
-                          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-cyan-500/10 hover:scale-105"
+                          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-cyan-500/10 hover:scale-105"
                         >
                           <Shield className="w-4 h-4" />
                           <span>Start Proctored Exam &rarr;</span>
@@ -581,7 +581,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <Users className="w-4 h-4 text-cyan-400" />
+                <Users className="w-4 h-4 text-amber-400" />
                 Live Student Test Submissions & Anti-Cheat Audit Telemetry
               </h3>
               <p className="text-xs text-slate-400">
@@ -610,7 +610,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                     <tr key={sub.submission_id} className="hover:bg-slate-850/50 transition-colors">
                       <td className="py-3">
                         <div className="font-semibold text-white">{sub.student_name}</div>
-                        <div className="text-[10px] text-cyan-400 font-mono">{sub.student_grade}</div>
+                        <div className="text-[10px] text-amber-400 font-mono">{sub.student_grade}</div>
                       </td>
                       <td className="py-3 text-slate-300 font-medium">{sub.assessment_title}</td>
                       <td className="py-3 text-center font-mono font-bold text-sm">
@@ -659,7 +659,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
           <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl max-w-3xl w-full p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
+                <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-amber-400 font-bold">
                   <CheckSquare className="w-5 h-5" />
                 </div>
                 <div>
@@ -684,7 +684,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                     <select
                       value={targetGrade}
                       onChange={(e) => setTargetGrade(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                     >
                       <option value="Class 10">Class 10 (Secondary Board)</option>
                       <option value="Class 7">Class 7 (Middle School)</option>
@@ -700,7 +700,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                     <select
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                     >
                       <option value="Mathematics">Mathematics</option>
                       <option value="Science (EVS)">Science / EVS / Physics & Chem</option>
@@ -718,7 +718,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                     value={topicSyllabus}
                     onChange={(e) => setTopicSyllabus(e.target.value)}
                     placeholder="e.g. Quadratic Equations, Photosynthesis, Fractions..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                   />
                 </div>
 
@@ -730,13 +730,13 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder={`e.g. ${targetGrade} ${subject}: Diagnostic Benchmark`}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                   />
                 </div>
 
                 {/* Timing Window & Scheduling Options */}
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-                  <div className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                <div className="p-4 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-3">
+                  <div className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
                     <Clock className="w-3.5 h-3.5" />
                     Scheduling & Timing Options
                   </div>
@@ -770,7 +770,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                           type="datetime-local"
                           value={startTime}
                           onChange={(e) => setStartTime(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white mt-1"
+                          className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-1.5 text-xs text-white mt-1"
                         />
                       </div>
                       <div>
@@ -779,7 +779,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                           type="datetime-local"
                           value={endTime}
                           onChange={(e) => setEndTime(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white mt-1"
+                          className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-1.5 text-xs text-white mt-1"
                         />
                       </div>
                     </div>
@@ -792,7 +792,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                         type="number"
                         value={durationMinutes}
                         onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white mt-1"
+                        className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-1.5 text-xs text-white mt-1"
                       />
                     </div>
                     <div>
@@ -801,7 +801,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                         type="number"
                         value={passingScore}
                         onChange={(e) => setPassingScore(Number(e.target.value))}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white mt-1"
+                        className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-1.5 text-xs text-white mt-1"
                       />
                     </div>
                   </div>
@@ -838,7 +838,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
                           creationMode === mode.id
                             ? 'bg-cyan-500 text-slate-950 shadow'
-                            : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                            : 'bg-[#0B0F19] border border-amber-500/15 text-slate-400 hover:text-white'
                         }`}
                       >
                         <mode.icon className="w-3.5 h-3.5" />
@@ -857,8 +857,8 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
 
                 {/* AI Generate View */}
                 {creationMode === 'AI' && (
-                  <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-4">
-                    <Sparkles className="w-8 h-8 text-cyan-400 mx-auto" />
+                  <div className="p-6 rounded-2xl bg-[#0B0F19] border border-amber-500/15 text-center space-y-4">
+                    <Sparkles className="w-8 h-8 text-amber-400 mx-auto" />
                     <div className="space-y-1">
                       <h4 className="font-bold text-white text-sm">
                         Synthesize Deeply Calibrated Examination Items for {targetGrade} {subject}
@@ -872,7 +872,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                       type="button"
                       disabled={isGeneratingAI}
                       onClick={handleAIGenerate}
-                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 mx-auto disabled:opacity-50 transition-all hover:scale-105"
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 mx-auto disabled:opacity-50 transition-all hover:scale-105"
                     >
                       {isGeneratingAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                       <span>{isGeneratingAI ? 'Synthesizing Rigorous Items...' : 'Generate 5 Examination Questions with AI'}</span>
@@ -926,14 +926,14 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
 
                 {/* Manual Builder View */}
                 {creationMode === 'MANUAL' && (
-                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                  <div className="p-4 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-3">
                     <div className="text-xs font-bold text-white">Add Individual Question</div>
                     <input
                       type="text"
                       value={manQText}
                       onChange={(e) => setManQText(e.target.value)}
                       placeholder="Enter question text (e.g. Solve 2x² - 7x + 3 = 0)..."
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                     />
 
                     <div className="grid grid-cols-3 gap-3">
@@ -942,7 +942,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                         <select
                           value={manQType}
                           onChange={(e) => setManQType(e.target.value as any)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white mt-1"
+                          className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-2 py-1.5 text-xs text-white mt-1"
                         >
                           <option value="multiple_choice">Multiple Choice (MCQ)</option>
                           <option value="descriptive">Descriptive / Problem Solving</option>
@@ -953,7 +953,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                         <select
                           value={manLevel}
                           onChange={(e) => setManLevel(e.target.value as any)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white mt-1"
+                          className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-2 py-1.5 text-xs text-white mt-1"
                         >
                           <option value="FOUNDATION">FOUNDATION</option>
                           <option value="APPLICATION">APPLICATION</option>
@@ -967,7 +967,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                           type="number"
                           value={manPoints}
                           onChange={(e) => setManPoints(Number(e.target.value))}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white mt-1"
+                          className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-2 py-1.5 text-xs text-white mt-1"
                         />
                       </div>
                     </div>
@@ -992,7 +992,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                                 setManOptions(next)
                               }}
                               placeholder={`Option ${idx + 1}...`}
-                              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white"
+                              className="flex-1 bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-1.5 text-xs text-white"
                             />
                           </div>
                         ))}
@@ -1018,13 +1018,13 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
 
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {questionItems.map((q, idx) => (
-                      <div key={q.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-start justify-between gap-3 text-xs">
+                      <div key={q.id} className="p-3 rounded-xl bg-[#0B0F19] border border-amber-500/15 flex items-start justify-between gap-3 text-xs">
                         <div>
                           <div className="font-semibold text-white">
                             {idx + 1}. {q.question_text}
                           </div>
                           <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-2">
-                            <span className="px-1.5 py-0.5 rounded bg-slate-900 text-cyan-400">{q.question_type}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-slate-900 text-amber-400">{q.question_type}</span>
                             <span className="px-1.5 py-0.5 rounded bg-slate-900 text-amber-400">{q.cognitive_level}</span>
                             <span>{q.points} Pts</span>
                           </div>
@@ -1077,14 +1077,14 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+            <div className="p-4 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-2">
               <div className="text-3xl font-black text-emerald-400 font-mono">
                 {viewingPastSubmission.score_percent}%
               </div>
               <div className="text-xs text-slate-300">
                 Earned {viewingPastSubmission.total_points_earned} of {viewingPastSubmission.max_points} Points
               </div>
-              <p className="text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+              <p className="text-xs text-slate-400 pt-2 border-t border-amber-500/15">
                 {viewingPastSubmission.feedback}
               </p>
             </div>
@@ -1109,7 +1109,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
           {/* Top Proctoring Security Bar */}
           <div className="flex items-center justify-between border-b border-slate-800 pb-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
+              <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-amber-400 font-bold">
                 <Shield className="w-5 h-5" />
               </div>
               <div>
@@ -1122,11 +1122,11 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
 
             {/* Live Camera Feed & Status HUD */}
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0B0F19] border border-amber-500/15 text-xs text-slate-300">
                 <Camera className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
                 <span>Cam Active</span>
                 <span className="text-slate-600">|</span>
-                <Mic className="w-3.5 h-3.5 text-cyan-400" />
+                <Mic className="w-3.5 h-3.5 text-amber-400" />
                 <span>Mic: {micVolumeLevel}%</span>
               </div>
 
@@ -1204,7 +1204,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
             ) : activeQ ? (
               <div className="space-y-6">
                 <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span className="px-3 py-1 rounded-lg bg-slate-900 text-cyan-300 font-bold border border-slate-800">
+                  <span className="px-3 py-1 rounded-lg bg-slate-900 text-yellow-300 font-bold border border-slate-800">
                     Concept: {activeQ.concept_name}
                   </span>
                   <span className="px-3 py-1 rounded-lg bg-slate-900 text-amber-300 font-bold border border-slate-800">
@@ -1212,7 +1212,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                   </span>
                 </div>
 
-                <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
+                <div className="p-6 rounded-3xl bg-[#0B0F19] border border-amber-500/15 shadow-xl">
                   <p className="text-base font-semibold text-white leading-relaxed">{activeQ.question_text}</p>
                 </div>
 
@@ -1231,7 +1231,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                           }`}
                         >
                           <span>{opt}</span>
-                          {isSelected && <Check className="w-4 h-4 text-cyan-400" />}
+                          {isSelected && <Check className="w-4 h-4 text-amber-400" />}
                         </button>
                       )
                     })}
@@ -1244,7 +1244,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
                       value={(studentAnswers[activeQ.id] as string) || ''}
                       onChange={(e) => setStudentAnswers((prev) => ({ ...prev, [activeQ.id]: e.target.value }))}
                       placeholder="Type your derivation steps, formulas, and final answer..."
-                      className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-2xl p-4 text-xs text-white focus:outline-none focus:border-cyan-500"
                     />
                   </div>
                 )}

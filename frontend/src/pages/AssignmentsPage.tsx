@@ -275,7 +275,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
     <div className="p-8 space-y-8 max-w-7xl mx-auto animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 p-8 rounded-3xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
         <div className="space-y-2 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider">
             <FileText className="w-3.5 h-3.5" />
             {isTeacher ? 'Faculty Coursework Desk & Grading Hub' : 'My Coursework & Assignment Desk'}
           </div>
@@ -292,7 +292,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
         {isTeacher && (
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-extrabold text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition-all hover:scale-105"
+            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-cyan-400 text-slate-950 font-extrabold text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition-all hover:scale-105"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             <span>New Assignment</span>
@@ -302,7 +302,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
 
       {/* Course Filter */}
       <div className="flex items-center gap-4 bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
-        <BookOpen className="w-4 h-4 text-cyan-400" />
+        <BookOpen className="w-4 h-4 text-amber-400" />
         <label className="text-xs uppercase font-bold tracking-wider text-slate-400">Select Curriculum Course:</label>
         <select
           value={selectedCourse}
@@ -321,7 +321,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
       <div className="space-y-4">
         {loading ? (
           <div className="p-12 text-center text-xs text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mx-auto text-cyan-400 mb-2" />
+            <Loader2 className="w-6 h-6 animate-spin mx-auto text-amber-400 mb-2" />
             <span>Loading course assignments...</span>
           </div>
         ) : assignments.length === 0 ? (
@@ -343,7 +343,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                 >
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded-full border border-cyan-500/20 font-mono">
+                      <span className="text-xs font-bold text-amber-400 bg-cyan-500/10 px-2.5 py-0.5 rounded-full border border-cyan-500/20 font-mono">
                         Max: {item.max_score} Pts
                       </span>
                       {item.due_date && (
@@ -358,11 +358,11 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                     <p className="text-slate-400 text-xs line-clamp-2">{item.description || item.instructions}</p>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                  <div className="pt-2 border-t border-amber-500/15 flex items-center justify-between">
                     {isTeacher ? (
                       <button
                         onClick={() => handleOpenTeacherSubmissions(item)}
-                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-cyan-300 border border-cyan-500/30 font-bold text-xs flex items-center gap-2 transition-all hover:scale-105"
+                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-yellow-300 border border-cyan-500/30 font-bold text-xs flex items-center gap-2 transition-all hover:scale-105"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>Review Submissions & Grade</span>
@@ -375,7 +375,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                     ) : (
                       <button
                         onClick={() => setActiveAssignment(item)}
-                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 transition-all hover:scale-105"
+                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 transition-all hover:scale-105"
                       >
                         <Upload className="w-3.5 h-3.5" />
                         <span>Submit Work &rarr;</span>
@@ -410,7 +410,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
             ) : (
               <div className="space-y-3">
                 {submissions.map((sub, idx) => (
-                  <div key={sub.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                  <div key={sub.id} className="p-4 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-white text-xs">Submission #{idx + 1}</span>
                       <span
@@ -424,12 +424,12 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
+                    <p className="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-xl border border-amber-500/15">
                       "{sub.content}"
                     </p>
 
                     {sub.feedback && (
-                      <p className="text-[11px] text-cyan-300">
+                      <p className="text-[11px] text-yellow-300">
                         <strong>Feedback:</strong> {sub.feedback}
                       </p>
                     )}
@@ -441,7 +441,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                           setGradeInput(sub.score || 85)
                           setFeedbackInput(sub.feedback || '')
                         }}
-                        className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold"
+                        className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-yellow-300 border border-cyan-500/40 text-xs font-bold"
                       >
                         {sub.status === 'graded' ? 'Edit Grade & Feedback' : 'Grade Submission'}
                       </button>
@@ -466,7 +466,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                   type="number"
                   value={gradeInput}
                   onChange={(e) => setGradeInput(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono mt-1"
+                  className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-white font-mono mt-1"
                 />
               </div>
 
@@ -477,7 +477,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                   value={feedbackInput}
                   onChange={(e) => setFeedbackInput(e.target.value)}
                   placeholder="e.g. Good mastery of formula, check arithmetic sign on step 3..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white mt-1"
+                  className="w-full bg-[#0B0F19] border border-amber-500/15 rounded-xl p-3 text-white mt-1"
                 />
               </div>
             </div>
@@ -504,7 +504,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
       {/* ── STUDENT SUBMIT WORK MODAL ───────────────────────────────────────── */}
       {activeAssignment && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <h3 className="font-bold text-white text-base">Submit Solution: {activeAssignment.title}</h3>
@@ -524,7 +524,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                   value={subContent}
                   onChange={(e) => setSubContent(e.target.value)}
                   placeholder="Provide your full mathematical derivations, explanatory paragraphs, or code implementation..."
-                  className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-2xl p-4 text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full mt-1 bg-[#0B0F19] border border-amber-500/15 rounded-2xl p-4 text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
@@ -535,7 +535,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                   value={subFileUrl}
                   onChange={(e) => setSubFileUrl(e.target.value)}
                   placeholder="https://drive.google.com/..."
-                  className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full mt-1 bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
@@ -550,7 +550,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold shadow-lg"
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-cyan-400 text-slate-950 font-bold shadow-lg"
                 >
                   {submitting ? 'Submitting...' : 'Submit to Teacher'}
                 </button>
@@ -563,7 +563,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
       {/* ── TEACHER CREATE ASSIGNMENT MODAL ─────────────────────────────────── */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white">Create New Course Assignment</h3>
               <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white text-xl">
@@ -579,7 +579,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. Quadratic Roots Problem Set 2"
-                  className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full mt-1 bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
@@ -591,7 +591,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Detail the problems, constraints, and submission criteria..."
-                  className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full mt-1 bg-[#0B0F19] border border-amber-500/15 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
@@ -602,7 +602,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                     type="number"
                     value={maxScore}
                     onChange={(e) => setMaxScore(Number(e.target.value))}
-                    className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    className="w-full mt-1 bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-white"
                   />
                 </div>
                 <div>
@@ -611,7 +611,7 @@ export const AssignmentsPage: React.FC<AssignmentsPageProps> = ({ user }) => {
                     type="date"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    className="w-full mt-1 bg-[#0B0F19] border border-amber-500/15 rounded-xl px-3 py-2 text-white"
                   />
                 </div>
               </div>

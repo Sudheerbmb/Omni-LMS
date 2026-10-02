@@ -315,7 +315,7 @@ const PeerVideoCard: React.FC<PeerCardProps> = ({
 
     <div
 
-      className={`rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 relative overflow-hidden shadow-xl flex flex-col transition-all duration-300 ${
+      className={`rounded-2xl sm:rounded-3xl bg-[#0B0F19] border border-amber-500/15 relative overflow-hidden shadow-xl flex flex-col transition-all duration-300 ${
 
         isSpotlight ? 'h-full w-full' : 'min-h-[220px] sm:min-h-[260px]'
 
@@ -381,7 +381,7 @@ const PeerVideoCard: React.FC<PeerCardProps> = ({
 
           <span className="truncate">{displayName} {isLocal && '(You)'}</span>
 
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 uppercase font-semibold">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-amber-400 border border-cyan-500/30 uppercase font-semibold">
 
             {role}
 
@@ -4079,7 +4079,7 @@ const handleTriggerTeacherCopilot = async (
 
                     <span>&bull;</span>
 
-                    <span className="text-cyan-400 font-medium">Period {activeCallRoom.period_number}</span>
+                    <span className="text-amber-400 font-medium">Period {activeCallRoom.period_number}</span>
 
                   </>
 
@@ -4155,9 +4155,9 @@ const handleTriggerTeacherCopilot = async (
                 ? 'bg-rose-500/20 border-rose-500/40 text-rose-300 animate-pulse'
                 : remainingSeconds <= 300
                 ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                : 'bg-slate-800/90 border-slate-700 text-cyan-300'
+                : 'bg-slate-800/90 border-slate-700 text-yellow-300'
             }`}>
-              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>{formatTimer(remainingSeconds)} remaining</span>
               <span className="text-[10px] opacity-75 font-sans hidden sm:inline">
                 (Period {activeCallRoom.period_number || 2} Sync)
@@ -4171,7 +4171,7 @@ const handleTriggerTeacherCopilot = async (
                   setTimetableWarningToast('⏱️ Extended class duration by +5 minutes.')
                   setTimeout(() => setTimetableWarningToast(null), 4000)
                 }}
-                className="px-2.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold transition-all"
+                className="px-2.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-orange-300 border border-indigo-500/30 text-xs font-bold transition-all"
                 title="Extend class by 5 minutes"
               >
                 +5m
@@ -4242,7 +4242,7 @@ const handleTriggerTeacherCopilot = async (
 
               /* VIEW MODE A: REAL-TIME COLLABORATIVE VECTOR WHITEBOARD */
 
-              <div className="flex-1 flex flex-col bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative">
+              <div className="flex-1 flex flex-col bg-[#0B0F19] border border-amber-500/15 rounded-3xl overflow-hidden shadow-2xl relative">
 
                 {/* Advanced Whiteboard Toolbar */}
 
@@ -4426,7 +4426,7 @@ const handleTriggerTeacherCopilot = async (
 
                         className={`px-2 py-1 rounded-lg text-xs font-bold ${
 
-                          whiteboardWidth === w ? 'bg-slate-700 text-cyan-400' : 'text-slate-400 hover:text-white'
+                          whiteboardWidth === w ? 'bg-slate-700 text-amber-400' : 'text-slate-400 hover:text-white'
 
                         }`}
 
@@ -4468,7 +4468,7 @@ const handleTriggerTeacherCopilot = async (
 
                       onClick={() => setShowAiDiagramModal(true)}
 
-                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
 
                     >
 
@@ -4564,7 +4564,7 @@ const handleTriggerTeacherCopilot = async (
 
               <div className="flex-1 flex flex-col md:flex-row gap-4 overflow-hidden">
 
-                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
+                <div className="flex-1 bg-[#0B0F19] border border-amber-500/15 rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
 
                   {isScreenSharing ? (
 
@@ -4602,7 +4602,7 @@ const handleTriggerTeacherCopilot = async (
 
                         <div className="flex flex-col items-center gap-3 text-slate-400">
 
-                          <Monitor className="w-12 h-12 text-cyan-400 animate-pulse" />
+                          <Monitor className="w-12 h-12 text-amber-400 animate-pulse" />
 
                           <p className="text-sm font-semibold">Connecting to {remoteScreenInfo.sharerName}'s screen share...</p>
 
@@ -4616,7 +4616,7 @@ const handleTriggerTeacherCopilot = async (
 
                     <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-tr from-slate-900 via-slate-950 to-slate-900">
 
-                      <div className="w-28 h-28 rounded-full bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center text-3xl font-black text-cyan-400 shadow-xl shadow-cyan-500/10">
+                      <div className="w-28 h-28 rounded-full bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center text-3xl font-black text-amber-400 shadow-xl shadow-cyan-500/10">
 
                         {activeCallRoom.teacher_name?.charAt(0) || 'T'}
 
@@ -4760,7 +4760,7 @@ const handleTriggerTeacherCopilot = async (
 
                   <div className="rounded-3xl border-2 border-dashed border-slate-800 flex flex-col items-center justify-center p-6 text-center text-slate-500">
 
-                    <Users className="w-10 h-10 mb-2 opacity-40 text-cyan-400" />
+                    <Users className="w-10 h-10 mb-2 opacity-40 text-amber-400" />
 
                     <p className="text-sm font-semibold text-slate-400">Waiting for other participants to join...</p>
 
@@ -4790,7 +4790,7 @@ const handleTriggerTeacherCopilot = async (
 
                     <>
 
-                      <MessageSquare className="w-4 h-4 text-cyan-400" />
+                      <MessageSquare className="w-4 h-4 text-amber-400" />
 
                       Classroom Chat
 
@@ -4802,7 +4802,7 @@ const handleTriggerTeacherCopilot = async (
 
                     <>
 
-                      <Users className="w-4 h-4 text-cyan-400" />
+                      <Users className="w-4 h-4 text-amber-400" />
 
                       Attendees ({totalParticipantCount})
 
@@ -4814,7 +4814,7 @@ const handleTriggerTeacherCopilot = async (
 
                     <>
 
-                      <BarChart2 className="w-4 h-4 text-cyan-400" />
+                      <BarChart2 className="w-4 h-4 text-amber-400" />
 
                       Live Polls
 
@@ -4826,7 +4826,7 @@ const handleTriggerTeacherCopilot = async (
 
                     <>
 
-                      <Bot className="w-4 h-4 text-cyan-400" />
+                      <Bot className="w-4 h-4 text-amber-400" />
 
                       Acharya-AI Classroom Agent
 
@@ -4944,7 +4944,7 @@ const handleTriggerTeacherCopilot = async (
 
                         placeholder="Type a message to everyone..."
 
-                        className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                        className="flex-1 px-3 py-2 bg-[#0B0F19] border border-amber-500/15 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
 
                       />
 
@@ -5014,7 +5014,7 @@ const handleTriggerTeacherCopilot = async (
 
                             {user.display_name || user.email}
 
-                            <span className="text-[9px] px-1 rounded bg-slate-800 text-cyan-400 font-semibold">You</span>
+                            <span className="text-[9px] px-1 rounded bg-slate-800 text-amber-400 font-semibold">You</span>
 
                           </p>
 
@@ -5114,7 +5114,7 @@ const handleTriggerTeacherCopilot = async (
 
                             onClick={handleGenerateAiPoll}
 
-                            className="px-2 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                            className="px-2 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-amber-400 border border-purple-500/30 text-[10px] font-bold flex items-center gap-1 transition-colors"
 
                           >
 
@@ -5128,7 +5128,7 @@ const handleTriggerTeacherCopilot = async (
 
                             onClick={() => setShowPollCreator(prev => !prev)}
 
-                            className="px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                            className="px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-amber-400 border border-cyan-500/30 text-[10px] font-bold flex items-center gap-1 transition-colors"
 
                           >
 
@@ -5150,7 +5150,7 @@ const handleTriggerTeacherCopilot = async (
 
                         <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
 
-                          <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
 
                           Launch Custom Poll
 
@@ -5170,7 +5170,7 @@ const handleTriggerTeacherCopilot = async (
 
                             placeholder="e.g. Do you understand Newton's third law?"
 
-                            className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                            className="w-full px-2.5 py-1.5 bg-[#0B0F19] border border-amber-500/15 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
 
                             required
 
@@ -5206,7 +5206,7 @@ const handleTriggerTeacherCopilot = async (
 
                                   placeholder={`Option ${idx + 1}`}
 
-                                  className="flex-1 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                                  className="flex-1 px-2.5 py-1 bg-[#0B0F19] border border-amber-500/15 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
 
                                 />
 
@@ -5242,7 +5242,7 @@ const handleTriggerTeacherCopilot = async (
 
                               onClick={() => setPollOptionsInput(prev => [...prev, ''])}
 
-                              className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold mt-2 flex items-center gap-1"
+                              className="text-[11px] text-amber-400 hover:text-yellow-300 font-semibold mt-2 flex items-center gap-1"
 
                             >
 
@@ -5276,7 +5276,7 @@ const handleTriggerTeacherCopilot = async (
 
                       <div className="flex items-center justify-between mb-2">
 
-                        <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
+                        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">
 
                           Live Poll {activePoll.creatorName ? `• by ${activePoll.creatorName}` : ''}
 
@@ -5328,7 +5328,7 @@ const handleTriggerTeacherCopilot = async (
 
                                 <span className="font-medium text-slate-200">{opt.text}</span>
 
-                                {hasVoted && <span className="font-bold text-cyan-400 text-[11px]">{pct}% ({opt.votes})</span>}
+                                {hasVoted && <span className="font-bold text-amber-400 text-[11px]">{pct}% ({opt.votes})</span>}
 
                               </div>
 
@@ -5373,10 +5373,10 @@ const handleTriggerTeacherCopilot = async (
                             </div>
                             <div>
                               <h4 className="text-xs font-extrabold text-white">AI Faculty Associate</h4>
-                              <p className="text-[10px] text-indigo-300">Live Pacing &bull; Missed Points &bull; Mermaid.js</p>
+                              <p className="text-[10px] text-orange-300">Live Pacing &bull; Missed Points &bull; Mermaid.js</p>
                             </div>
                           </div>
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
                             Groq LPU
                           </span>
                         </div>
@@ -5429,7 +5429,7 @@ const handleTriggerTeacherCopilot = async (
                               <button
                                 onClick={handleAuditMissedPoints}
                                 disabled={isTeacherAiLoading}
-                                className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                                className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-orange-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
                               >
                                 <Sparkles className="w-3 h-3" />
                                 <span>{isTeacherAiLoading ? 'Auditing...' : 'Re-Audit'}</span>
@@ -5437,15 +5437,15 @@ const handleTriggerTeacherCopilot = async (
                             </div>
 
                             {isTeacherAiLoading && !copilotMissedPointsData ? (
-                              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-2">
-                                <Loader2 className="w-5 h-5 text-indigo-400 animate-spin mx-auto" />
-                                <p className="text-xs text-indigo-300 font-semibold">Comparing live speech against curriculum...</p>
+                              <div className="p-4 rounded-2xl bg-[#0B0F19] border border-amber-500/15 text-center space-y-2">
+                                <Loader2 className="w-5 h-5 text-orange-400 animate-spin mx-auto" />
+                                <p className="text-xs text-orange-300 font-semibold">Comparing live speech against curriculum...</p>
                               </div>
                             ) : copilotMissedPointsData ? (
                               <div className="space-y-3">
                                 {/* Pacing Advice Banner */}
                                 <div className="p-3 rounded-2xl bg-slate-950 border border-indigo-500/30 space-y-1.5">
-                                  <div className="flex items-center gap-1.5 text-indigo-400 text-[11px] font-extrabold">
+                                  <div className="flex items-center gap-1.5 text-orange-400 text-[11px] font-extrabold">
                                     <Clock className="w-3.5 h-3.5" />
                                     <span>Pacing & Timing Advice</span>
                                   </div>
@@ -5456,7 +5456,7 @@ const handleTriggerTeacherCopilot = async (
                                 {copilotMissedPointsData.suggested_transition && (
                                   <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 space-y-2">
                                     <div className="flex items-center justify-between">
-                                      <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                                      <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1">
                                         <Volume2 className="w-3 h-3" />
                                         <span>Suggested Verbal Bridge</span>
                                       </span>
@@ -5466,7 +5466,7 @@ const handleTriggerTeacherCopilot = async (
                                           setCopiedTransitionToast(true)
                                           setTimeout(() => setCopiedTransitionToast(false), 3000)
                                         }}
-                                        className="text-[10px] text-indigo-300 hover:text-white font-bold underline"
+                                        className="text-[10px] text-orange-300 hover:text-white font-bold underline"
                                       >
                                         {copiedTransitionToast ? 'Copied!' : 'Copy Phrase'}
                                       </button>
@@ -5512,9 +5512,9 @@ const handleTriggerTeacherCopilot = async (
                             ) : (
                               <button
                                 onClick={handleAuditMissedPoints}
-                                className="w-full py-4 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
+                                className="w-full py-4 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-orange-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
                               >
-                                <Sparkles className="w-5 h-5 text-indigo-400" />
+                                <Sparkles className="w-5 h-5 text-orange-400" />
                                 <span>Audit Live Lecture vs Syllabus</span>
                               </button>
                             )}
@@ -5529,7 +5529,7 @@ const handleTriggerTeacherCopilot = async (
                               <button
                                 onClick={handleGenerateMermaidDiagram}
                                 disabled={isTeacherAiLoading}
-                                className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                                className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-orange-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
                               >
                                 <Sparkles className="w-3 h-3" />
                                 <span>{isTeacherAiLoading ? 'Synthesizing...' : 'Regenerate'}</span>
@@ -5541,16 +5541,16 @@ const handleTriggerTeacherCopilot = async (
                                 <h5 className="text-xs font-bold text-white">{copilotDiagramData.title}</h5>
 
                                 {copilotDiagramData.mermaid_code && (
-                                  <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                                  <div className="p-3 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-2">
                                     <div className="flex items-center justify-between">
-                                      <span className="text-[10px] font-mono text-cyan-400 font-bold">Mermaid.js Code</span>
+                                      <span className="text-[10px] font-mono text-amber-400 font-bold">Mermaid.js Code</span>
                                       <button
                                         onClick={() => {
                                           navigator.clipboard.writeText(copilotDiagramData.mermaid_code || '')
                                           setCopiedMermaidToast(true)
                                           setTimeout(() => setCopiedMermaidToast(false), 3000)
                                         }}
-                                        className="text-[10px] text-cyan-300 hover:text-white font-bold underline"
+                                        className="text-[10px] text-yellow-300 hover:text-white font-bold underline"
                                       >
                                         {copiedMermaidToast ? 'Copied Code!' : 'Copy Code'}
                                       </button>
@@ -5561,7 +5561,7 @@ const handleTriggerTeacherCopilot = async (
                                   </div>
                                 )}
 
-                                <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
+                                <div className="p-3 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-1.5">
                                   <span className="text-[10px] font-bold text-slate-400 uppercase">Concept Architecture</span>
                                   <pre className="text-[10px] font-mono text-slate-300 bg-slate-900/80 p-2.5 rounded-xl overflow-x-auto whitespace-pre">
                                     {copilotDiagramData.diagram_ascii}
@@ -5582,9 +5582,9 @@ const handleTriggerTeacherCopilot = async (
                             ) : (
                               <button
                                 onClick={handleGenerateMermaidDiagram}
-                                className="w-full py-4 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
+                                className="w-full py-4 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-orange-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
                               >
-                                <Zap className="w-5 h-5 text-indigo-400" />
+                                <Zap className="w-5 h-5 text-orange-400" />
                                 <span>Synthesize Concept Mermaid Diagram</span>
                               </button>
                             )}
@@ -5599,7 +5599,7 @@ const handleTriggerTeacherCopilot = async (
                               <button
                                 onClick={handleGenerateAnalogies}
                                 disabled={isTeacherAiLoading}
-                                className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                                className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-orange-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
                               >
                                 <Sparkles className="w-3 h-3" />
                                 <span>{isTeacherAiLoading ? 'Generating...' : 'Refresh'}</span>
@@ -5607,15 +5607,15 @@ const handleTriggerTeacherCopilot = async (
                             </div>
 
                             {copilotResult ? (
-                              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                              <div className="p-3.5 rounded-2xl bg-[#0B0F19] border border-amber-500/15 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
                                 {copilotResult}
                               </div>
                             ) : (
                               <button
                                 onClick={handleGenerateAnalogies}
-                                className="w-full py-4 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
+                                className="w-full py-4 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-orange-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
                               >
-                                <Lightbulb className="w-5 h-5 text-indigo-400" />
+                                <Lightbulb className="w-5 h-5 text-orange-400" />
                                 <span>Generate Intuitive Metaphors & Analogies</span>
                               </button>
                             )}
@@ -5709,7 +5709,7 @@ const handleTriggerTeacherCopilot = async (
                           <div className="flex-1 flex flex-col justify-between overflow-hidden">
                             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
                               {studentDoubtHistory.length === 0 ? (
-                                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-center space-y-2 my-auto">
+                                <div className="p-4 rounded-2xl bg-slate-950/60 border border-amber-500/15 text-center space-y-2 my-auto">
                                   <Bot className="w-6 h-6 text-emerald-400 mx-auto" />
                                   <h5 className="text-xs font-bold text-white">Have a doubt on what teacher just taught?</h5>
                                   <p className="text-[11px] text-slate-400">
@@ -5782,7 +5782,7 @@ const handleTriggerTeacherCopilot = async (
                                 value={studentDoubtInput}
                                 onChange={e => setStudentDoubtInput(e.target.value)}
                                 placeholder="Ask live tutor about this lecture..."
-                                className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                                className="flex-1 px-3 py-2 bg-[#0B0F19] border border-amber-500/15 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                               />
                               <button
                                 type="submit"
@@ -5811,7 +5811,7 @@ const handleTriggerTeacherCopilot = async (
                             </div>
 
                             {studentSummaryResult ? (
-                              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                              <div className="p-3.5 rounded-2xl bg-[#0B0F19] border border-amber-500/15 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
                                 {studentSummaryResult}
                               </div>
                             ) : (
@@ -5847,7 +5847,7 @@ const handleTriggerTeacherCopilot = async (
                                   <div key={idx} className="relative space-y-1">
                                     <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-4 ring-slate-950" />
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-emerald-300">
+                                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#0B0F19] border border-amber-500/15 text-emerald-300">
                                         {m.timestamp}
                                       </span>
                                       <h6 className="text-xs font-bold text-white">{m.title}</h6>
@@ -5881,7 +5881,7 @@ const handleTriggerTeacherCopilot = async (
         {/* LIVE CAPTIONS / SUBTITLE OVERLAY */}
         {showLiveCaptions && latestTranscriptSnippet && (
           <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 max-w-xl w-[90%] bg-slate-950/90 backdrop-blur-md border border-slate-800 text-white px-4 py-2.5 rounded-2xl shadow-2xl text-center pointer-events-none transition-all animate-in fade-in slide-in-from-bottom-2 duration-200">
-            <div className="flex items-center justify-center gap-1.5 text-[10px] text-cyan-400 font-bold uppercase tracking-wider mb-0.5">
+            <div className="flex items-center justify-center gap-1.5 text-[10px] text-amber-400 font-bold uppercase tracking-wider mb-0.5">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
               <span>Live Transcription ({formatTimer(elapsedSeconds)})</span>
             </div>
@@ -5967,11 +5967,11 @@ const handleTriggerTeacherCopilot = async (
                 className={`h-11 px-3.5 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs transition-all shadow-md active:scale-95 ${
                   activeSideDrawer === 'ai'
                     ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-indigo-500/30 ring-2 ring-indigo-400'
-                    : 'bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/40'
+                    : 'bg-slate-800 hover:bg-slate-700 text-orange-300 border border-indigo-500/40'
                 }`}
                 title="AI Faculty Associate (Missed Points & Mermaid Diagrams)"
               >
-                <Sparkles className="w-4 h-4 text-indigo-300" />
+                <Sparkles className="w-4 h-4 text-orange-300" />
                 <span className="hidden md:inline">AI Faculty Associate</span>
               </button>
             )}
@@ -5985,7 +5985,7 @@ const handleTriggerTeacherCopilot = async (
                   isRecording
                     ? 'bg-red-600 text-white animate-pulse shadow-red-600/50 ring-2 ring-red-400'
                     : isUploadingRecording
-                    ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 cursor-wait'
+                    ? 'bg-purple-600/20 text-amber-300 border border-purple-500/40 cursor-wait'
                     : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60'
                 }`}
                 title={isRecording ? 'Stop Recording' : 'Record Class to Cloud'}
@@ -5997,7 +5997,7 @@ const handleTriggerTeacherCopilot = async (
                   </>
                 ) : isUploadingRecording ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
                     <span className="hidden md:inline">Uploading...</span>
                   </>
                 ) : (
@@ -6046,7 +6046,7 @@ const handleTriggerTeacherCopilot = async (
               onClick={() => setShowLiveCaptions(prev => !prev)}
               className={`h-11 px-3 rounded-2xl flex items-center justify-center gap-1.5 font-bold text-xs transition-all shadow-md active:scale-95 ${
                 showLiveCaptions
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
+                  ? 'bg-cyan-500/20 text-yellow-300 border border-cyan-500/50'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700/60'
               }`}
               title={showLiveCaptions ? 'Hide Live Captions' : 'Show Live Captions'}
@@ -6139,7 +6139,7 @@ const handleTriggerTeacherCopilot = async (
 
           <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
 
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 space-y-4">
+            <div className="bg-[#0B0F19] border border-amber-500/15 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 space-y-4">
 
               <h3 className="text-base font-bold text-white flex items-center gap-2">
 
@@ -6209,13 +6209,13 @@ const handleTriggerTeacherCopilot = async (
 
           <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
 
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 space-y-4">
+            <div className="bg-[#0B0F19] border border-amber-500/15 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 space-y-4">
 
               <div className="flex items-center justify-between">
 
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
 
-                  <Sparkles className="w-5 h-5 text-cyan-400" />
+                  <Sparkles className="w-5 h-5 text-amber-400" />
 
                   AI Whiteboard Synthesizer
 
@@ -6241,7 +6241,7 @@ const handleTriggerTeacherCopilot = async (
 
                   onClick={() => handleGenerateAiDiagram('triangle')}
 
-                  className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
+                  className="p-3 rounded-2xl bg-[#0B0F19] border border-amber-500/15 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
 
                 >
 
@@ -6253,7 +6253,7 @@ const handleTriggerTeacherCopilot = async (
 
                   </div>
 
-                  <Sparkles className="w-4 h-4 text-cyan-400" />
+                  <Sparkles className="w-4 h-4 text-amber-400" />
 
                 </button>
 
@@ -6261,7 +6261,7 @@ const handleTriggerTeacherCopilot = async (
 
                   onClick={() => handleGenerateAiDiagram('circuit')}
 
-                  className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
+                  className="p-3 rounded-2xl bg-[#0B0F19] border border-amber-500/15 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
 
                 >
 
@@ -6281,7 +6281,7 @@ const handleTriggerTeacherCopilot = async (
 
                   onClick={() => handleGenerateAiDiagram('tree')}
 
-                  className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
+                  className="p-3 rounded-2xl bg-[#0B0F19] border border-amber-500/15 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
 
                 >
 
@@ -6301,7 +6301,7 @@ const handleTriggerTeacherCopilot = async (
 
                   onClick={() => handleGenerateAiDiagram('axes')}
 
-                  className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
+                  className="p-3 rounded-2xl bg-[#0B0F19] border border-amber-500/15 hover:border-cyan-500 text-left transition-colors flex items-center justify-between"
 
                 >
 
@@ -6313,7 +6313,7 @@ const handleTriggerTeacherCopilot = async (
 
                   </div>
 
-                  <Plus className="w-4 h-4 text-purple-400" />
+                  <Plus className="w-4 h-4 text-amber-400" />
 
                 </button>
 
@@ -6377,7 +6377,7 @@ const handleTriggerTeacherCopilot = async (
 
           <div className="flex items-center gap-2 mb-1">
 
-            <span className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            <span className="p-2 rounded-xl bg-cyan-500/10 text-amber-400 border border-cyan-500/20">
 
               <Video className="w-5 h-5" />
 
@@ -6428,7 +6428,7 @@ const handleTriggerTeacherCopilot = async (
             </div>
             <div>
               <p className="text-xs font-extrabold text-white">Enrolled Stream: Class {studentGrade}</p>
-              <p className="text-[11px] text-cyan-300">Displaying authorized live lectures and official recordings for Class {studentGrade} only.</p>
+              <p className="text-[11px] text-yellow-300">Displaying authorized live lectures and official recordings for Class {studentGrade} only.</p>
             </div>
           </div>
           <button
@@ -6436,10 +6436,10 @@ const handleTriggerTeacherCopilot = async (
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
               filterRecordingOnly
                 ? 'bg-purple-600 text-white shadow-md'
-                : 'bg-slate-900 text-purple-300 border border-purple-500/30'
+                : 'bg-slate-900 text-amber-300 border border-purple-500/30'
             }`}
           >
-            <Video className="w-3.5 h-3.5 text-purple-300" />
+            <Video className="w-3.5 h-3.5 text-amber-300" />
             <span>Class {studentGrade} Recordings ({classes.filter(c => !!c.recording_url).length})</span>
           </button>
         </div>
@@ -6460,10 +6460,10 @@ const handleTriggerTeacherCopilot = async (
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
               filterRecordingOnly
                 ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-2 ring-purple-400'
-                : 'bg-slate-900 text-purple-300 hover:text-white border border-purple-500/30'
+                : 'bg-slate-900 text-amber-300 hover:text-white border border-purple-500/30'
             }`}
           >
-            <Video className="w-3.5 h-3.5 text-purple-300" />
+            <Video className="w-3.5 h-3.5 text-amber-300" />
             <span>Watch Recordings ({classes.filter(c => !!c.recording_url).length})</span>
           </button>
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(g => (
@@ -6490,7 +6490,7 @@ const handleTriggerTeacherCopilot = async (
 
           <div className="col-span-full py-16 text-center text-slate-400">
 
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-cyan-400 mb-3" />
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-amber-400 mb-3" />
 
             <p className="text-sm font-semibold">Loading live classes...</p>
 
@@ -6498,7 +6498,7 @@ const handleTriggerTeacherCopilot = async (
 
         ) : classes.length === 0 ? (
 
-          <div className="col-span-full py-16 text-center rounded-3xl bg-slate-900/50 border border-slate-800/80">
+          <div className="col-span-full py-16 text-center rounded-3xl bg-slate-900/50 border border-amber-500/15">
 
             <Calendar className="w-12 h-12 mx-auto text-slate-600 mb-3" />
 
@@ -6572,7 +6572,7 @@ const handleTriggerTeacherCopilot = async (
 
                     {!isLive && !isEnded && (
 
-                      <span className="text-[11px] font-medium text-cyan-400">Scheduled</span>
+                      <span className="text-[11px] font-medium text-amber-400">Scheduled</span>
 
                     )}
 
@@ -6618,7 +6618,7 @@ const handleTriggerTeacherCopilot = async (
 
                         onClick={() => { setSelectedRecordingUrl(cls.recording_url!); setSelectedRecordingClass(cls); }}
 
-                        className="flex-1 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/20 transition-all hover:scale-[1.02] active:scale-95"
+                        className="flex-1 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02] active:scale-95"
 
                       >
 
@@ -6698,11 +6698,11 @@ const handleTriggerTeacherCopilot = async (
 
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
 
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-[#0B0F19] border border-amber-500/15 rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
 
             <h2 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
 
-              <Sparkles className="w-5 h-5 text-cyan-400" />
+              <Sparkles className="w-5 h-5 text-amber-400" />
 
               Schedule / Launch Live Class
 
@@ -6740,7 +6740,7 @@ const handleTriggerTeacherCopilot = async (
 
                     onChange={e => setSelectedSlotIndex(Number(e.target.value))}
 
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0B0F19] border border-amber-500/15 text-xs text-white focus:outline-none focus:border-cyan-500"
 
                   >
 
@@ -6778,7 +6778,7 @@ const handleTriggerTeacherCopilot = async (
 
                   placeholder="e.g. Chapter 4: Live Practical Demonstration"
 
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2.5 rounded-xl bg-[#0B0F19] border border-amber-500/15 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
 
                 />
 
@@ -6861,10 +6861,10 @@ const handleTriggerTeacherCopilot = async (
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-bold text-white">AI Teaching Copilot</h3>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
                       Teacher Only
                     </span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
                       Minute {formatTimer(elapsedSeconds)}
                     </span>
                   </div>
@@ -6882,7 +6882,7 @@ const handleTriggerTeacherCopilot = async (
             {/* Content */}
             <div className="p-5 space-y-4 overflow-y-auto flex-1">
               {/* Dynamic Transcript Context Banner */}
-              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-start gap-2.5">
+              <div className="p-3 rounded-2xl bg-[#0B0F19] border border-amber-500/15 flex items-start gap-2.5">
                 <Radio className="w-4 h-4 text-red-400 animate-pulse shrink-0 mt-0.5" />
                 <div className="text-xs flex-1">
                   <span className="font-bold text-slate-300">Live Speech Captured up to Minute {formatTimer(elapsedSeconds)}: </span>
@@ -6895,7 +6895,7 @@ const handleTriggerTeacherCopilot = async (
               {/* Current Topic Input */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                  <BookOpen className="w-3.5 h-3.5 text-orange-400" />
                   <span>Current Topic / Concept Discussed:</span>
                 </label>
                 <div className="flex gap-2">
@@ -6924,7 +6924,7 @@ const handleTriggerTeacherCopilot = async (
                         : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/60'
                     }`}
                   >
-                    <Zap className="w-4 h-4 text-cyan-300 shrink-0" />
+                    <Zap className="w-4 h-4 text-yellow-300 shrink-0" />
                     <span>Concept Diagrams</span>
                   </button>
 
@@ -6963,7 +6963,7 @@ const handleTriggerTeacherCopilot = async (
                         : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/60'
                     }`}
                   >
-                    <BarChart2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                    <BarChart2 className="w-4 h-4 text-amber-400 shrink-0" />
                     <span>Instant Poll Idea</span>
                   </button>
 
@@ -6976,7 +6976,7 @@ const handleTriggerTeacherCopilot = async (
                         : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/60'
                     }`}
                   >
-                    <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                     <span>Fun Fact</span>
                   </button>
 
@@ -6998,14 +6998,14 @@ const handleTriggerTeacherCopilot = async (
               {/* Copilot Result Box */}
               <div className="rounded-2xl bg-slate-950/70 border border-slate-800 p-4 space-y-3 min-h-[160px] flex flex-col justify-center">
                 {isCopilotLoading ? (
-                  <div className="flex flex-col items-center justify-center py-6 gap-2 text-indigo-400 text-xs">
+                  <div className="flex flex-col items-center justify-center py-6 gap-2 text-orange-400 text-xs">
                     <Loader2 className="w-6 h-6 animate-spin" />
                     <span>AI Copilot is analyzing live transcript up to Minute {formatTimer(elapsedSeconds)}...</span>
                   </div>
                 ) : copilotDiagramData ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
                         <Zap className="w-4 h-4" />
                         {copilotDiagramData.title}
                       </span>
@@ -7032,7 +7032,7 @@ const handleTriggerTeacherCopilot = async (
                     </div>
 
                     {/* ASCII Diagram Box */}
-                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-[11px] leading-relaxed text-cyan-300 overflow-x-auto whitespace-pre selection:bg-cyan-500 selection:text-slate-950">
+                    <div className="p-3.5 rounded-xl bg-[#0B0F19] border border-amber-500/15 font-mono text-[11px] leading-relaxed text-yellow-300 overflow-x-auto whitespace-pre selection:bg-cyan-500 selection:text-slate-950">
                       {copilotDiagramData.diagram_ascii}
                     </div>
 
@@ -7043,7 +7043,7 @@ const handleTriggerTeacherCopilot = async (
                         <ul className="space-y-1 text-xs text-slate-300 pl-2">
                           {copilotDiagramData.key_concepts.map((concept, i) => (
                             <li key={i} className="flex items-start gap-1.5">
-                              <span className="text-cyan-400 font-bold">•</span>
+                              <span className="text-amber-400 font-bold">•</span>
                               <span>{concept}</span>
                             </li>
                           ))}
@@ -7061,7 +7061,7 @@ const handleTriggerTeacherCopilot = async (
                     <div className="pt-1 flex justify-end">
                       <button
                         onClick={() => handleTriggerTeacherCopilot('diagram')}
-                        className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1"
+                        className="text-[11px] text-amber-400 hover:text-yellow-300 font-semibold flex items-center gap-1"
                       >
                         <RefreshCw className="w-3 h-3" />
                         <span>Regenerate Alternative Diagram</span>
@@ -7077,7 +7077,7 @@ const handleTriggerTeacherCopilot = async (
                     {/* If Poll Data generated, show quick Launch button */}
                     {copilotPollData && (
                       <div className="p-3 rounded-xl bg-cyan-950/40 border border-cyan-500/40 space-y-2">
-                        <div className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                        <div className="text-xs font-bold text-yellow-300 flex items-center gap-1.5">
                           <BarChart2 className="w-4 h-4" />
                           <span>Generated Live Poll</span>
                         </div>
@@ -7121,16 +7121,16 @@ const handleTriggerTeacherCopilot = async (
             {/* Header */}
             <div className="px-5 py-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-purple-600/30">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-purple-600/30">
                   <Bot className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-bold text-white">AI Classroom Tutor</h3>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                       Student Only
                     </span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
                       Minute {formatTimer(elapsedSeconds)}
                     </span>
                   </div>
@@ -7235,7 +7235,7 @@ const handleTriggerTeacherCopilot = async (
                     <button
                       type="submit"
                       disabled={isStudentTutorLoading || !studentDoubtInput.trim()}
-                      className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md transition"
+                      className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md transition"
                     >
                       <Send className="w-4 h-4" />
                       <span>Ask</span>
@@ -7244,7 +7244,7 @@ const handleTriggerTeacherCopilot = async (
 
                   {/* Loading indicator */}
                   {isStudentTutorLoading && (
-                    <div className="flex items-center justify-center py-6 gap-2 text-purple-400 text-xs">
+                    <div className="flex items-center justify-center py-6 gap-2 text-amber-400 text-xs">
                       <Loader2 className="w-5 h-5 animate-spin" />
                       <span>AI Tutor is reasoning over the live lecture...</span>
                     </div>
@@ -7253,15 +7253,15 @@ const handleTriggerTeacherCopilot = async (
                   {/* Q&A Doubt History */}
                   <div className="space-y-3">
                     {studentDoubtHistory.map((item) => (
-                      <div key={item.id} className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-                        <div className="flex items-center justify-between text-[11px] font-semibold text-purple-300">
+                      <div key={item.id} className="p-3.5 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-amber-300">
                           <span className="flex items-center gap-1">
                             <HelpCircle className="w-3.5 h-3.5" />
                             <span>Your Question ({item.timestamp})</span>
                           </span>
                         </div>
                         <p className="text-xs text-white font-medium pl-1">{item.question}</p>
-                        <div className="pt-2 border-t border-slate-800/80 text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                        <div className="pt-2 border-t border-amber-500/15 text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
                           {item.answer}
                         </div>
                       </div>
@@ -7283,7 +7283,7 @@ const handleTriggerTeacherCopilot = async (
                     <button
                       onClick={handleGenerateStudentSummary}
                       disabled={isStudentTutorLoading}
-                      className="text-xs text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1"
+                      className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span>Refresh Summary</span>
@@ -7291,12 +7291,12 @@ const handleTriggerTeacherCopilot = async (
                   </div>
 
                   {isStudentTutorLoading ? (
-                    <div className="flex items-center justify-center py-8 gap-2 text-purple-400 text-xs">
+                    <div className="flex items-center justify-center py-8 gap-2 text-amber-400 text-xs">
                       <Loader2 className="w-5 h-5 animate-spin" />
                       <span>Synthesizing lecture summary...</span>
                     </div>
                   ) : studentSummaryResult ? (
-                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                    <div className="p-4 rounded-2xl bg-[#0B0F19] border border-amber-500/15 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
                       {studentSummaryResult}
                     </div>
                   ) : (
@@ -7315,7 +7315,7 @@ const handleTriggerTeacherCopilot = async (
                     <button
                       onClick={handleGenerateStudentMilestones}
                       disabled={isStudentTutorLoading}
-                      className="text-xs text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1"
+                      className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span>Update Timeline</span>
@@ -7323,15 +7323,15 @@ const handleTriggerTeacherCopilot = async (
                   </div>
 
                   {isStudentTutorLoading ? (
-                    <div className="flex items-center justify-center py-8 gap-2 text-purple-400 text-xs">
+                    <div className="flex items-center justify-center py-8 gap-2 text-amber-400 text-xs">
                       <Loader2 className="w-5 h-5 animate-spin" />
                       <span>Extracting lecture milestones...</span>
                     </div>
                   ) : (
                     <div className="space-y-2.5">
                       {studentMilestones.map((m, idx) => (
-                        <div key={idx} className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                          <span className="px-2 py-1 rounded-lg bg-purple-950/60 text-purple-300 border border-purple-500/40 text-[10px] font-mono font-bold shrink-0">
+                        <div key={idx} className="p-3 rounded-2xl bg-[#0B0F19] border border-amber-500/15 flex items-start gap-3">
+                          <span className="px-2 py-1 rounded-lg bg-purple-950/60 text-amber-300 border border-purple-500/40 text-[10px] font-mono font-bold shrink-0">
                             {m.timestamp}
                           </span>
                           <div className="flex-1 space-y-0.5">
@@ -7387,8 +7387,8 @@ const handleTriggerTeacherCopilot = async (
             {/* Body */}
             <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
               {/* Overview */}
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
-                <span className="font-bold text-cyan-400 text-xs flex items-center gap-1.5">
+              <div className="p-4 rounded-2xl bg-[#0B0F19] border border-amber-500/15 space-y-1.5">
+                <span className="font-bold text-amber-400 text-xs flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4" />
                   Executive Lecture Overview
                 </span>
@@ -7404,7 +7404,7 @@ const handleTriggerTeacherCopilot = async (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {postSessionSummary.key_topics.map((t: string, i: number) => (
                       <div key={i} className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-slate-300 flex items-start gap-2">
-                        <span className="w-4 h-4 rounded-full bg-cyan-500/20 text-cyan-400 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="w-4 h-4 rounded-full bg-cyan-500/20 text-amber-400 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
                           {i + 1}
                         </span>
                         <span>{t}</span>
@@ -7421,7 +7421,7 @@ const handleTriggerTeacherCopilot = async (
                   <ul className="space-y-1 pl-2 text-slate-300">
                     {postSessionSummary.whiteboard_notes.map((n: string, i: number) => (
                       <li key={i} className="flex items-start gap-2">
-                        <span className="text-cyan-400 font-bold">•</span>
+                        <span className="text-amber-400 font-bold">•</span>
                         <span>{n}</span>
                       </li>
                     ))}
@@ -7446,11 +7446,11 @@ const handleTriggerTeacherCopilot = async (
               {postSessionSummary.quiz && postSessionSummary.quiz.length > 0 && (
                 <div className="space-y-2 pt-2 border-t border-slate-800">
                   <span className="font-bold text-slate-300 text-xs flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                    <CheckCircle2 className="w-4 h-4 text-amber-400" />
                     Self-Assessment Check (Based on today's lecture):
                   </span>
                   {postSessionSummary.quiz.map((q: any, qi: number) => (
-                    <div key={qi} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                    <div key={qi} className="p-3 rounded-xl bg-[#0B0F19] border border-amber-500/15 space-y-2">
                       <p className="text-white font-medium">{qi + 1}. {q.question}</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-2">
                         {q.options?.map((opt: string, oi: number) => (
@@ -7512,7 +7512,7 @@ const handleTriggerTeacherCopilot = async (
 
           {isUploadingRecording ? (
 
-            <Loader2 className="w-5 h-5 text-purple-400 animate-spin shrink-0" />
+            <Loader2 className="w-5 h-5 text-amber-400 animate-spin shrink-0" />
 
           ) : (
 
