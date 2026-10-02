@@ -575,7 +575,7 @@ async def ask_class_ai_doubt(
         # Build segments summary for agent perception
         seg_json = json.dumps(segments or [{"start": 0.0, "end": 15.0, "text": transcript}])
         
-        system_agent_prompt = f"""You are Omni-Agent, an autonomous AI educational study agent for this recorded video lecture.
+        system_agent_prompt = f"""You are Acharya-Agent, an autonomous AI educational study agent for this recorded video lecture.
 You have direct perception of the lecture's timestamped audio transcript:
 {seg_json}
 

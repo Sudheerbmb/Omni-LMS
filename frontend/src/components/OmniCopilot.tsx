@@ -233,7 +233,7 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
       icon: ShieldCheck
     }
   }[role] || {
-    title: 'Omni Universal Copilot',
+    title: 'Acharya Copilot',
     badge: 'MCP AI',
     badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
     gradient: 'from-cyan-500 to-blue-600',

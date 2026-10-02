@@ -891,7 +891,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
 
-    { id: 'init_1', sender: 'System', role: 'system', text: 'Welcome to Omni-LMS Real-Time Classroom!', timestamp: 'Now' }
+    { id: 'init_1', sender: 'System', role: 'system', text: 'Welcome to Acharya-LMS Real-Time Classroom!', timestamp: 'Now' }
 
   ])
 
@@ -4828,7 +4828,7 @@ const handleTriggerTeacherCopilot = async (
 
                       <Bot className="w-4 h-4 text-cyan-400" />
 
-                      Omni-AI Classroom Agent
+                      Acharya-AI Classroom Agent
 
                     </>
 

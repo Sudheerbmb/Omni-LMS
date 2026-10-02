@@ -1,4 +1,4 @@
-# 🎓 Omni-LMS Platform
+# 🎓 Acharya-LMS Platform
 
 A modern, full-stack **Learning Management System (LMS)** built with **FastAPI**, **React 19**, **TypeScript**, and **PostgreSQL (Neon)**. Designed for multi-tenant educational institutions, featuring live Zoom classrooms, automated quizzes, coursework grading, verifiable credentials, and an interactive coding sandbox.
 

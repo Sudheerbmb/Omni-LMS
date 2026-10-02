@@ -1,5 +1,5 @@
 """
-Omni-LMS Enterprise Backend Service
+Acharya-LMS Enterprise Backend Service
 Production Release Sync
 """
 import hashlib

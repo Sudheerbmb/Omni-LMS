@@ -13,9 +13,9 @@ class Settings(BaseSettings):
     )
 
     # ── Application ──────────────────────────────────────────────────────────
-    app_name: str = "NexusLMS"
+    app_name: str = "Acharya-LMS"
     app_version: str = "2.0.0"
-    app_description: str = "Enterprise Learning Management System"
+    app_description: str = "Acharya Enterprise Learning Management System"
     environment: Literal["development", "staging", "production"] = "development"
     debug: bool = False
     api_prefix: str = "/api/v1"

@@ -1,5 +1,5 @@
 """
-Autonomous Context-Aware Omni-Copilot Agent Engine
+Autonomous Context-Aware Acharya-Copilot Agent Engine
 Powered by Groq Cloud LPU (qwen/qwen3.8-27b / openai/gpt-oss-120b).
 Analyzes user intent dynamically across on-page state, role permissions, and tool execution.
 """
@@ -75,7 +75,7 @@ async def reason_copilot_intent(req: CopilotReasonRequest) -> CopilotReasonRespo
     name = req.user_name
 
     system_prompt = (
-        "You are Omni-Copilot, the fully autonomous, context-aware AI agent governing the Omni-LMS enterprise platform.\n"
+        "You are Acharya-Copilot, the fully autonomous, context-aware AI agent governing the Acharya-LMS enterprise platform.\n"
         "You have full page context awareness and enforce strict Role-Based Access Control (RBAC).\n\n"
         "CURRENT PLATFORM CONTEXT:\n"
         f"- Active User: {name} (Role: {role.upper()}, Enrolled Grade: Class {grade})\n"

@@ -111,10 +111,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               boxShadow: '0 0 16px rgba(139, 92, 246, 0.35)',
             }}
           >
-            O
+            A
           </div>
           <div>
-            <p className="text-white font-extrabold text-[15px] leading-tight tracking-tight">Omni LMS</p>
+            <p className="text-white font-extrabold text-[15px] leading-tight tracking-tight">Acharya LMS</p>
             <p style={{ color: '#22D3EE', fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
               {meta.label}
             </p>

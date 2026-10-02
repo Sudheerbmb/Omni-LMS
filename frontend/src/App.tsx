@@ -115,7 +115,7 @@ export function App() {
       <div style={{ minHeight: '100vh', background: '#080A12', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', system-ui, sans-serif" }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ width: 44, height: 44, borderRadius: '50%', border: '3px solid rgba(255,255,255,0.08)', borderTopColor: '#8B5CF6', borderRightColor: '#22D3EE', animation: 'spin 0.75s linear infinite', margin: '0 auto 16px', boxShadow: '0 0 20px rgba(139,92,246,0.3)' }} />
-          <p style={{ fontSize: 11, color: '#A7B0C0', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Loading Omni LMS...</p>
+          <p style={{ fontSize: 11, color: '#A7B0C0', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Loading Acharya LMS...</p>
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -135,9 +135,9 @@ export function App() {
 
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '3rem', position: 'relative', zIndex: 1 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'linear-gradient(135deg, #8B5CF6 0%, #22D3EE 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20, color: '#ffffff', boxShadow: '0 0 20px rgba(139,92,246,0.35)', letterSpacing: '-0.03em' }}>O</div>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'linear-gradient(135deg, #8B5CF6 0%, #22D3EE 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20, color: '#ffffff', boxShadow: '0 0 20px rgba(139,92,246,0.35)', letterSpacing: '-0.03em' }}>A</div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em', color: '#F8FAFC' }}>Omni LMS</div>
+              <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em', color: '#F8FAFC' }}>Acharya LMS</div>
               <div style={{ fontSize: 11, color: '#22D3EE', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>AI Learning OS</div>
             </div>
           </div>
@@ -146,7 +146,7 @@ export function App() {
             Enterprise AI Education Platform
           </h2>
           <p style={{ fontSize: 13, color: '#A7B0C0', lineHeight: 1.75, marginBottom: '2.5rem', position: 'relative', zIndex: 1 }}>
-            Omni LMS unifies administrators, faculty, and students into an intelligent learning infrastructure with automated scheduling, cognitive analytics, and live interactive classrooms.
+            Acharya LMS unifies administrators, faculty, and students into an intelligent learning infrastructure with automated scheduling, cognitive analytics, and live interactive classrooms.
           </p>
 
           {/* Feature list — sleek dark border items */}
@@ -172,7 +172,7 @@ export function App() {
             {/* Heading */}
             <div style={{ marginBottom: 28 }}>
               <h1 style={{ fontSize: 24, fontWeight: 800, color: '#F8FAFC', marginBottom: 6, letterSpacing: '-0.02em' }}>
-                {authMode === 'login' ? 'Sign in to Omni LMS' : 'Create an Account'}
+                {authMode === 'login' ? 'Sign in to Acharya LMS' : 'Create an Account'}
               </h1>
               <p style={{ fontSize: 13, color: '#A7B0C0' }}>
                 {authMode === 'login' ? 'Enter your credentials to access your portal.' : 'Fill in your details to register.'}

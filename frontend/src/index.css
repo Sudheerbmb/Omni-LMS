@@ -2,14 +2,14 @@
 @import "tailwindcss";
 
 /* ══════════════════════════════════════════════════════════════
-   OMNI-LMS ENTERPRISE AI DESIGN SYSTEM
+   ACHARYA-LMS ENTERPRISE AI DESIGN SYSTEM
    ══════════════════════════════════════════════════════════════ */
 :root {
   font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.6;
 
-  /* ── Core Omni-LMS AI Palette ── */
+  /* ── Core Acharya-LMS AI Palette ── */
   --omni-bg:          #080A12;
   --omni-bg-sec:      #0D101A;
   --omni-surface:     #111522;
