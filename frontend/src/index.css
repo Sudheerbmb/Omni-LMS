@@ -2,38 +2,43 @@
 @import "tailwindcss";
 
 /* ══════════════════════════════════════════════════════════════
-   ACHARYA-LMS ENTERPRISE AI DESIGN SYSTEM
+   ACHARYA-LMS ENTERPRISE DESIGN SYSTEM (AUTHENTIC PALETTE)
+   Inspired by the Sacred Acharya Motif:
+   - Deep Cosmic Obsidian Canvas (#06080F, #0B0F19, #111726)
+   - Radiant Surya Solar Gold (#F59E0B, #FBBF24, #D97706)
+   - Sacred Saffron / Kesari Robes (#EA580C, #FF6B35, #C2410C)
+   - Wisdom Leaves & Golden Sprout (#FEF08A, #FDE047, #F59E0B)
    ══════════════════════════════════════════════════════════════ */
 :root {
   font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.6;
 
-  /* ── Core Acharya-LMS AI Palette ── */
-  --omni-bg:          #080A12;
-  --omni-bg-sec:      #0D101A;
-  --omni-surface:     #111522;
-  --omni-elevated:    #151A28;
-  --omni-accent:      #8B5CF6;
-  --omni-accent-sec:  #6366F1;
-  --omni-accent-ai:   #22D3EE;
-  --omni-success:     #22C55E;
+  /* ── Core Acharya-LMS Authentic Palette ── */
+  --omni-bg:          #06080F;
+  --omni-bg-sec:      #0B0F19;
+  --omni-surface:     #111726;
+  --omni-elevated:    #161E31;
+  --omni-accent:      #F59E0B;
+  --omni-accent-sec:  #EA580C;
+  --omni-accent-ai:   #FBBF24;
+  --omni-success:     #10B981;
   --omni-warning:     #F59E0B;
   --omni-danger:      #EF4444;
   --omni-text:        #F8FAFC;
-  --omni-text-sec:    #A7B0C0;
-  --omni-muted:       #6B7280;
-  --omni-border:      rgba(255, 255, 255, 0.08);
-  --omni-border-subtle: rgba(255, 255, 255, 0.05);
-  --omni-glass:       rgba(255, 255, 255, 0.04);
-  --omni-glass-hover: rgba(255, 255, 255, 0.08);
+  --omni-text-sec:    #CBD5E1;
+  --omni-muted:       #94A3B8;
+  --omni-border:      rgba(245, 158, 11, 0.12);
+  --omni-border-subtle: rgba(255, 255, 255, 0.06);
+  --omni-glass:       rgba(17, 23, 38, 0.7);
+  --omni-glass-hover: rgba(245, 158, 11, 0.08);
 
   /* ── Gradients ── */
-  --omni-grad-primary: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%);
-  --omni-grad-ai:      linear-gradient(135deg, #8B5CF6 0%, #22D3EE 100%);
-  --omni-grad-surface: linear-gradient(180deg, rgba(21, 26, 40, 0.8) 0%, rgba(17, 21, 34, 0.95) 100%);
+  --omni-grad-primary: linear-gradient(135deg, #F59E0B 0%, #EA580C 100%);
+  --omni-grad-ai:      linear-gradient(135deg, #FBBF24 0%, #F59E0B 50%, #EA580C 100%);
+  --omni-grad-surface: linear-gradient(180deg, rgba(22, 30, 49, 0.85) 0%, rgba(11, 15, 25, 0.95) 100%);
 
-  /* ── Role Mappings (All Unified in Dark Enterprise AI Base) ── */
+  /* ── Role Mappings (All Unified in Dark Cosmic Base) ── */
   /* Default / Global */
   --bg:          var(--omni-bg);
   --bg-sec:      var(--omni-bg-sec);
@@ -46,10 +51,10 @@
   --text:        var(--omni-text);
   --text-sec:    var(--omni-text-sec);
   --muted:       var(--omni-muted);
-  --sidebar:     #090C16;
-  --sidebar-t:   #A7B0C0;
-  --active-bg:   rgba(139, 92, 246, 0.15);
-  --active-t:    #A78BFA;
+  --sidebar:     #080C16;
+  --sidebar-t:   #CBD5E1;
+  --active-bg:   rgba(245, 158, 11, 0.16);
+  --active-t:    #FDE68A;
 
   /* Geometry & Shadows */
   --radius-sm: 6px;
@@ -59,40 +64,40 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.6), 0 4px 10px rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.25);
-  --shadow-ai-glow: 0 0 25px rgba(34, 211, 238, 0.2);
+  --shadow-glow: 0 0 24px rgba(245, 158, 11, 0.25);
+  --shadow-ai-glow: 0 0 30px rgba(234, 88, 12, 0.22);
 
   color-scheme: dark;
 }
 
-/* ── Role Customizations (Tailored Accents over Unified Dark Base) ── */
+/* ── Role Customizations (Tailored Accents over Cosmic Dark Base) ── */
 [data-role="admin"] {
-  --sidebar:     #080A12;
-  --sidebar-t:   #A7B0C0;
-  --active-bg:   rgba(99, 102, 241, 0.16);
-  --active-t:    #818CF8;
-  --accent:      #6366F1;
-  --accent-2:    #4F46E5;
+  --sidebar:     #080C16;
+  --sidebar-t:   #CBD5E1;
+  --active-bg:   rgba(245, 158, 11, 0.18);
+  --active-t:    #FDE68A;
+  --accent:      #F59E0B;
+  --accent-2:    #D97706;
   color-scheme: dark;
 }
 
 [data-role="teacher"] {
-  --sidebar:     #080A12;
-  --sidebar-t:   #A7B0C0;
-  --active-bg:   rgba(139, 92, 246, 0.16);
-  --active-t:    #A78BFA;
-  --accent:      #8B5CF6;
-  --accent-2:    #7C3AED;
+  --sidebar:     #080C16;
+  --sidebar-t:   #CBD5E1;
+  --active-bg:   rgba(234, 88, 12, 0.18);
+  --active-t:    #FDBA74;
+  --accent:      #EA580C;
+  --accent-2:    #C2410C;
   color-scheme: dark;
 }
 
 [data-role="student"] {
-  --sidebar:     #080A12;
-  --sidebar-t:   #A7B0C0;
-  --active-bg:   rgba(34, 211, 238, 0.14);
-  --active-t:    #38BDF8;
-  --accent:      #06B6D4;
-  --accent-2:    #0284C7;
+  --sidebar:     #080C16;
+  --sidebar-t:   #CBD5E1;
+  --active-bg:   rgba(251, 191, 36, 0.16);
+  --active-t:    #FEF08A;
+  --accent:      #FBBF24;
+  --accent-2:    #F59E0B;
   color-scheme: dark;
 }
 
@@ -130,7 +135,7 @@ body {
   border-radius: 99px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 92, 246, 0.4);
+  background: rgba(245, 158, 11, 0.4);
 }
 
 /* ── Typography Scale ───────────────────────────────────── */
@@ -152,12 +157,12 @@ h1, h2, h3, h4, h5, h6 {
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 .lms-card:hover {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(245, 158, 11, 0.25);
 }
 
 /* Glass Card */
 .lms-card-glass {
-  background: rgba(17, 21, 34, 0.7);
+  background: rgba(17, 23, 38, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--omni-border);
@@ -167,10 +172,10 @@ h1, h2, h3, h4, h5, h6 {
 
 /* AI / Intelligent Cognitive Card */
 .lms-card-ai {
-  background: linear-gradient(180deg, rgba(21, 26, 40, 0.9) 0%, rgba(13, 16, 26, 0.95) 100%);
-  border: 1px solid rgba(139, 92, 246, 0.25);
+  background: linear-gradient(180deg, rgba(22, 30, 49, 0.9) 0%, rgba(11, 15, 25, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
   border-radius: var(--radius-xl);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(254, 240, 138, 0.1);
   position: relative;
   overflow: hidden;
 }
@@ -182,7 +187,7 @@ h1, h2, h3, h4, h5, h6 {
   right: 0;
   height: 2px;
   background: var(--omni-grad-ai);
-  opacity: 0.9;
+  opacity: 0.95;
 }
 
 /* Primary Button */
@@ -194,18 +199,18 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0.55rem 1.15rem;
   background: var(--omni-grad-primary);
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(254, 240, 138, 0.2);
   border-radius: var(--radius-md);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.8125rem;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.25);
+  box-shadow: 0 2px 12px rgba(234, 88, 12, 0.3);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   letter-spacing: -0.01em;
 }
 .lms-btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.45);
   filter: brightness(1.08);
 }
 .lms-btn-primary:active {
@@ -220,19 +225,19 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.5rem;
   padding: 0.55rem 1.15rem;
   background: var(--omni-grad-ai);
-  color: #ffffff;
-  border: none;
+  color: #111827;
+  border: 1px solid rgba(254, 240, 138, 0.3);
   border-radius: var(--radius-md);
-  font-weight: 700;
+  font-weight: 800;
   font-size: 0.8125rem;
   cursor: pointer;
-  box-shadow: 0 2px 12px rgba(34, 211, 238, 0.25);
+  box-shadow: 0 2px 14px rgba(245, 158, 11, 0.35);
   transition: all 0.2s ease;
 }
 .lms-btn-ai:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(34, 211, 238, 0.4);
-  filter: brightness(1.1);
+  box-shadow: 0 4px 22px rgba(245, 158, 11, 0.55);
+  filter: brightness(1.05);
 }
 
 /* Ghost / Secondary Button */
@@ -252,8 +257,8 @@ h1, h2, h3, h4, h5, h6 {
   transition: all 0.15s ease;
 }
 .lms-btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.3);
   color: #ffffff;
 }
 
@@ -271,7 +276,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 .lms-input:focus {
   border-color: var(--omni-accent);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
   background: var(--omni-elevated);
 }
 .lms-input::placeholder {
@@ -291,12 +296,12 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid transparent;
 }
 
-/* Status colours (Omni AI Dark Palette) */
-.lms-badge-green  { background: rgba(34, 197, 94, 0.12); color: #4ade80; border-color: rgba(34, 197, 94, 0.25); }
-.lms-badge-blue   { background: rgba(99, 102, 241, 0.15); color: #818cf8; border-color: rgba(99, 102, 241, 0.3); }
-.lms-badge-violet { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border-color: rgba(139, 92, 246, 0.3); }
-.lms-badge-cyan   { background: rgba(34, 211, 238, 0.12); color: #22d3ee; border-color: rgba(34, 211, 238, 0.25); }
-.lms-badge-amber  { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border-color: rgba(245, 158, 11, 0.25); }
+/* Status colours (Acharya Authentic Palette) */
+.lms-badge-green  { background: rgba(16, 185, 129, 0.12); color: #34d399; border-color: rgba(16, 185, 129, 0.25); }
+.lms-badge-blue   { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
+.lms-badge-violet { background: rgba(234, 88, 12, 0.15); color: #fdba74; border-color: rgba(234, 88, 12, 0.3); }
+.lms-badge-cyan   { background: rgba(251, 191, 36, 0.14); color: #fde047; border-color: rgba(251, 191, 36, 0.3); }
+.lms-badge-amber  { background: rgba(245, 158, 11, 0.14); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
 .lms-badge-red    { background: rgba(239, 68, 68, 0.12); color: #f87171; border-color: rgba(239, 68, 68, 0.25); }
 .lms-badge-gray   { background: rgba(255, 255, 255, 0.05); color: #94a3b8; border-color: rgba(255, 255, 255, 0.08); }
 
@@ -350,7 +355,7 @@ h1, h2, h3, h4, h5, h6 {
   transition: background 0.15s ease;
 }
 .lms-table tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(245, 158, 11, 0.04);
 }
 .lms-table tbody tr:last-child td {
   border-bottom: none;
@@ -369,8 +374,9 @@ h1, h2, h3, h4, h5, h6 {
   transition: border-color 0.2s ease, transform 0.2s ease;
 }
 .lms-stat:hover {
-  border-color: rgba(139, 92, 246, 0.3);
+  border-color: rgba(245, 158, 11, 0.35);
   transform: translateY(-2px);
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.15);
 }
 .lms-stat-label {
   font-size: 0.72rem;

@@ -8,9 +8,9 @@ type HeaderProps = {
 }
 
 const ROLE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  admin:   { bg: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', text: '#fff', border: 'rgba(99,102,241,0.4)' },
-  teacher: { bg: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', text: '#fff', border: 'rgba(139,92,246,0.4)' },
-  student: { bg: 'linear-gradient(135deg, #06B6D4 0%, #0284C7 100%)', text: '#fff', border: 'rgba(6,182,212,0.4)' },
+  admin:   { bg: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', text: '#ffffff', border: 'rgba(245,158,11,0.5)' },
+  teacher: { bg: 'linear-gradient(135deg, #EA580C 0%, #C2410C 100%)', text: '#ffffff', border: 'rgba(234,88,12,0.5)' },
+  student: { bg: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)', text: '#0F172A', border: 'rgba(251,191,36,0.6)' },
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -29,20 +29,20 @@ export const Header: React.FC<HeaderProps> = ({ user, notifications }) => {
     <header
       className="h-16 flex items-center justify-between px-6 shrink-0 sticky top-0 z-30 select-none"
       style={{
-        background: '#0D101A',
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+        background: '#06080F',
+        borderBottom: '1px solid rgba(245, 158, 11, 0.12)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
       }}
     >
       {/* ── Left: breadcrumb ───────────────────── */}
       <div className="flex items-center gap-2.5">
         <span
-          className="text-[11px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md"
-          style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.3)' }}
+          className="text-[11px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-md"
+          style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.35)' }}
         >
           Acharya LMS
         </span>
-        <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.875rem' }}>›</span>
+        <span style={{ color: 'rgba(245,158,11,0.4)', fontSize: '0.875rem' }}>›</span>
         <span
           className="text-xs sm:text-sm font-bold capitalize text-white flex items-center gap-1.5"
         >
@@ -59,9 +59,9 @@ export const Header: React.FC<HeaderProps> = ({ user, notifications }) => {
             onClick={() => setShowNotifs(!showNotifs)}
             className="relative flex items-center justify-center w-9 h-9 rounded-xl transition-all"
             style={{
-              background: showNotifs ? 'rgba(139,92,246,0.18)' : 'rgba(255,255,255,0.04)',
-              border: showNotifs ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
-              color: showNotifs ? '#A78BFA' : '#A7B0C0',
+              background: showNotifs ? 'rgba(245,158,11,0.18)' : 'rgba(255,255,255,0.04)',
+              border: showNotifs ? '1px solid rgba(245,158,11,0.45)' : '1px solid rgba(255,255,255,0.08)',
+              color: showNotifs ? '#FDE68A' : '#CBD5E1',
               cursor: 'pointer',
             }}
             title="Notifications"
@@ -70,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({ user, notifications }) => {
             {unreadCount > 0 && (
               <span
                 className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-full text-white font-extrabold shadow-sm"
-                style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #22D3EE 100%)', fontSize: '0.6rem' }}
+                style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #EA580C 100%)', fontSize: '0.6rem' }}
               >
                 {unreadCount}
               </span>
@@ -82,16 +82,16 @@ export const Header: React.FC<HeaderProps> = ({ user, notifications }) => {
             <div
               className="absolute right-0 mt-2 w-80 rounded-2xl shadow-2xl z-50 overflow-hidden"
               style={{
-                background: '#151A28',
-                border: '1px solid rgba(255,255,255,0.1)',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+                background: '#111726',
+                border: '1px solid rgba(245,158,11,0.2)',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.7)',
               }}
             >
               <div
                 className="flex items-center justify-between px-4 py-3"
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: '#111522' }}
+                style={{ borderBottom: '1px solid rgba(245,158,11,0.12)', background: '#0B0F19' }}
               >
-                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
                   Notifications
                 </span>
                 <div className="flex items-center gap-2">
@@ -122,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({ user, notifications }) => {
                     >
                       <div
                         className="w-2 h-2 rounded-full mt-1.5 shrink-0"
-                        style={{ background: n.read_at ? 'rgba(255,255,255,0.2)' : '#8B5CF6', boxShadow: n.read_at ? 'none' : '0 0 8px #8B5CF6' }}
+                        style={{ background: n.read_at ? 'rgba(255,255,255,0.2)' : '#F59E0B', boxShadow: n.read_at ? 'none' : '0 0 8px #F59E0B' }}
                       />
                       <div>
                         <p className="text-xs font-semibold text-white">
@@ -141,12 +141,12 @@ export const Header: React.FC<HeaderProps> = ({ user, notifications }) => {
         </div>
 
         {/* Divider */}
-        <div className="h-6 w-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+        <div className="h-6 w-px" style={{ background: 'rgba(245,158,11,0.15)' }} />
 
         {/* User Pill */}
         <div
           className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl transition-colors cursor-default"
-          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+          style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.12)' }}
         >
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center font-extrabold text-xs select-none shadow-sm"
@@ -158,11 +158,11 @@ export const Header: React.FC<HeaderProps> = ({ user, notifications }) => {
             <p className="text-xs font-bold leading-tight text-white">
               {user.display_name}
             </p>
-            <p className="text-[10px] leading-tight text-slate-400 font-medium">
+            <p className="text-[10px] leading-tight text-amber-400/80 font-medium">
               {roleLabel}
             </p>
           </div>
-          <ChevronDown style={{ width: 13, height: 13, color: '#6B7280' }} />
+          <ChevronDown style={{ width: 13, height: 13, color: '#F59E0B' }} />
         </div>
       </div>
     </header>

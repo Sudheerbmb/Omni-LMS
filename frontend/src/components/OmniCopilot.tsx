@@ -211,33 +211,33 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
     student: {
       title: 'Student Study Copilot',
       badge: 'Student AI',
-      badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-      gradient: 'from-emerald-500 to-cyan-600',
-      borderGlow: 'border-emerald-500/40 hover:border-emerald-400',
+      badgeBg: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+      gradient: 'from-amber-500 to-yellow-500',
+      borderGlow: 'border-yellow-500/40 hover:border-yellow-400',
       icon: GraduationCap
     },
     teacher: {
       title: 'Faculty Live Copilot',
       badge: 'Faculty AI',
-      badgeBg: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
-      gradient: 'from-cyan-500 to-indigo-600',
-      borderGlow: 'border-cyan-500/40 hover:border-cyan-400',
+      badgeBg: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+      gradient: 'from-orange-500 to-amber-500',
+      borderGlow: 'border-orange-500/40 hover:border-orange-400',
       icon: Briefcase
     },
     admin: {
       title: 'Executive Admin Copilot',
       badge: 'Admin AI',
-      badgeBg: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
-      gradient: 'from-rose-500 to-amber-600',
-      borderGlow: 'border-rose-500/40 hover:border-rose-400',
+      badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+      gradient: 'from-amber-600 to-yellow-600',
+      borderGlow: 'border-amber-500/40 hover:border-amber-400',
       icon: ShieldCheck
     }
   }[role] || {
     title: 'Acharya Copilot',
     badge: 'MCP AI',
-    badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-    gradient: 'from-cyan-500 to-blue-600',
-    borderGlow: 'border-cyan-500/40 hover:border-cyan-400',
+    badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    gradient: 'from-amber-500 to-orange-500',
+    borderGlow: 'border-amber-500/40 hover:border-amber-400',
     icon: Brain
   }
 
