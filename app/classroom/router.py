@@ -787,24 +787,73 @@ async def teacher_copilot_assistant(
             "IMPORTANT: Ground your output dynamically in what the teacher has actually explained up to this exact second in class!\n"
         )
 
-    if action == "diagram":
+    if action == "missed_points":
         prompt = (
-            f"You are an expert visual diagram architect and teacher copilot assisting a live teacher in real-time.\n"
+            f"You are an expert academic curriculum auditor and faculty associate for a live classroom lecture.\n"
             f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n"
             f"{transcript_context}\n"
-            "The teacher wants a clear, visually structured concept diagram that explains the concept being taught (e.g. if teaching OOPS, illustrate Classes, Objects, Inheritance, or Encapsulation based on what was taught up to this minute).\n\n"
+            f"Analyze what the teacher has actually explained in the live lecture transcript up to minute {elapsed_min_str} against the full curriculum syllabus for {topic}.\n"
+            "Identify:\n"
+            "1. 🟢 'covered_points': Array of 2-3 key definitions/points the teacher has already explained well.\n"
+            "2. ⚠️ 'missed_points': Array of 3-4 crucial points, formulas, boundary conditions, or edge cases the teacher has NOT mentioned yet or might have overlooked.\n"
+            "3. ⏱️ 'pacing_advice': 1-2 concise sentences advising on lecture timing and pacing for the rest of the period.\n"
+            "4. 🗣️ 'suggested_transition': Exact verbal bridge phrase the teacher can speak right now to smoothly transition to the missing concepts.\n"
+            "5. 'overview': Short 1-sentence summary.\n\n"
+            "Return ONLY valid JSON."
+        )
+        res_json = await call_groq_llm([
+            {"role": "system", "content": "You are a JSON-only curriculum coverage and pacing auditor for live teachers. Return valid JSON."},
+            {"role": "user", "content": prompt}
+        ], json_mode=True, max_tokens=650, temperature=0.3)
+
+        missed_obj = None
+        if res_json:
+            try:
+                missed_obj = json.loads(res_json)
+            except Exception:
+                pass
+
+        if not missed_obj:
+            missed_obj = {
+                "covered_points": [f"Core foundations and introductory definitions of {topic}"],
+                "missed_points": [
+                    f"Boundary conditions and asymptotic limits in {topic}",
+                    "Common student misconception diagnostics and edge case examples",
+                    "Formal algebraic/symbolic verification and proof steps"
+                ],
+                "pacing_advice": "Great pacing so far. You have sufficient time remaining in this period to transition into derivations and interactive student Q&A.",
+                "suggested_transition": f"Now that we have established the foundations of {topic}, let us examine what happens when extreme boundary values are reached.",
+                "overview": f"Curriculum coverage for {topic} is on track. Suggested focus: boundary conditions."
+            }
+
+        return {
+            "action": "missed_points",
+            "topic": topic,
+            "result": missed_obj.get("overview", ""),
+            "missed_points_data": missed_obj,
+            "diagram_data": None,
+            "poll_data": None
+        }
+
+    elif action in ["mermaid_diagram", "diagram"]:
+        prompt = (
+            f"You are an expert visual diagram architect and teacher associate in a live virtual classroom.\n"
+            f"Subject: {subject} | Grade: {grade} | Current Topic: {topic}\n"
+            f"{transcript_context}\n"
+            "The teacher wants a clear, visually structured Mermaid.js diagram and ASCII concept map explaining the concept being taught up to this minute in the lecture.\n\n"
             "Output a valid JSON object with the following schema:\n"
-            "- 'title': concise, descriptive title for the diagram\n"
-            "- 'diagram_ascii': a clean, beautifully formatted ASCII / text box diagram with boxes, dividers, and arrows (using +, -, |, v, ->) illustrating the concept architecture or workflow\n"
+            "- 'title': concise title for the diagram\n"
+            "- 'mermaid_code': valid, syntactically clean Mermaid.js code starting with 'graph TD' or 'flowchart LR' or 'sequenceDiagram' with clean node labels and arrows\n"
+            "- 'diagram_ascii': a clean ASCII text box diagram with boxes, dividers, and arrows (using +, -, |, v, ->) illustrating the concept workflow\n"
             "- 'key_concepts': an array of 3-4 bullet strings explaining the components in the diagram\n"
             "- 'pedagogical_explanation': 2-3 sentences explaining how the teacher can walk students through this diagram on the whiteboard\n"
             "- 'whiteboard_text': concise summary lines ready to be transferred to the classroom whiteboard\n"
             "Return ONLY valid JSON."
         )
         res_json = await call_groq_llm([
-            {"role": "system", "content": "You are a JSON-only visual diagram generator for teachers. Output valid JSON."},
+            {"role": "system", "content": "You are a JSON-only visual diagram and Mermaid.js generator for teachers. Output valid JSON."},
             {"role": "user", "content": prompt}
-        ], json_mode=True, max_tokens=650, temperature=0.4)
+        ], json_mode=True, max_tokens=700, temperature=0.35)
 
         diagram_obj = None
         if res_json:
@@ -814,8 +863,10 @@ async def teacher_copilot_assistant(
                 pass
 
         if not diagram_obj:
+            clean_topic = topic.replace('"', '').replace("'", "")
             diagram_obj = {
-                "title": f"Concept Architecture: {topic}",
+                "title": f"Mermaid Architecture: {clean_topic}",
+                "mermaid_code": f"graph TD\n    A[{clean_topic}] --> B[Foundations & Input]\n    A --> C[Processing & Theorems]\n    B --> D[Execution]\n    C --> D\n    D --> E[Verified Output]",
                 "diagram_ascii": (
                     "+-------------------------------------------------------+\n"
                     f"|                 {topic.upper()}                       |\n"
@@ -835,7 +886,7 @@ async def teacher_copilot_assistant(
                 ),
                 "key_concepts": [
                     f"Core definition and foundations of {topic}",
-                    "Relationship between data structures and algorithmic operations",
+                    "Relationship between theoretical principles and physical parameters",
                     "Real-world application and error prevention"
                 ],
                 "pedagogical_explanation": f"Walk students through {topic} starting from the high-level system boundary down into individual functional components.",
@@ -847,6 +898,7 @@ async def teacher_copilot_assistant(
             "topic": topic,
             "result": diagram_obj.get("pedagogical_explanation", ""),
             "diagram_data": diagram_obj,
+            "missed_points_data": None,
             "poll_data": None
         }
 

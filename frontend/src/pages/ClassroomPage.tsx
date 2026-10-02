@@ -43,7 +43,8 @@ import {
   Radio,
 
   CheckCircle2,
-
+  AlertCircle,
+  Volume2,
   AlertTriangle,
 
   RefreshCw,
@@ -183,18 +184,6 @@ interface WhiteboardStroke {
   width: number
 
   tool: 'pen' | 'highlighter' | 'eraser' | 'line' | 'rectangle' | 'circle' | 'arrow'
-
-}
-
-interface AiChatMessage {
-
-  id: string
-
-  sender: 'user' | 'ai'
-
-  text: string
-
-  timestamp: string
 
 }
 
@@ -471,8 +460,22 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
   
   // Teacher AI Copilot State
   const [showTeacherCopilot, setShowTeacherCopilot] = useState(false)
+  // Teacher AI Faculty Associate State
+  const [copilotMissedPointsData, setCopilotMissedPointsData] = useState<{
+    covered_points: string[]
+    missed_points: string[]
+    pacing_advice: string
+    suggested_transition: string
+    overview: string
+  } | null>(null)
+  const [teacherAiTab, setTeacherAiTab] = useState<'missed_points' | 'mermaid' | 'analogies' | 'poll'>('missed_points')
+  const [isTeacherAiLoading, setIsTeacherAiLoading] = useState(false)
+  const [copiedTransitionToast, setCopiedTransitionToast] = useState(false)
+  const [copiedMermaidToast, setCopiedMermaidToast] = useState(false)
+  
   const [copilotDiagramData, setCopilotDiagramData] = useState<{
     title: string
+    mermaid_code?: string
     diagram_ascii: string
     key_concepts: string[]
     pedagogical_explanation: string
@@ -930,29 +933,7 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
   const [pollOptionsInput, setPollOptionsInput] = useState(['Yes, completely clear', 'Needs slight explanation', 'Did not understand'])
 
-  // AI CO-PILOT AGENT STATE
 
-  const [aiChatMessages, setAiChatMessages] = useState<AiChatMessage[]>([
-
-    {
-
-      id: 'ai_welcome',
-
-      sender: 'ai',
-
-      text: 'Hello! I am Omni-Tutor, your real-time classroom AI co-pilot. I can explain complex concepts, synthesize live diagrams onto the whiteboard, generate comprehension quizzes, or summarize the lecture for you.',
-
-      timestamp: 'Now'
-
-    }
-
-  ])
-
-  const [aiInputText, setAiInputText] = useState('')
-
-  const [aiGenerating, setAiGenerating] = useState(false)
-
-  const [aiTab, setAiTab] = useState<'chat' | 'diagram' | 'quiz' | 'summary'>('chat')
 
   const [showAiDiagramModal, setShowAiDiagramModal] = useState(false)
 
@@ -3414,88 +3395,165 @@ const handleTriggerTeacherCopilot = async (
 
   // ==========================================
 
-  // AGENTIC AI CLASSROOM CO-PILOT ACTIONS
 
-  // ==========================================
-
-  // 1. AI Intelligent Chat Assistant
-
-  const handleSendAiMessage = (e: React.FormEvent) => {
-
-    e.preventDefault()
-
-    if (!aiInputText.trim() || aiGenerating) return
-
-    const userText = aiInputText.trim()
-
-    const userMsg: AiChatMessage = {
-
-      id: `user_${Date.now()}`,
-
-      sender: 'user',
-
-      text: userText,
-
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-
-    }
-
-    setAiChatMessages(prev => [...prev, userMsg])
-
-    setAiInputText('')
-
-    setAiGenerating(true)
-
-    // Generate smart context-aware pedagogical response
-
-    setTimeout(() => {
-
-      let reply = ''
-
-      const lower = userText.toLowerCase()
-
-      const subject = activeCallRoom?.subject_name || 'this topic'
-
-      if (lower.includes('formula') || lower.includes('equation') || lower.includes('math')) {
-
-        reply = `Here are the foundational equations for ${subject}:\n• Velocity: v = Δx / Δt\n• Acceleration: a = Δv / Δt\n• Newton's 2nd Law: F = m · a\n• Kinetic Energy: KE = ½mv²\nLet me know if you would like me to synthesize a diagram on the whiteboard!`
-
-      } else if (lower.includes('summary') || lower.includes('recap') || lower.includes('explain')) {
-
-        reply = `**Session Conceptual Recap (${activeCallRoom?.title}):**\n1. **Core Principle:** ${subject} models the systematic interactions of natural forces.\n2. **Key Insight:** Understanding the vector relationship between velocity and net acceleration.\n3. **Practical Application:** Observed everyday in vehicular motion, planetary orbits, and sports kinematics.`
-
-      } else if (lower.includes('quiz') || lower.includes('question') || lower.includes('practice')) {
-
-        reply = `**Quick Practice Check:**\n*A ball is thrown vertically upward. At the highest point of its trajectory, what are its velocity and acceleration?*\n• A) Velocity is zero, acceleration is zero\n• B) Velocity is zero, acceleration is 9.8 m/s² downward [Correct]\n• C) Velocity is 9.8 m/s, acceleration is zero`
-
-      } else {
-
-        reply = `In ${subject}, "${userText}" is a vital concept! The core intuition revolves around how state variables transition over time under defined boundary conditions. Feel free to ask for a whiteboard diagram or click 'Generate Poll' to test comprehension!`
-
+  // ── TEACHER AI FACULTY ASSOCIATE HANDLERS ─────────────────────────────────
+  const handleAuditMissedPoints = async () => {
+    if (!activeCallRoom) return
+    setIsTeacherAiLoading(true)
+    try {
+      const fullTranscript = liveTranscript.map(t => t.text).join(' ') || latestTranscriptSnippet
+      const res = await getTeacherCopilotAssistance(activeCallRoom.id, {
+        current_topic: activeCallRoom.subject_name || activeCallRoom.title,
+        grade: activeCallRoom.grade_number,
+        subject: activeCallRoom.subject_name,
+        action: 'missed_points',
+        live_transcript: fullTranscript,
+        elapsed_seconds: elapsedSeconds
+      })
+      if (res.missed_points_data) {
+        setCopilotMissedPointsData(res.missed_points_data)
       }
+    } catch (err) {
+      console.warn('Teacher AI Associate missed points error:', err)
+    } finally {
+      setIsTeacherAiLoading(false)
+    }
+  }
 
-      setAiChatMessages(prev => [
+  const handleGenerateMermaidDiagram = async () => {
+    if (!activeCallRoom) return
+    setIsTeacherAiLoading(true)
+    try {
+      const fullTranscript = liveTranscript.map(t => t.text).join(' ') || latestTranscriptSnippet
+      const res = await getTeacherCopilotAssistance(activeCallRoom.id, {
+        current_topic: activeCallRoom.subject_name || activeCallRoom.title,
+        grade: activeCallRoom.grade_number,
+        subject: activeCallRoom.subject_name,
+        action: 'mermaid_diagram',
+        live_transcript: fullTranscript,
+        elapsed_seconds: elapsedSeconds
+      })
+      if (res.diagram_data) {
+        setCopilotDiagramData(res.diagram_data)
+      }
+    } catch (err) {
+      console.warn('Teacher AI Associate mermaid error:', err)
+    } finally {
+      setIsTeacherAiLoading(false)
+    }
+  }
 
-        ...prev,
+  const handleGenerateAnalogies = async () => {
+    if (!activeCallRoom) return
+    setIsTeacherAiLoading(true)
+    try {
+      const fullTranscript = liveTranscript.map(t => t.text).join(' ') || latestTranscriptSnippet
+      const res = await getTeacherCopilotAssistance(activeCallRoom.id, {
+        current_topic: activeCallRoom.subject_name || activeCallRoom.title,
+        grade: activeCallRoom.grade_number,
+        subject: activeCallRoom.subject_name,
+        action: 'analogy',
+        live_transcript: fullTranscript,
+        elapsed_seconds: elapsedSeconds
+      })
+      setCopilotResult(res.result)
+    } catch (err) {
+      console.warn('Teacher AI Associate analogy error:', err)
+    } finally {
+      setIsTeacherAiLoading(false)
+    }
+  }
 
-        {
+  // ── STUDENT AI LIVE TUTOR HANDLERS ────────────────────────────────────────
+  const handleStudentLiveDoubt = async (doubtQuery?: string) => {
+    const q = (doubtQuery || studentDoubtInput).trim()
+    if (!q || !activeCallRoom || isStudentTutorLoading) return
 
-          id: `ai_${Date.now()}`,
+    setStudentDoubtInput('')
+    setIsStudentTutorLoading(true)
+    const newEntry = {
+      id: Math.random().toString(36).substring(7),
+      question: q,
+      answer: 'Analyzing lecture context and formulating Socratic step-by-step guidance...',
+      timestamp: formatTimer(elapsedSeconds)
+    }
+    setStudentDoubtHistory(prev => [...prev, newEntry])
 
-          sender: 'ai',
+    try {
+      const fullTranscript = liveTranscript.map(t => t.text).join(' ') || latestTranscriptSnippet
+      const res = await getStudentTutorAssistance(activeCallRoom.id, {
+        action: 'doubt',
+        query: q,
+        live_transcript: fullTranscript,
+        elapsed_seconds: elapsedSeconds,
+        topic: activeCallRoom.subject_name || activeCallRoom.title,
+        grade: activeCallRoom.grade_number,
+        subject: activeCallRoom.subject_name
+      })
 
-          text: reply,
+      setStudentDoubtHistory(prev =>
+        prev.map(item =>
+          item.id === newEntry.id ? { ...item, answer: res.result } : item
+        )
+      )
+    } catch (err) {
+      setStudentDoubtHistory(prev =>
+        prev.map(item =>
+          item.id === newEntry.id
+            ? {
+                ...item,
+                answer: `Based on what your teacher has explained so far in ${activeCallRoom.subject_name || 'class'}, remember to check the core governing formulas on the board.`
+              }
+            : item
+        )
+      )
+    } finally {
+      setIsStudentTutorLoading(false)
+    }
+  }
 
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const handleStudentLiveSummary = async () => {
+    if (!activeCallRoom) return
+    setIsStudentTutorLoading(true)
+    try {
+      const fullTranscript = liveTranscript.map(t => t.text).join(' ') || latestTranscriptSnippet
+      const res = await getStudentTutorAssistance(activeCallRoom.id, {
+        action: 'summary',
+        live_transcript: fullTranscript,
+        elapsed_seconds: elapsedSeconds,
+        topic: activeCallRoom.subject_name || activeCallRoom.title,
+        grade: activeCallRoom.grade_number,
+        subject: activeCallRoom.subject_name
+      })
+      setStudentSummaryResult(res.result)
+    } catch (err) {
+      console.warn('Student tutor summary error:', err)
+    } finally {
+      setIsStudentTutorLoading(false)
+    }
+  }
 
-        }
-
-      ])
-
-      setAiGenerating(false)
-
-    }, 700)
-
+  const handleStudentLiveMilestones = async () => {
+    if (!activeCallRoom) return
+    setIsStudentTutorLoading(true)
+    try {
+      const fullTranscript = liveTranscript.map(t => t.text).join(' ') || latestTranscriptSnippet
+      const res = await getStudentTutorAssistance(activeCallRoom.id, {
+        action: 'milestones',
+        live_transcript: fullTranscript,
+        elapsed_seconds: elapsedSeconds,
+        topic: activeCallRoom.subject_name || activeCallRoom.title,
+        grade: activeCallRoom.grade_number,
+        subject: activeCallRoom.subject_name
+      })
+      if (res.milestones) {
+        setStudentMilestones(res.milestones)
+      }
+    } catch (err) {
+      console.warn('Student tutor milestones error:', err)
+    } finally {
+      setIsStudentTutorLoading(false)
+    }
   }
 
   // 2. AI Whiteboard Diagram & Formula Synthesizer
@@ -5300,385 +5358,525 @@ const handleTriggerTeacherCopilot = async (
 
                 )}
 
-                {/* 4. OMNI-AI AGENT DRAWER */}
-
+                {/* 4. ROLE-ISOLATED AI DRAWER (Faculty Associate for Teachers vs Live Tutor for Students) */}
                 {activeSideDrawer === 'ai' && (
-
-                  <div className="flex-1 flex flex-col justify-between h-full">
-
-                    {/* AI Agent Sub-Tabs */}
-
-                    <div className="flex items-center gap-1 pb-3 mb-3 border-b border-slate-800">
-
-                      <button
-
-                        onClick={() => setAiTab('chat')}
-
-                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
-
-                          aiTab === 'chat' ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-800 text-slate-400 hover:text-white'
-
-                        }`}
-
-                      >
-
-                        <Bot className="w-3.5 h-3.5" />
-
-                        Tutor Q&A
-
-                      </button>
-
-                      <button
-
-                        onClick={() => setAiTab('diagram')}
-
-                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
-
-                          aiTab === 'diagram' ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-800 text-slate-400 hover:text-white'
-
-                        }`}
-
-                      >
-
-                        <Zap className="w-3.5 h-3.5" />
-
-                        Diagrams
-
-                      </button>
-
-                      <button
-
-                        onClick={() => setAiTab('summary')}
-
-                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
-
-                          aiTab === 'summary' ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-800 text-slate-400 hover:text-white'
-
-                        }`}
-
-                      >
-
-                        <FileText className="w-3.5 h-3.5" />
-
-                        Summary
-
-                      </button>
-
-                    </div>
-
-                    {/* AI Sub-Tab 1: Tutor Q&A Chat */}
-
-                    {aiTab === 'chat' && (
-
+                  <div className="flex-1 flex flex-col justify-between h-full overflow-hidden">
+                    
+                    {/* ── TEACHER VIEW: AI FACULTY ASSOCIATE ── */}
+                    {isHost ? (
                       <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                        {/* Header Badge */}
+                        <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 mb-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white font-black shadow">
+                              <Sparkles className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-extrabold text-white">AI Faculty Associate</h4>
+                              <p className="text-[10px] text-indigo-300">Live Pacing &bull; Missed Points &bull; Mermaid.js</p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            Groq LPU
+                          </span>
+                        </div>
 
-                        <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                        {/* Teacher Sub-Tabs */}
+                        <div className="grid grid-cols-4 gap-1 pb-2.5 mb-2.5 border-b border-slate-800">
+                          <button
+                            onClick={() => { setTeacherAiTab('missed_points'); if (!copilotMissedPointsData) handleAuditMissedPoints(); }}
+                            className={`py-1.5 rounded-xl text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all ${
+                              teacherAiTab === 'missed_points' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span>Missed</span>
+                          </button>
+                          <button
+                            onClick={() => { setTeacherAiTab('mermaid'); if (!copilotDiagramData) handleGenerateMermaidDiagram(); }}
+                            className={`py-1.5 rounded-xl text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all ${
+                              teacherAiTab === 'mermaid' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                            <span>Mermaid</span>
+                          </button>
+                          <button
+                            onClick={() => { setTeacherAiTab('analogies'); if (!copilotResult) handleGenerateAnalogies(); }}
+                            className={`py-1.5 rounded-xl text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all ${
+                              teacherAiTab === 'analogies' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            <Lightbulb className="w-3.5 h-3.5" />
+                            <span>Analogies</span>
+                          </button>
+                          <button
+                            onClick={() => setTeacherAiTab('poll')}
+                            className={`py-1.5 rounded-xl text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all ${
+                              teacherAiTab === 'poll' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            <BarChart2 className="w-3.5 h-3.5" />
+                            <span>Poll</span>
+                          </button>
+                        </div>
 
-                          {aiChatMessages.map(msg => (
-
-                            <div
-
-                              key={msg.id}
-
-                              className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
-
-                            >
-
-                              <div
-
-                                className={`px-3.5 py-2.5 rounded-2xl text-xs max-w-[90%] whitespace-pre-wrap ${
-
-                                  msg.sender === 'user'
-
-                                    ? 'bg-cyan-600 text-white rounded-br-none'
-
-                                    : 'bg-slate-950 text-slate-200 border border-slate-800 rounded-bl-none shadow'
-
-                                }`}
-
+                        {/* Tab 1: Missed Points Auditor */}
+                        {teacherAiTab === 'missed_points' && (
+                          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Live Lecture Coverage</span>
+                              <button
+                                onClick={handleAuditMissedPoints}
+                                disabled={isTeacherAiLoading}
+                                className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
                               >
+                                <Sparkles className="w-3 h-3" />
+                                <span>{isTeacherAiLoading ? 'Auditing...' : 'Re-Audit'}</span>
+                              </button>
+                            </div>
 
-                                {msg.sender === 'ai' && (
-
-                                  <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-[10px] mb-1">
-
-                                    <Sparkles className="w-3 h-3" />
-
-                                    Omni-Tutor Agent
-
+                            {isTeacherAiLoading && !copilotMissedPointsData ? (
+                              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-2">
+                                <Loader2 className="w-5 h-5 text-indigo-400 animate-spin mx-auto" />
+                                <p className="text-xs text-indigo-300 font-semibold">Comparing live speech against curriculum...</p>
+                              </div>
+                            ) : copilotMissedPointsData ? (
+                              <div className="space-y-3">
+                                {/* Pacing Advice Banner */}
+                                <div className="p-3 rounded-2xl bg-slate-950 border border-indigo-500/30 space-y-1.5">
+                                  <div className="flex items-center gap-1.5 text-indigo-400 text-[11px] font-extrabold">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    <span>Pacing & Timing Advice</span>
                                   </div>
+                                  <p className="text-xs text-slate-300">{copilotMissedPointsData.pacing_advice}</p>
+                                </div>
 
+                                {/* Suggested Transition Bridge */}
+                                {copilotMissedPointsData.suggested_transition && (
+                                  <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Volume2 className="w-3 h-3" />
+                                        <span>Suggested Verbal Bridge</span>
+                                      </span>
+                                      <button
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(copilotMissedPointsData.suggested_transition)
+                                          setCopiedTransitionToast(true)
+                                          setTimeout(() => setCopiedTransitionToast(false), 3000)
+                                        }}
+                                        className="text-[10px] text-indigo-300 hover:text-white font-bold underline"
+                                      >
+                                        {copiedTransitionToast ? 'Copied!' : 'Copy Phrase'}
+                                      </button>
+                                    </div>
+                                    <p className="text-xs italic text-indigo-200 bg-slate-950/60 p-2.5 rounded-xl border border-indigo-500/20">
+                                      "{copilotMissedPointsData.suggested_transition}"
+                                    </p>
+                                  </div>
                                 )}
 
-                                {msg.text}
+                                {/* Missed Critical Points */}
+                                <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 space-y-2">
+                                  <div className="flex items-center gap-1.5 text-rose-400 text-[11px] font-extrabold">
+                                    <AlertCircle className="w-3.5 h-3.5" />
+                                    <span>Points & Edge Cases Not Covered Yet</span>
+                                  </div>
+                                  <ul className="space-y-1.5 text-xs text-slate-200">
+                                    {copilotMissedPointsData.missed_points.map((pt, idx) => (
+                                      <li key={idx} className="flex items-start gap-1.5">
+                                        <span className="text-rose-400 font-bold shrink-0">&bull;</span>
+                                        <span>{pt}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
 
+                                {/* Covered Points */}
+                                <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+                                  <div className="flex items-center gap-1.5 text-emerald-400 text-[11px] font-extrabold">
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Covered Points (Well Explained)</span>
+                                  </div>
+                                  <ul className="space-y-1 text-xs text-slate-300">
+                                    {copilotMissedPointsData.covered_points.map((pt, idx) => (
+                                      <li key={idx} className="flex items-start gap-1.5">
+                                        <span className="text-emerald-400 font-bold shrink-0">&bull;</span>
+                                        <span>{pt}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
                               </div>
+                            ) : (
+                              <button
+                                onClick={handleAuditMissedPoints}
+                                className="w-full py-4 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
+                              >
+                                <Sparkles className="w-5 h-5 text-indigo-400" />
+                                <span>Audit Live Lecture vs Syllabus</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
 
+                        {/* Tab 2: Mermaid.js Synthesizer */}
+                        {teacherAiTab === 'mermaid' && (
+                          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Visual Diagram Engine</span>
+                              <button
+                                onClick={handleGenerateMermaidDiagram}
+                                disabled={isTeacherAiLoading}
+                                className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>{isTeacherAiLoading ? 'Synthesizing...' : 'Regenerate'}</span>
+                              </button>
                             </div>
 
-                          ))}
+                            {copilotDiagramData ? (
+                              <div className="space-y-3">
+                                <h5 className="text-xs font-bold text-white">{copilotDiagramData.title}</h5>
 
-                          {aiGenerating && (
+                                {copilotDiagramData.mermaid_code && (
+                                  <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] font-mono text-cyan-400 font-bold">Mermaid.js Code</span>
+                                      <button
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(copilotDiagramData.mermaid_code || '')
+                                          setCopiedMermaidToast(true)
+                                          setTimeout(() => setCopiedMermaidToast(false), 3000)
+                                        }}
+                                        className="text-[10px] text-cyan-300 hover:text-white font-bold underline"
+                                      >
+                                        {copiedMermaidToast ? 'Copied Code!' : 'Copy Code'}
+                                      </button>
+                                    </div>
+                                    <pre className="text-[11px] font-mono text-cyan-200 bg-slate-900/80 p-2.5 rounded-xl overflow-x-auto whitespace-pre">
+                                      {copilotDiagramData.mermaid_code}
+                                    </pre>
+                                  </div>
+                                )}
 
-                            <div className="flex items-center gap-2 text-xs text-cyan-400 animate-pulse bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                                <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Concept Architecture</span>
+                                  <pre className="text-[10px] font-mono text-slate-300 bg-slate-900/80 p-2.5 rounded-xl overflow-x-auto whitespace-pre">
+                                    {copilotDiagramData.diagram_ascii}
+                                  </pre>
+                                </div>
 
-                              <Sparkles className="w-4 h-4 animate-spin" />
+                                <button
+                                  onClick={() => {
+                                    handleOpenWhiteboard()
+                                    alert('Diagram transferred to live whiteboard session.')
+                                  }}
+                                  className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 transition-all flex items-center justify-center gap-1.5"
+                                >
+                                  <PenTool className="w-4 h-4" />
+                                  <span>Plot to Whiteboard</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={handleGenerateMermaidDiagram}
+                                className="w-full py-4 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
+                              >
+                                <Zap className="w-5 h-5 text-indigo-400" />
+                                <span>Synthesize Concept Mermaid Diagram</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
 
-                              <span>AI Co-Pilot is reasoning...</span>
-
+                        {/* Tab 3: Alternative Explanations & Analogies */}
+                        {teacherAiTab === 'analogies' && (
+                          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alternative Pedagogical Angles</span>
+                              <button
+                                onClick={handleGenerateAnalogies}
+                                disabled={isTeacherAiLoading}
+                                className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>{isTeacherAiLoading ? 'Generating...' : 'Refresh'}</span>
+                              </button>
                             </div>
 
-                          )}
+                            {copilotResult ? (
+                              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                                {copilotResult}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={handleGenerateAnalogies}
+                                className="w-full py-4 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
+                              >
+                                <Lightbulb className="w-5 h-5 text-indigo-400" />
+                                <span>Generate Intuitive Metaphors & Analogies</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
 
-                        </div>
-
-                        {/* Quick Prompts Chips */}
-
-                        <div className="flex items-center gap-1.5 overflow-x-auto py-2">
-
-                          <button
-
-                            onClick={() => setAiInputText('What are the core equations and formulas for this lesson?')}
-
-                            className="px-2 py-1 rounded-lg bg-slate-800 text-[10px] text-cyan-300 whitespace-nowrap hover:bg-slate-700"
-
-                          >
-
-                            Key Formulas
-
-                          </button>
-
-                          <button
-
-                            onClick={() => setAiInputText('Can you explain this with a real-world example?')}
-
-                            className="px-2 py-1 rounded-lg bg-slate-800 text-[10px] text-cyan-300 whitespace-nowrap hover:bg-slate-700"
-
-                          >
-
-                            Real-world Example
-
-                          </button>
-
-                          <button
-
-                            onClick={() => setAiInputText('Summarize what has been taught so far')}
-
-                            className="px-2 py-1 rounded-lg bg-slate-800 text-[10px] text-cyan-300 whitespace-nowrap hover:bg-slate-700"
-
-                          >
-
-                            Lecture Summary
-
-                          </button>
-
-                        </div>
-
-                        <form onSubmit={handleSendAiMessage} className="flex gap-2 pt-2 border-t border-slate-800">
-
-                          <input
-
-                            type="text"
-
-                            value={aiInputText}
-
-                            onChange={e => setAiInputText(e.target.value)}
-
-                            placeholder="Ask AI tutor anything..."
-
-                            className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-
-                          />
-
-                          <button
-
-                            type="submit"
-
-                            disabled={aiGenerating}
-
-                            className="p-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl transition-colors disabled:opacity-50"
-
-                          >
-
-                            <Send className="w-4 h-4" />
-
-                          </button>
-
-                        </form>
-
+                        {/* Tab 4: Quick Poll */}
+                        {teacherAiTab === 'poll' && (
+                          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                            <p className="text-xs text-slate-400">Launch an instant 1-question multiple choice poll to test student understanding:</p>
+                            <button
+                              onClick={() => {
+                                const newPoll = {
+                                  id: `poll-${Date.now()}`,
+                                  question: `Quick Check: What is the primary relationship in ${activeCallRoom?.subject_name || 'this topic'}?`,
+                                  options: [
+                                    { text: 'Directly Proportional', votes: 0 },
+                                    { text: 'Inversely Proportional', votes: 0 },
+                                    { text: 'Constant / Invariant', votes: 0 },
+                                    { text: 'Non-linear Perturbation', votes: 0 }
+                                  ],
+                                  totalVotes: 0,
+                                  isActive: true,
+                                  creatorName: user.display_name || 'Instructor'
+                                }
+                                setActivePoll(newPoll)
+                                sendWsMessage({ type: 'new_poll', poll: newPoll })
+                                alert('Instant comprehension poll broadcasted to class!')
+                              }}
+                              className="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-1.5"
+                            >
+                              <BarChart2 className="w-4 h-4" />
+                              <span>Broadcast Instant Comprehension Poll</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
+                    ) : (
 
-                    )}
-
-                    {/* AI Sub-Tab 2: Diagram Synthesizer */}
-
-                    {aiTab === 'diagram' && (
-
-                      <div className="space-y-3 overflow-y-auto">
-
-                        <p className="text-xs text-slate-400">
-
-                          The AI Agent can generate accurate vector diagrams directly onto the shared live whiteboard in real time:
-
-                        </p>
-
-                        <div className="grid grid-cols-1 gap-2">
-
-                          <button
-
-                            onClick={() => handleGenerateAiDiagram('triangle')}
-
-                            className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-left transition-all group"
-
-                          >
-
-                            <div className="flex items-center justify-between mb-1">
-
-                              <span className="text-xs font-bold text-white group-hover:text-cyan-400">Right Triangle & Pythagoras</span>
-
-                              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-
+                      /* ── STUDENT VIEW: AI LIVE STUDENT TUTOR ── */
+                      <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                        {/* Header Badge */}
+                        <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 mb-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-slate-950 font-black shadow">
+                              <Bot className="w-3.5 h-3.5" />
                             </div>
-
-                            <p className="text-[10px] text-slate-400">Draws geometric triangle with orthogonal angle and hypotenuse.</p>
-
-                          </button>
-
-                          <button
-
-                            onClick={() => handleGenerateAiDiagram('circuit')}
-
-                            className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-left transition-all group"
-
-                          >
-
-                            <div className="flex items-center justify-between mb-1">
-
-                              <span className="text-xs font-bold text-white group-hover:text-cyan-400">Ohm's Law Electric Circuit</span>
-
-                              <Zap className="w-3.5 h-3.5 text-amber-400" />
-
+                            <div>
+                              <h4 className="text-xs font-extrabold text-white">AI Live Student Tutor</h4>
+                              <p className="text-[10px] text-emerald-300">Grounded in Live Lecture &bull; Instant Doubts</p>
                             </div>
-
-                            <p className="text-[10px] text-slate-400">Schematic with DC battery source, current vector, and resistor load.</p>
-
-                          </button>
-
-                          <button
-
-                            onClick={() => handleGenerateAiDiagram('tree')}
-
-                            className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-left transition-all group"
-
-                          >
-
-                            <div className="flex items-center justify-between mb-1">
-
-                              <span className="text-xs font-bold text-white group-hover:text-cyan-400">Binary Search Tree Structure</span>
-
-                              <Layers className="w-3.5 h-3.5 text-emerald-400" />
-
-                            </div>
-
-                            <p className="text-[10px] text-slate-400">Computer Science node hierarchy with left and right subtrees.</p>
-
-                          </button>
-
-                          <button
-
-                            onClick={() => handleGenerateAiDiagram('axes')}
-
-                            className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-left transition-all group"
-
-                          >
-
-                            <div className="flex items-center justify-between mb-1">
-
-                              <span className="text-xs font-bold text-white group-hover:text-cyan-400">Cartesian Coordinate Wave Graph</span>
-
-                              <Plus className="w-3.5 h-3.5 text-purple-400" />
-
-                            </div>
-
-                            <p className="text-[10px] text-slate-400">X-Y axes with harmonic oscillation wave trajectory.</p>
-
-                          </button>
-
+                          </div>
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Live Sync
+                          </span>
                         </div>
 
+                        {/* Student Sub-Tabs */}
+                        <div className="grid grid-cols-3 gap-1 pb-2.5 mb-2.5 border-b border-slate-800">
+                          <button
+                            onClick={() => setStudentTutorTab('doubt')}
+                            className={`py-1.5 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition-all ${
+                              studentTutorTab === 'doubt' ? 'bg-emerald-500 text-slate-950 shadow font-black' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>Ask Doubt</span>
+                          </button>
+                          <button
+                            onClick={() => { setStudentTutorTab('summary'); if (!studentSummaryResult) handleStudentLiveSummary(); }}
+                            className={`py-1.5 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition-all ${
+                              studentTutorTab === 'summary' ? 'bg-emerald-500 text-slate-950 shadow font-black' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Live Notes</span>
+                          </button>
+                          <button
+                            onClick={() => { setStudentTutorTab('milestones'); if (studentMilestones.length === 0) handleStudentLiveMilestones(); }}
+                            className={`py-1.5 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition-all ${
+                              studentTutorTab === 'milestones' ? 'bg-emerald-500 text-slate-950 shadow font-black' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Milestones</span>
+                          </button>
+                        </div>
+
+                        {/* Student Tab 1: Live Doubt Chat */}
+                        {studentTutorTab === 'doubt' && (
+                          <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                              {studentDoubtHistory.length === 0 ? (
+                                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-center space-y-2 my-auto">
+                                  <Bot className="w-6 h-6 text-emerald-400 mx-auto" />
+                                  <h5 className="text-xs font-bold text-white">Have a doubt on what teacher just taught?</h5>
+                                  <p className="text-[11px] text-slate-400">
+                                    Ask anything! I listen to the live lecture and explain concepts step-by-step using what your teacher said.
+                                  </p>
+                                </div>
+                              ) : (
+                                studentDoubtHistory.map(item => (
+                                  <div key={item.id} className="space-y-2">
+                                    {/* Student Question */}
+                                    <div className="flex justify-end">
+                                      <div className="px-3.5 py-2 rounded-2xl bg-emerald-600 text-slate-950 font-medium text-xs max-w-[85%] rounded-br-none shadow">
+                                        {item.question}
+                                      </div>
+                                    </div>
+                                    {/* AI Tutor Answer */}
+                                    <div className="flex justify-start">
+                                      <div className="p-3.5 rounded-2xl bg-slate-950 text-slate-200 border border-slate-800 text-xs max-w-[90%] rounded-bl-none shadow leading-relaxed whitespace-pre-wrap">
+                                        <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-[10px] mb-1">
+                                          <Sparkles className="w-3 h-3" />
+                                          <span>AI Live Tutor ({item.timestamp})</span>
+                                        </div>
+                                        {item.answer}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+
+                              {isStudentTutorLoading && (
+                                <div className="flex items-center gap-2 text-xs text-emerald-400 bg-slate-950 p-3 rounded-2xl border border-slate-800 animate-pulse">
+                                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                                  <span>Grounded AI Tutor is reasoning over live lecture...</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Quick Chips */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto py-2">
+                              <button
+                                onClick={() => handleStudentLiveDoubt('Can you explain the last equation the teacher wrote in simpler terms?')}
+                                className="px-2.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/20 text-[10px] text-emerald-300 whitespace-nowrap hover:bg-slate-800"
+                              >
+                                🔍 Explain Last Equation
+                              </button>
+                              <button
+                                onClick={() => handleStudentLiveDoubt('Why is this formula or theorem true? Give me an intuitive example.')}
+                                className="px-2.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/20 text-[10px] text-emerald-300 whitespace-nowrap hover:bg-slate-800"
+                              >
+                                💡 Intuitive Example
+                              </button>
+                              <button
+                                onClick={() => handleStudentLiveDoubt('What is the main takeaway of this topic for exams?')}
+                                className="px-2.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/20 text-[10px] text-emerald-300 whitespace-nowrap hover:bg-slate-800"
+                              >
+                                📝 Key Exam Takeaway
+                              </button>
+                            </div>
+
+                            {/* Input Form */}
+                            <form
+                              onSubmit={e => {
+                                e.preventDefault()
+                                handleStudentLiveDoubt()
+                              }}
+                              className="flex gap-2 pt-2 border-t border-slate-800"
+                            >
+                              <input
+                                type="text"
+                                value={studentDoubtInput}
+                                onChange={e => setStudentDoubtInput(e.target.value)}
+                                placeholder="Ask live tutor about this lecture..."
+                                className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                              />
+                              <button
+                                type="submit"
+                                disabled={isStudentTutorLoading || !studentDoubtInput.trim()}
+                                className="p-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl transition-colors disabled:opacity-50"
+                              >
+                                <Send className="w-4 h-4" />
+                              </button>
+                            </form>
+                          </div>
+                        )}
+
+                        {/* Student Tab 2: Live Notes & Summary */}
+                        {studentTutorTab === 'summary' && (
+                          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Live Lecture Notes ({formatTimer(elapsedSeconds)})</span>
+                              <button
+                                onClick={handleStudentLiveSummary}
+                                disabled={isStudentTutorLoading}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>{isStudentTutorLoading ? 'Generating...' : 'Update Notes'}</span>
+                              </button>
+                            </div>
+
+                            {studentSummaryResult ? (
+                              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                                {studentSummaryResult}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={handleStudentLiveSummary}
+                                className="w-full py-4 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
+                              >
+                                <FileText className="w-5 h-5 text-emerald-400" />
+                                <span>Generate Up-To-Minute Lecture Summary</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Student Tab 3: Timeline Milestones */}
+                        {studentTutorTab === 'milestones' && (
+                          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Chronological Milestones</span>
+                              <button
+                                onClick={handleStudentLiveMilestones}
+                                disabled={isStudentTutorLoading}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>{isStudentTutorLoading ? 'Syncing...' : 'Sync'}</span>
+                              </button>
+                            </div>
+
+                            {studentMilestones.length > 0 ? (
+                              <div className="space-y-2.5 relative pl-4 border-l-2 border-slate-800">
+                                {studentMilestones.map((m, idx) => (
+                                  <div key={idx} className="relative space-y-1">
+                                    <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-4 ring-slate-950" />
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-emerald-300">
+                                        {m.timestamp}
+                                      </span>
+                                      <h6 className="text-xs font-bold text-white">{m.title}</h6>
+                                    </div>
+                                    <p className="text-[11px] text-slate-300">{m.summary}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={handleStudentLiveMilestones}
+                                className="w-full py-4 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs transition-all flex flex-col items-center justify-center gap-2"
+                              >
+                                <Clock className="w-5 h-5 text-emerald-400" />
+                                <span>Extract Lecture Timeline Milestones</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
-
-                    )}
-
-                    {/* AI Sub-Tab 3: Smart Session Summary */}
-
-                    {aiTab === 'summary' && (
-
-                      <div className="space-y-3 overflow-y-auto">
-
-                        <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-
-                          <h4 className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
-
-                            <BookOpen className="w-4 h-4" />
-
-                            Session Overview ({activeCallRoom.title})
-
-                          </h4>
-
-                          <p className="text-[11px] text-slate-300 leading-relaxed">
-
-                            • <strong>Subject:</strong> {activeCallRoom.subject_name} (Grade {activeCallRoom.grade_number}-{activeCallRoom.section_name})\n
-
-                            • <strong>Instructor:</strong> {activeCallRoom.teacher_name}\n
-
-                            • <strong>Active Attendees:</strong> {totalParticipantCount} live learners\n
-
-                            • <strong>Live Whiteboard Vector Strokes:</strong> {strokesRef.current.length} synchronizations
-
-                          </p>
-
-                        </div>
-
-                        <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-
-                          <h4 className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-
-                            <Check className="w-4 h-4" />
-
-                            Key Learning Takeaways
-
-                          </h4>
-
-                          <ul className="text-[11px] text-slate-300 space-y-1 list-disc list-inside">
-
-                            <li>Foundational comprehension of subject parameters and physical constraints.</li>
-
-                            <li>Applied vector derivation on the interactive collaborative canvas.</li>
-
-                            <li>Dynamic feedback loop through in-call conceptual comprehension polls.</li>
-
-                          </ul>
-
-                        </div>
-
-                      </div>
-
                     )}
 
                   </div>
-
                 )}
 
               </div>
-
             </aside>
-
           )}
-
         </div>
-
-        {/* BOTTOM CALL CONTROL BAR (Zoom / Teams Style) */}
 
         {/* LIVE CAPTIONS / SUBTITLE OVERLAY */}
         {showLiveCaptions && latestTranscriptSnippet && (
@@ -5757,24 +5955,24 @@ const handleTriggerTeacherCopilot = async (
               <span className="hidden md:inline">Whiteboard</span>
             </button>
 
-            {/* TEACHER ONLY: AI Teaching Copilot */}
+            {/* TEACHER ONLY: AI Faculty Associate Button */}
             {isHost && (
               <button
                 onClick={() => {
-                  setShowTeacherCopilot(prev => !prev)
-                  if (!showTeacherCopilot && !copilotTopic && activeCallRoom?.title) {
+                  setActiveSideDrawer(prev => prev === 'ai' ? null : 'ai')
+                  if (!copilotTopic && activeCallRoom?.title) {
                     setCopilotTopic(activeCallRoom.title)
                   }
                 }}
                 className={`h-11 px-3.5 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs transition-all shadow-md active:scale-95 ${
-                  showTeacherCopilot
-                    ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-indigo-500/30 ring-2 ring-indigo-400'
-                    : 'bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/30'
+                  activeSideDrawer === 'ai'
+                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-indigo-500/30 ring-2 ring-indigo-400'
+                    : 'bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/40'
                 }`}
-                title="AI Teaching Copilot (Visible only to teachers)"
+                title="AI Faculty Associate (Missed Points & Mermaid Diagrams)"
               >
                 <Sparkles className="w-4 h-4 text-indigo-300" />
-                <span className="hidden md:inline">AI Copilot</span>
+                <span className="hidden md:inline">AI Faculty Associate</span>
               </button>
             )}
 
@@ -5811,22 +6009,23 @@ const handleTriggerTeacherCopilot = async (
               </button>
             )}
 
-            {/* AI Tutor Button (Active for Students, and previewable for Teachers) */}
-            <button
-              onClick={() => {
-                setShowStudentTutorModal(true)
-                setActiveSideDrawer('ai')
-              }}
-              className={`h-11 px-3.5 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs transition-all shadow-md active:scale-95 ${
-                showStudentTutorModal
-                  ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/30 ring-2 ring-purple-400'
-                  : 'bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/40'
-              }`}
-              title={isHost ? "Student AI Tutor (Teacher Preview & Test)" : "Student AI Tutor (Live Doubts & Summary)"}
-            >
-              <Bot className="w-4 h-4 text-purple-300" />
-              <span>{isHost ? 'AI Tutor (Preview)' : 'AI Tutor'}</span>
-            </button>
+            {/* STUDENT ONLY: AI Student Tutor Button */}
+            {!isHost && (
+              <button
+                onClick={() => {
+                  setActiveSideDrawer(prev => prev === 'ai' ? null : 'ai')
+                }}
+                className={`h-11 px-3.5 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs transition-all shadow-md active:scale-95 ${
+                  activeSideDrawer === 'ai'
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400'
+                    : 'bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/40'
+                }`}
+                title="AI Live Tutor (Grounded Doubts & Live Notes)"
+              >
+                <Bot className="w-4 h-4 text-emerald-300" />
+                <span>AI Live Tutor</span>
+              </button>
+            )}
 
             {/* Raise Hand Button */}
             <button

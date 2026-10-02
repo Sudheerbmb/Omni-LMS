@@ -945,10 +945,18 @@ export interface TeacherCopilotData {
   } | null
   diagram_data?: {
     title: string
+    mermaid_code?: string
     diagram_ascii: string
     key_concepts: string[]
     pedagogical_explanation: string
     whiteboard_text?: string
+  } | null
+  missed_points_data?: {
+    covered_points: string[]
+    missed_points: string[]
+    pacing_advice: string
+    suggested_transition: string
+    overview: string
   } | null
 }
 
@@ -958,7 +966,7 @@ export const getTeacherCopilotAssistance = (
     current_topic: string
     grade?: any
     subject?: string
-    action: 'enhance' | 'diagram' | 'case_study' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question'
+    action: 'missed_points' | 'mermaid_diagram' | 'diagram' | 'enhance' | 'case_study' | 'fun_fact' | 'analogy' | 'quick_poll' | 'engagement_question'
     live_transcript?: string
     elapsed_seconds?: number
   }
