@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import type { User, Notification as LMSNotification } from '../lib/api'
-import { Bell, X, ChevronDown, Settings } from 'lucide-react'
+import { Bell, X, ChevronDown } from 'lucide-react'
 
 type HeaderProps = {
   user: User
