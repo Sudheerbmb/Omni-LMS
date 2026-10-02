@@ -6,26 +6,12 @@ from app.platform.config import settings
 GROQ_KEY = settings.groq_api_key or os.getenv("GROQ_API_KEY")
 
 
-async def call_groq_llm(messages: List[Dict[str, str]], model: str = "llama-3.3-70b-versatile", json_mode: bool = False) -> str:
-    """Invokes Groq Cloud LPU with ultra-low latency."""
-    if not GROQ_KEY:
-        # Fallback to local intelligence if key is missing
-        return ""
-    try:
-        from groq import AsyncGroq
-        client = AsyncGroq(api_key=GROQ_KEY)
-        params: Dict[str, Any] = {
-            "model": model,
-            "messages": messages,
-            "temperature": 0.2,
-        }
-        if json_mode:
-            params["response_format"] = {"type": "json_object"}
-        resp = await client.chat.completions.create(**params)
-        return resp.choices[0].message.content or ""
-    except Exception as err:
-        print(f"Groq API error: {err}")
-        return ""
+from app.learning_agent.langgraph_engine import call_groq_resilient
+
+
+async def call_groq_llm(messages: List[Dict[str, str]], model: Optional[str] = None, json_mode: bool = False) -> str:
+    """Invokes Groq Cloud LPU with resilient multi-model failover."""
+    return await call_groq_resilient(messages, temperature=0.2)
 
 
 async def generate_dynamic_diagnostic_questions(

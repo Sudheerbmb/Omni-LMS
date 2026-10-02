@@ -17,9 +17,16 @@ import {
   Edit3,
   Sliders,
   CheckCircle2,
-  ShieldCheck
+  ShieldCheck,
+  RotateCcw,
+  Check
 } from 'lucide-react'
-import type { User } from '../lib/api'
+import {
+  generateLensDrill,
+  submitLensDrill,
+  submitLensDiagnostic
+} from '../lib/api'
+import type { User, LensDrillQuestion } from '../lib/api'
 import {
   computeBayesianMastery,
   computeCompetency,
@@ -252,9 +259,14 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
   const [testSubmitting, setTestSubmitting] = useState(false)
   const [testSummary, setTestSummary] = useState<any>(null)
 
-  // Interactive Drill Modal
+  // Interactive Drill Modal State
   const [drillModalOpen, setDrillModalOpen] = useState(false)
   const [activeDrillConcept, setActiveDrillConcept] = useState<ConceptEvidence | null>(null)
+  const [drillQuestions, setDrillQuestions] = useState<LensDrillQuestion[]>([])
+  const [drillAnswers, setDrillAnswers] = useState<Record<string, number>>({})
+  const [drillSubmitting, setDrillSubmitting] = useState(false)
+  const [drillResult, setDrillResult] = useState<any>(null)
+  const [drillLoading, setDrillLoading] = useState(false)
 
   // Chat State
   const [chatInput, setChatInput] = useState('')
@@ -959,6 +971,7 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
     const updatedSubject: SubjectBenchmarkState = {
       ...currentSubjectState,
       is_calibrated: true,
+      benchmark_score_percent: Math.round(overallScoreRatio * 100),
       overall_mastery: Number(avgMastery.toFixed(4)),
       overall_competency: Number(avgCompetency.toFixed(4)),
       overall_uncertainty: Number(avgUncertainty.toFixed(4)),
@@ -967,6 +980,14 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
       concepts: updatedConcepts,
       last_assessed: new Date().toISOString(),
     }
+
+    // Persist to backend database
+    submitLensDiagnostic(
+      neuralState.grade_name,
+      [activeTestSubject],
+      selectedAnswers,
+      questions as any
+    ).catch((e: any) => console.warn('Diagnostic backend calibration sync:', e))
 
     const nextSubjects = { ...neuralState.subjects, [activeTestSubject]: updatedSubject }
     const allSubjects = Object.values(nextSubjects)
@@ -1009,6 +1030,145 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
       conceptBreakdown: breakdown,
     })
     setTestSubmitting(false)
+  }
+
+
+  // ── DYNAMIC INTERACTIVE CONCEPT DRILL HANDLERS ────────────────────────────
+  const handleStartPracticeDrill = async (concept: ConceptEvidence) => {
+    setActiveDrillConcept(concept)
+    setDrillAnswers({})
+    setDrillResult(null)
+    setDrillModalOpen(true)
+    setDrillLoading(true)
+
+    try {
+      const res = await generateLensDrill(
+        neuralState.grade_name,
+        concept.subject,
+        concept.concept_id,
+        concept.concept_name,
+        2
+      )
+      if (res && res.questions && res.questions.length > 0) {
+        setDrillQuestions(res.questions)
+      } else {
+        setDrillQuestions([
+          {
+            id: `d_${concept.concept_id}_1`,
+            prompt: `What is the core prerequisite principle for mastering ${concept.concept_name} in ${concept.subject}?`,
+            options: [
+              `Consistent validation of boundary conditions and foundational axioms of ${concept.concept_name}`,
+              'Applying random heuristic guesses without formula validation',
+              'Skipping conceptual definitions',
+              'Ignoring dimensional constants'
+            ],
+            correct_index: 0,
+            difficulty: 0.40,
+            explanation: `Foundational analytical clarity is the primary requirement for mastering ${concept.concept_name}.`
+          },
+          {
+            id: `d_${concept.concept_id}_2`,
+            prompt: `Which real-world application directly relies on ${concept.concept_name}?`,
+            options: [
+              `Modeling physical state transitions and quantitative calculations in ${concept.subject}`,
+              'Arbitrary non-deterministic approximations',
+              'Disregarding conservation laws',
+              'Ignoring dimensional balance'
+            ],
+            correct_index: 0,
+            difficulty: 0.50,
+            explanation: `${concept.concept_name} governs the exact physical and mathematical relationships.`
+          }
+        ])
+      }
+    } catch (err) {
+      console.warn('Drill load fallback:', err)
+    } finally {
+      setDrillLoading(false)
+    }
+  }
+
+  const handleSubmitPracticeDrill = async () => {
+    if (!activeDrillConcept || drillQuestions.length === 0) return
+    setDrillSubmitting(true)
+
+    try {
+      const payload = {
+        concept_id: activeDrillConcept.concept_id,
+        concept_name: activeDrillConcept.concept_name,
+        subject: activeDrillConcept.subject,
+        grade_name: neuralState.grade_name,
+        answers: drillAnswers,
+        questions: drillQuestions,
+        current_mastery: activeDrillConcept.mastery,
+        current_retention: activeDrillConcept.retention,
+        current_attempts: activeDrillConcept.attempts_count,
+        current_correct: activeDrillConcept.correct_count
+      }
+
+      const res = await submitLensDrill(payload)
+      if (res && res.updated_state) {
+        const u = res.updated_state
+        const subjName = activeDrillConcept.subject
+        const curSubj = neuralState.subjects[subjName]
+
+        if (curSubj) {
+          const updatedConcepts = curSubj.concepts.map((c) =>
+            c.concept_id === activeDrillConcept.concept_id
+              ? {
+                  ...c,
+                  attempts_count: u.attempts_count,
+                  correct_count: u.correct_count,
+                  mastery: u.mastery,
+                  retention: u.retention,
+                  transfer: u.transfer,
+                  misconception: u.misconception,
+                  competency: u.competency,
+                  uncertainty: u.uncertainty,
+                  identifiability: u.identifiability,
+                  bottleneck: u.bottleneck,
+                  learning_mode: u.learning_mode,
+                  last_updated: 'Just now'
+                }
+              : c
+          )
+
+          const avgM = updatedConcepts.reduce((acc, c) => acc + c.mastery, 0) / updatedConcepts.length
+          const avgC = updatedConcepts.reduce((acc, c) => acc + c.competency, 0) / updatedConcepts.length
+
+          const updatedSubj: SubjectBenchmarkState = {
+            ...curSubj,
+            is_calibrated: true,
+            overall_mastery: Number(avgM.toFixed(4)),
+            overall_competency: Number(avgC.toFixed(4)),
+            concepts: updatedConcepts
+          }
+
+          const nextSubjects = { ...neuralState.subjects, [subjName]: updatedSubj }
+          const nextFull: FullStudentNeuralState = {
+            ...neuralState,
+            subjects: nextSubjects,
+            total_evidence_events: neuralState.total_evidence_events + drillQuestions.length
+          }
+
+          setNeuralState(nextFull)
+          localStorage.setItem(storageKey, JSON.stringify(nextFull))
+        }
+
+        setDrillResult({
+          scorePercent: res.score_percent,
+          correctCount: res.correct_count,
+          totalCount: res.total_questions,
+          newMastery: Math.round(u.mastery * 100),
+          newRetention: Math.round(u.retention * 100),
+          conceptName: activeDrillConcept.concept_name
+        })
+      }
+    } catch (err) {
+      console.error('Submit drill error:', err)
+    } finally {
+      setDrillSubmitting(false)
+    }
   }
 
   // Handle SN1 LangGraph Autonomous Chat
@@ -1112,34 +1272,77 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {subjectList.map((subjName) => {
             const subj = neuralState.subjects[subjName]
+            const isTaken = subj.is_calibrated
+            const scorePct = subj.benchmark_score_percent ?? Math.round(subj.overall_competency * 100)
+
             return (
               <div
                 key={subjName}
-                className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between space-y-4 shadow-xl"
+                className={`p-5 rounded-3xl border flex flex-col justify-between space-y-4 shadow-xl transition-all ${
+                  isTaken
+                    ? 'bg-slate-900/90 border-emerald-500/40 shadow-emerald-500/5'
+                    : 'bg-slate-900/80 border-slate-800'
+                }`}
               >
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-white">{subjName}</span>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                        subj.is_calibrated ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
-                      }`}
-                    >
-                      {subj.is_calibrated ? 'Calibrated' : 'Uncalibrated'}
-                    </span>
+                    {isTaken ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Already Completed</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        Pending Test
+                      </span>
+                    )}
                   </div>
-                  <div className="text-2xl font-black text-cyan-400 font-mono">
-                    {Math.round(subj.overall_competency * 100)}%{' '}
-                    <span className="text-xs font-normal text-slate-400">Competency</span>
+
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <div className="text-2xl font-black text-cyan-400 font-mono">
+                        {Math.round(subj.overall_competency * 100)}%
+                      </div>
+                      <div className="text-[10px] text-slate-400">Bayesian Competency</div>
+                    </div>
+                    {isTaken && (
+                      <div className="text-right">
+                        <div className="text-sm font-black text-emerald-400 font-mono">
+                          {scorePct}% Score
+                        </div>
+                        <div className="text-[10px] text-slate-400">Diagnostic Result</div>
+                      </div>
+                    )}
                   </div>
+
+                  {isTaken && (
+                    <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] flex items-center justify-between text-slate-300">
+                      <span>Neural Status:</span>
+                      <span className="font-mono text-cyan-300 font-bold uppercase">{subj.active_bottleneck}</span>
+                    </div>
+                  )}
                 </div>
 
                 <button
                   onClick={() => handleStartSubjectBenchmark(subjName)}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md"
+                  className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md ${
+                    isTaken
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                      : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-extrabold shadow-cyan-500/20'
+                  }`}
                 >
-                  <Play className="w-3.5 h-3.5" />
-                  <span>Start Benchmark Test</span>
+                  {isTaken ? (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Retake Benchmark Test</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Start Benchmark Test</span>
+                    </>
+                  )}
                 </button>
               </div>
             )
@@ -1189,13 +1392,11 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
                 <span className="font-mono text-emerald-400 font-bold">{Math.round(concept.mastery * 100)}%</span>
               </div>
               <button
-                onClick={() => {
-                  setActiveDrillConcept(concept)
-                  setDrillModalOpen(true)
-                }}
-                className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200"
+                onClick={() => handleStartPracticeDrill(concept)}
+                className="w-full py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:border-cyan-500/60 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
               >
-                Start Practice Drill
+                <Play className="w-3 h-3 fill-current" />
+                <span>Start Practice Drill</span>
               </button>
             </div>
           ))}
@@ -1334,29 +1535,100 @@ export const LearningIntelligencePage: React.FC<{ user: User | null }> = ({ user
         </div>
       )}
 
-      {/* ── Interactive Practice Drill Modal ─────────────────────────────────── */}
+      {/* ── Interactive Practice Drill Modal (Dynamic & Bayesian Calibrated) ────────────────── */}
       {drillModalOpen && activeDrillConcept && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl">
+          <div className="bg-slate-900 border border-indigo-500/40 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-bold text-white text-base">Practice Drill: {activeDrillConcept.concept_name}</h3>
+              <div>
+                <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">{activeDrillConcept.subject} &bull; Practice Drill</span>
+                <h3 className="font-bold text-white text-base">{activeDrillConcept.concept_name}</h3>
+              </div>
               <button onClick={() => setDrillModalOpen(false)} className="text-slate-400 hover:text-white text-xl">
                 &times;
               </button>
             </div>
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs text-slate-300">
-              <p>
-                Reinforcing memory retention stability for <strong>{activeDrillConcept.concept_name}</strong>.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setDrillModalOpen(false)
-              }}
-              className="w-full py-3 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
-            >
-              Complete Drill
-            </button>
+
+            {drillLoading ? (
+              <div className="p-10 text-center text-xs text-slate-400 space-y-2">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto text-cyan-400" />
+                <p>Generating psychometric conceptual drill items for {activeDrillConcept.concept_name}...</p>
+              </div>
+            ) : drillResult ? (
+              <div className="p-6 rounded-2xl bg-slate-950 border border-emerald-500/30 text-center space-y-4 animate-in zoom-in-95">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-black text-white">Drill Complete: {drillResult.conceptName}</h4>
+                  <p className="text-xs text-emerald-400 font-mono font-bold mt-1">
+                    Score: {drillResult.scorePercent}% ({drillResult.correctCount}/{drillResult.totalCount} Correct)
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                  <div>
+                    <span className="text-slate-400">New Mastery:</span>
+                    <div className="text-base font-black text-cyan-400 font-mono">{drillResult.newMastery}%</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Memory Retention:</span>
+                    <div className="text-base font-black text-emerald-400 font-mono">{drillResult.newRetention}%</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDrillModalOpen(false)}
+                  className="w-full py-2.5 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
+                >
+                  Save & Return to Knowledge Matrix
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {drillQuestions.map((q, idx) => (
+                  <div key={q.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span className="font-bold text-cyan-400">Question {idx + 1} of {drillQuestions.length}</span>
+                      <span className="font-mono">Difficulty: {(q.difficulty * 100).toFixed(0)}%</span>
+                    </div>
+                    <p className="text-xs font-semibold text-white">{q.prompt}</p>
+
+                    <div className="space-y-1.5 pt-1">
+                      {q.options.map((opt: string, optIdx: number) => (
+                        <button
+                          key={optIdx}
+                          onClick={() => setDrillAnswers((prev) => ({ ...prev, [q.id]: optIdx }))}
+                          className={`w-full p-2.5 rounded-xl border text-left text-xs font-medium transition-all ${
+                            drillAnswers[q.id] === optIdx
+                              ? 'bg-cyan-500/20 border-cyan-500 text-white'
+                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  disabled={drillSubmitting || Object.keys(drillAnswers).length < drillQuestions.length}
+                  onClick={handleSubmitPracticeDrill}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-black text-xs disabled:opacity-50 transition-all shadow-lg flex items-center justify-center gap-2"
+                >
+                  {drillSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Calibrating Neural Engine...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Submit Practice Drill & Calibrate Node</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

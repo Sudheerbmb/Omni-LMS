@@ -142,6 +142,8 @@ export interface AgentDecisionState {
   llm_explanation: string
 }
 
+import { sendLensChat } from './api'
+
 export async function runLangGraphAgentPipeline(
   studentName: string,
   gradeName: string,
@@ -149,6 +151,30 @@ export async function runLangGraphAgentPipeline(
   userQuery: string,
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>
 ): Promise<string> {
+  const subjects = Object.keys(neuralState.subjects)
+  const stateVector = {
+    student_name: studentName,
+    is_calibrated: neuralState.overall_competency > 0 || Object.values(neuralState.subjects).some(s => s.is_calibrated),
+    mastery: neuralState.overall_mastery,
+    retention: 0.85,
+    transfer: 0.60,
+    misconception: 0.05,
+    competency: neuralState.overall_competency,
+    uncertainty: neuralState.overall_uncertainty,
+    current_bottleneck: neuralState.primary_bottleneck,
+    current_learning_mode: neuralState.primary_mode,
+    total_evidence_events: neuralState.total_evidence_events
+  }
+
+  try {
+    const backendRes = await sendLensChat(userQuery, gradeName, subjects, stateVector)
+    if (backendRes && backendRes.response) {
+      return backendRes.response
+    }
+  } catch (err) {
+    console.warn('Backend LangGraph chat error:', err)
+  }
+
   // Node 1: State Ingestion & Multi-Subject Diagnosis
   const diagnosisList: string[] = []
   Object.entries(neuralState.subjects).forEach(([subjName, subjState]) => {
@@ -191,9 +217,10 @@ Operational Directives:
 
   try {
     const reply = await callGroqDirect(messages, { temperature: 0.3 })
-    return reply
+    if (reply) return reply
   } catch (e) {
-    console.error('LangGraph pipeline LLM invocation failed:', e)
-    return `Based on your live ${gradeName} neural state vector across ${Object.keys(neuralState.subjects).join(', ')}, your primary bottleneck is **${neuralState.primary_bottleneck}**. Please complete your pending subject benchmarks so I can further calibrate your learning curve.`
+    console.error('LangGraph pipeline fallback:', e)
   }
+
+  return `Hello ${studentName}! Grounded in your live ${gradeName} neural state vector across ${subjects.join(', ')}, your holistic competency is ${(neuralState.overall_competency * 100).toFixed(0)}% with primary bottleneck **${neuralState.primary_bottleneck}**. Please complete your scheduled benchmark tests to eliminate epistemic uncertainty.`
 }

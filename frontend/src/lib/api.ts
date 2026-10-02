@@ -1091,3 +1091,53 @@ export const sendLensChat = (
     method: 'POST',
     body: JSON.stringify({ query, grade_name, subjects, state_vector }),
   })
+
+export interface LensDrillQuestion {
+  id: string
+  prompt: string
+  options: string[]
+  correct_index: number
+  difficulty: number
+  explanation: string
+  misconception_tag?: string
+}
+
+export interface LensGenerateDrillResponse {
+  status: string
+  concept: string
+  questions: LensDrillQuestion[]
+}
+
+export interface LensSubmitDrillResponse {
+  status: string
+  concept_id: string
+  concept_name: string
+  score_percent: number
+  correct_count: number
+  total_questions: number
+  updated_state: any
+}
+
+export const generateLensDrill = (grade_name: string, subject: string, concept_id: string, concept_name: string, num_questions: number = 2) =>
+  request<LensGenerateDrillResponse>('/api/v1/lens/drill/generate', {
+    method: 'POST',
+    body: JSON.stringify({ grade_name, subject, concept_id, concept_name, num_questions }),
+  })
+
+export const submitLensDrill = (payload: {
+  concept_id: string
+  concept_name: string
+  subject: string
+  grade_name: string
+  answers: Record<string, number>
+  questions: any[]
+  current_mastery: number
+  current_retention: number
+  current_attempts: number
+  current_correct: number
+}) =>
+  request<LensSubmitDrillResponse>('/api/v1/lens/drill/submit', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
