@@ -147,46 +147,38 @@ async def get_school_live_classes(
     status_filter: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Fetches live classes filtered by role:
-    - Students only see live/scheduled classes for their grade.
-    - Teachers see sessions they lead.
+    Fetches live classes strictly filtered by role and student enrollment:
+    - Students only see live/scheduled classes and recordings specifically assigned to their grade.
+    - Teachers see sessions they lead and the grades they teach.
     - Admins see all sessions.
     """
     query = select(LiveClass).order_by(LiveClass.starts_at.desc())
 
-    # Determine student grade
+    # Determine student grade accurately from display name or email
     target_grade = grade_number
     if user.role == "student" and not target_grade:
-        m = re.search(r"class(\d+)", user.email or "", re.IGNORECASE)
+        m = re.search(r"class\s*(\d+)", user.display_name or "", re.IGNORECASE) or re.search(r"class(\d+)", user.email or "", re.IGNORECASE)
         if m:
             target_grade = int(m.group(1))
         else:
-            target_grade = 9
+            target_grade = 10
 
     if user.role == "student":
+        # Strict isolation: Student ONLY sees classes matching their assigned grade
         if grade_number is not None:
-            query = query.where(
-                or_(
-                    LiveClass.grade_number == grade_number,
-                    LiveClass.recording_url.isnot(None),
-                )
-            )
+            query = query.where(LiveClass.grade_number == grade_number)
         else:
-            # Show scheduled classes for their grade + ALL currently LIVE active lectures school-wide + ALL available recordings
+            query = query.where(LiveClass.grade_number == target_grade)
+    elif user.role == "teacher":
+        if grade_number is not None:
+            query = query.where(LiveClass.grade_number == grade_number)
+        else:
             query = query.where(
                 or_(
-                    LiveClass.grade_number == target_grade,
-                    LiveClass.status == "live",
-                    LiveClass.recording_url.isnot(None),
+                    LiveClass.teacher_id == user.id,
+                    LiveClass.grade_number.isnot(None),
                 )
             )
-    elif user.role == "teacher":
-        query = query.where(
-            or_(
-                LiveClass.teacher_id == user.id,
-                LiveClass.status == "live",
-            )
-        )
 
     if status_filter:
         query = query.where(LiveClass.status == status_filter)

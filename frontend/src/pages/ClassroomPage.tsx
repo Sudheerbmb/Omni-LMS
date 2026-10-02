@@ -956,18 +956,21 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
   const [showAiDiagramModal, setShowAiDiagramModal] = useState(false)
 
-  // Meeting duration timer
-
+  // Meeting duration timer & Timetable Auto-End Engine
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [extraTimeSeconds, setExtraTimeSeconds] = useState(0)
+  const [timetableWarningToast, setTimetableWarningToast] = useState<string | null>(null)
 
-  const [filterGrade, setFilterGrade] = useState<number | 'all'>('all')
-  const [filterRecordingOnly, setFilterRecordingOnly] = useState(false)
-
+  const isStudent = user.role === 'student'
   const isTeacher = user.role === 'teacher'
-
   const isAdmin = user.role === 'admin'
-
   const isHost = isTeacher || isAdmin
+
+  const studentGradeMatch = user.display_name?.match(/class\s*(\d+)/i) || user.email?.match(/class(\d+)/i)
+  const studentGrade = studentGradeMatch ? parseInt(studentGradeMatch[1], 10) : 10
+
+  const [filterGrade, setFilterGrade] = useState<number | 'all'>(isStudent ? studentGrade : 'all')
+  const [filterRecordingOnly, setFilterRecordingOnly] = useState(false)
 
   // Helper to send WebSocket message safely
 
@@ -1037,29 +1040,50 @@ export const ClassroomPage: React.FC<ClassroomPageProps> = ({ user }) => {
 
   }
 
-  // Meeting Timer Interval
+  // Timetable-Synchronized Auto-End Countdown Computation
+  const scheduledDurationSeconds = activeCallRoom
+    ? (activeCallRoom.ends_at && activeCallRoom.starts_at
+        ? Math.max(600, Math.round((new Date(activeCallRoom.ends_at).getTime() - new Date(activeCallRoom.starts_at).getTime()) / 1000))
+        : 45 * 60)
+    : 45 * 60
 
+  const totalAllowedSeconds = scheduledDurationSeconds + extraTimeSeconds
+  const remainingSeconds = Math.max(0, totalAllowedSeconds - elapsedSeconds)
+
+  // Meeting Timer & Timetable Auto-End Interval
   useEffect(() => {
-
     let interval: any = null
 
     if (activeCallRoom) {
-
       interval = setInterval(() => {
+        setElapsedSeconds(prev => {
+          const next = prev + 1
+          const remaining = totalAllowedSeconds - next
 
-        setElapsedSeconds(prev => prev + 1)
+          if (remaining === 300) {
+            setTimetableWarningToast('⚠️ 5 Minutes remaining in this scheduled period.')
+          } else if (remaining === 60) {
+            setTimetableWarningToast('🚨 1 Minute remaining. Class will auto-end according to timetable.')
+          } else if (remaining <= 0) {
+            // Auto-end class gracefully as per timetable
+            if (isHost) {
+              handleEndMeetingForAll()
+            } else {
+              handleLeaveMeetingOnly()
+            }
+          }
 
+          return next
+        })
       }, 1000)
-
     } else {
-
       setElapsedSeconds(0)
-
+      setExtraTimeSeconds(0)
+      setTimetableWarningToast(null)
     }
 
     return () => clearInterval(interval)
-
-  }, [activeCallRoom])
+  }, [activeCallRoom, totalAllowedSeconds, isHost])
 
   // ==========================================
 
@@ -3645,6 +3669,10 @@ const handleTriggerTeacherCopilot = async (
   // Meeting Handlers
 
   const handleJoinClass = async (liveClass: SchoolLiveClass) => {
+    if (isStudent && liveClass.grade_number && liveClass.grade_number !== studentGrade) {
+      alert(`Access Restricted: This live lecture is reserved for Class ${liveClass.grade_number}. You are in Class ${studentGrade}.`)
+      return
+    }
 
     await startCameraStream()
 
@@ -3897,6 +3925,22 @@ const handleTriggerTeacherCopilot = async (
 
         )}
 
+        {/* Timetable Auto-End Warning Banner */}
+        {timetableWarningToast && (
+          <div className="bg-amber-500/90 text-slate-950 px-4 py-2 flex items-center justify-between text-xs font-bold z-40 shadow-lg animate-in slide-in-from-top duration-300">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-slate-950 animate-spin" />
+              <span>{timetableWarningToast}</span>
+            </div>
+            <button
+              onClick={() => setTimetableWarningToast(null)}
+              className="text-slate-950 font-black text-sm px-2"
+            >
+              &times;
+            </button>
+          </div>
+        )}
+
         {/* TOP BAR: Room Title, Timetable Subject, Live Timer, Badges */}
 
         <header className="h-16 px-4 sm:px-6 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 flex items-center justify-between shrink-0 z-30">
@@ -4047,13 +4091,34 @@ const handleTriggerTeacherCopilot = async (
 
             </div>
 
-            {/* In-Call Duration Counter */}
-
-            <div className="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 font-mono text-xs font-bold text-cyan-300">
-
-              {formatTimer(elapsedSeconds)}
-
+            {/* Timetable Sync Countdown HUD */}
+            <div className={`px-3 py-1.5 rounded-xl border font-mono text-xs font-bold flex items-center gap-2 transition-all ${
+              remainingSeconds <= 60
+                ? 'bg-rose-500/20 border-rose-500/40 text-rose-300 animate-pulse'
+                : remainingSeconds <= 300
+                ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                : 'bg-slate-800/90 border-slate-700 text-cyan-300'
+            }`}>
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{formatTimer(remainingSeconds)} remaining</span>
+              <span className="text-[10px] opacity-75 font-sans hidden sm:inline">
+                (Period {activeCallRoom.period_number || 2} Sync)
+              </span>
             </div>
+
+            {isHost && (
+              <button
+                onClick={() => {
+                  setExtraTimeSeconds(prev => prev + 300)
+                  setTimetableWarningToast('⏱️ Extended class duration by +5 minutes.')
+                  setTimeout(() => setTimetableWarningToast(null), 4000)
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold transition-all"
+                title="Extend class by 5 minutes"
+              >
+                +5m
+              </button>
+            )}
 
             {/* Leave / End Call Button */}
 
@@ -6148,43 +6213,68 @@ const handleTriggerTeacherCopilot = async (
 
       </div>
 
-            {/* Grade Selector & Recordings Filter Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        <button
-          onClick={() => { setFilterGrade('all'); setFilterRecordingOnly(false); }}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
-            filterGrade === 'all' && !filterRecordingOnly
-              ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-              : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-          }`}
-        >
-          All Grades
-        </button>
-        <button
-          onClick={() => setFilterRecordingOnly(prev => !prev)}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
-            filterRecordingOnly
-              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-2 ring-purple-400'
-              : 'bg-slate-900 text-purple-300 hover:text-white border border-purple-500/30'
-          }`}
-        >
-          <Video className="w-3.5 h-3.5 text-purple-300" />
-          <span>Watch Recordings ({classes.filter(c => !!c.recording_url).length})</span>
-        </button>
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(g => (
+            {/* Student Enrolled Class Banner or Teacher Grade Selector */}
+      {isStudent ? (
+        <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-cyan-500 text-slate-950 font-black flex items-center justify-center text-xs">
+              {studentGrade}
+            </div>
+            <div>
+              <p className="text-xs font-extrabold text-white">Enrolled Stream: Class {studentGrade}</p>
+              <p className="text-[11px] text-cyan-300">Displaying authorized live lectures and official recordings for Class {studentGrade} only.</p>
+            </div>
+          </div>
           <button
-            key={g}
-            onClick={() => { setFilterGrade(g); setFilterRecordingOnly(false); }}
+            onClick={() => setFilterRecordingOnly(prev => !prev)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              filterRecordingOnly
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'bg-slate-900 text-purple-300 border border-purple-500/30'
+            }`}
+          >
+            <Video className="w-3.5 h-3.5 text-purple-300" />
+            <span>Class {studentGrade} Recordings ({classes.filter(c => !!c.recording_url).length})</span>
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          <button
+            onClick={() => { setFilterGrade('all'); setFilterRecordingOnly(false); }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              filterGrade === g && !filterRecordingOnly
+              filterGrade === 'all' && !filterRecordingOnly
                 ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
                 : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
             }`}
           >
-            Grade {g}
+            All Grades
           </button>
-        ))}
-      </div>
+          <button
+            onClick={() => setFilterRecordingOnly(prev => !prev)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              filterRecordingOnly
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-2 ring-purple-400'
+                : 'bg-slate-900 text-purple-300 hover:text-white border border-purple-500/30'
+            }`}
+          >
+            <Video className="w-3.5 h-3.5 text-purple-300" />
+            <span>Watch Recordings ({classes.filter(c => !!c.recording_url).length})</span>
+          </button>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(g => (
+            <button
+              key={g}
+              onClick={() => { setFilterGrade(g); setFilterRecordingOnly(false); }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                filterGrade === g && !filterRecordingOnly
+                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              Grade {g}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Live & Scheduled Classes Grid */}
 
