@@ -56,10 +56,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div>
         <div className="flex items-center gap-3 px-3 py-4 border-b border-slate-800 mb-6">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black shadow-lg shadow-cyan-500/20">
-            Z
+            O
           </div>
           <div>
-            <h1 className="font-bold text-white tracking-wide text-base">Zoom LMS</h1>
+            <h1 className="font-bold text-white tracking-wide text-base">Omni LMS</h1>
             <p className="text-xs text-slate-400 capitalize">{userRole} Portal</p>
           </div>
         </div>

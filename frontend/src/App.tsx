@@ -115,7 +115,7 @@ export function App() {
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center font-sans">
         <div className="text-center space-y-3">
           <div className="w-12 h-12 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin mx-auto" />
-          <p className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Loading Zoom LMS...</p>
+          <p className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Loading Omni LMS...</p>
         </div>
       </div>
     )
@@ -131,9 +131,9 @@ export function App() {
         <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-8 shadow-2xl relative z-10 space-y-6">
           <div className="text-center space-y-2">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 font-black text-2xl mx-auto shadow-lg shadow-cyan-500/20">
-              Z
+              O
             </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">Zoom LMS Platform</h1>
+            <h1 className="text-2xl font-black text-white tracking-tight">Omni LMS Platform</h1>
             <p className="text-slate-400 text-xs">
               {authMode === 'login' ? 'Sign in to access your learning portal' : 'Create an account to start learning'}
             </p>
