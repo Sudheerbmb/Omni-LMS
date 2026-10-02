@@ -1,14 +1,316 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
-:root { 
-  font-family: 'DM Sans', sans-serif; 
+/* ── Design Tokens ──────────────────────────────────────── */
+:root {
+  font-family: 'Inter', 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+
+  /* Admin Portal — Dark Navy */
+  --admin-bg:        #0f172a;
+  --admin-surface:   #1e293b;
+  --admin-border:    #334155;
+  --admin-accent:    #3b82f6;
+  --admin-accent-2:  #1d4ed8;
+  --admin-text:      #f1f5f9;
+  --admin-muted:     #94a3b8;
+  --admin-sidebar:   #0f172a;
+  --admin-sidebar-t: #cbd5e1;
+  --admin-active-bg: rgba(59,130,246,0.15);
+  --admin-active-t:  #60a5fa;
+
+  /* Teacher Portal — Warm Professional Blue-Green */
+  --teacher-bg:        #f0f4ff;
+  --teacher-surface:   #ffffff;
+  --teacher-border:    #c7d7f0;
+  --teacher-accent:    #2563eb;
+  --teacher-accent-2:  #1e40af;
+  --teacher-text:      #1e293b;
+  --teacher-muted:     #64748b;
+  --teacher-sidebar:   #1e3a5f;
+  --teacher-sidebar-t: #e2eaf7;
+  --teacher-active-bg: rgba(37,99,235,0.12);
+  --teacher-active-t:  #2563eb;
+
+  /* Student Portal — Clean Light */
+  --student-bg:        #f8fafc;
+  --student-surface:   #ffffff;
+  --student-border:    #e2e8f0;
+  --student-accent:    #0ea5e9;
+  --student-accent-2:  #0284c7;
+  --student-text:      #0f172a;
+  --student-muted:     #64748b;
+  --student-sidebar:   #1e293b;
+  --student-sidebar-t: #e2e8f0;
+  --student-active-bg: rgba(14,165,233,0.12);
+  --student-active-t:  #0ea5e9;
+
+  /* Shared */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06);
+}
+
+/* ── Role-scoped themes ────────────────────────────────── */
+[data-role="admin"] {
+  --bg:        var(--admin-bg);
+  --surface:   var(--admin-surface);
+  --border:    var(--admin-border);
+  --accent:    var(--admin-accent);
+  --accent-2:  var(--admin-accent-2);
+  --text:      var(--admin-text);
+  --muted:     var(--admin-muted);
+  --sidebar:   var(--admin-sidebar);
+  --sidebar-t: var(--admin-sidebar-t);
+  --active-bg: var(--admin-active-bg);
+  --active-t:  var(--admin-active-t);
   color-scheme: dark;
 }
 
-body { 
-  margin: 0; 
+[data-role="teacher"] {
+  --bg:        var(--teacher-bg);
+  --surface:   var(--teacher-surface);
+  --border:    var(--teacher-border);
+  --accent:    var(--teacher-accent);
+  --accent-2:  var(--teacher-accent-2);
+  --text:      var(--teacher-text);
+  --muted:     var(--teacher-muted);
+  --sidebar:   var(--teacher-sidebar);
+  --sidebar-t: var(--teacher-sidebar-t);
+  --active-bg: var(--teacher-active-bg);
+  --active-t:  var(--teacher-active-t);
+  color-scheme: light;
+}
+
+[data-role="student"] {
+  --bg:        var(--student-bg);
+  --surface:   var(--student-surface);
+  --border:    var(--student-border);
+  --accent:    var(--student-accent);
+  --accent-2:  var(--student-accent-2);
+  --text:      var(--student-text);
+  --muted:     var(--student-muted);
+  --sidebar:   var(--student-sidebar);
+  --sidebar-t: var(--student-sidebar-t);
+  --active-bg: var(--student-active-bg);
+  --active-t:  var(--student-active-t);
+  color-scheme: light;
+}
+
+/* ── Base Reset ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
   min-width: 320px;
-  background-color: #020617;
-  color: #f8fafc;
+  background-color: var(--bg, #f8fafc);
+  color: var(--text, #0f172a);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--border, #e2e8f0); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted, #94a3b8); }
+
+/* ── Shared UI Primitives ───────────────────────────────── */
+
+/* Card */
+.lms-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.25rem;
+}
+
+/* Primary Button */
+.lms-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--accent, #0ea5e9);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.lms-btn-primary:hover {
+  background: var(--accent-2, #0284c7);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Ghost Button */
+.lms-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: var(--text, #0f172a);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.lms-btn-ghost:hover {
+  background: var(--active-bg, rgba(14,165,233,0.08));
+  border-color: var(--accent, #0ea5e9);
+  color: var(--accent, #0ea5e9);
+}
+
+/* Input */
+.lms-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-md);
+  color: var(--text, #0f172a);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.lms-input:focus {
+  border-color: var(--accent, #0ea5e9);
+  box-shadow: 0 0 0 3px rgba(14,165,233,0.12);
+}
+.lms-input::placeholder { color: var(--muted, #94a3b8); }
+
+/* Badge */
+.lms-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Status colours */
+.lms-badge-green  { background: #dcfce7; color: #15803d; }
+.lms-badge-blue   { background: #dbeafe; color: #1d4ed8; }
+.lms-badge-amber  { background: #fef3c7; color: #b45309; }
+.lms-badge-red    { background: #fee2e2; color: #b91c1c; }
+.lms-badge-gray   { background: #f1f5f9; color: #475569; }
+
+/* ── Page wrapper ───────────────────────────────────────── */
+.lms-page {
+  padding: 1.75rem 2rem;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.lms-page-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text, #0f172a);
+  margin-bottom: 0.25rem;
+}
+
+.lms-page-sub {
+  font-size: 0.8125rem;
+  color: var(--muted, #64748b);
+  margin-bottom: 1.5rem;
+}
+
+/* ── Table ──────────────────────────────────────────────── */
+.lms-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.lms-table thead th {
+  text-align: left;
+  padding: 0.625rem 1rem;
+  background: var(--bg, #f8fafc);
+  color: var(--muted, #64748b);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.lms-table tbody td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  color: var(--text, #0f172a);
+  vertical-align: middle;
+}
+.lms-table tbody tr:hover { background: var(--active-bg, rgba(14,165,233,0.04)); }
+.lms-table tbody tr:last-child td { border-bottom: none; }
+
+/* ── Stat Card ──────────────────────────────────────────── */
+.lms-stat {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.lms-stat-label { font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.lms-stat-value { font-size: 1.75rem; font-weight: 800; color: var(--text); line-height: 1; }
+.lms-stat-sub   { font-size: 0.75rem; color: var(--muted); }
+
+/* ── Modal Overlay ──────────────────────────────────────── */
+.lms-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999; padding: 1rem;
+}
+.lms-modal {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 1.75rem;
+  width: 100%; max-width: 520px;
+  max-height: 90vh; overflow-y: auto;
+}
+
+/* ── Toast ──────────────────────────────────────────────── */
+.lms-toast {
+  position: fixed; bottom: 1.5rem; right: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem; font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  z-index: 10000;
+  animation: slideUp 0.2s ease;
+}
+.lms-toast-success { background: #15803d; color: #fff; }
+.lms-toast-error   { background: #b91c1c; color: #fff; }
+.lms-toast-info    { background: var(--accent, #0ea5e9); color: #fff; }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Transitions ────────────────────────────────────────── */
+button, a, input, select, textarea {
+  transition: all 0.15s ease;
+}
+
+/* ── Focus ring ─────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent, #0ea5e9);
+  outline-offset: 2px;
 }

@@ -112,212 +112,148 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center font-sans">
-        <div className="text-center space-y-3">
-          <div className="w-12 h-12 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin mx-auto" />
-          <p className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Loading Omni LMS...</p>
+      <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#0ea5e9', animation: 'spin 0.7s linear infinite', margin: '0 auto 12px' }} />
+          <p style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Loading Omni LMS...</p>
         </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     )
   }
 
   if (!user || !token) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 font-sans relative overflow-hidden">
-        {/* Background glow effects */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full filter blur-3xl pointer-events-none" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full filter blur-3xl pointer-events-none" />
-
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-8 shadow-2xl relative z-10 space-y-6">
-          <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 font-black text-2xl mx-auto shadow-lg shadow-cyan-500/20">
-              O
+        {/* Left branding panel */}
+        <div style={{ width: 420, background: 'linear-gradient(160deg, #1e3a5f 0%, #1d4ed8 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '3rem 3.5rem', color: '#fff', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '3rem' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20 }}>O</div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em' }}>Omni LMS</div>
+              <div style={{ fontSize: 11, opacity: 0.6, fontWeight: 500 }}>Education Management System</div>
             </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">Omni LMS Platform</h1>
-            <p className="text-slate-400 text-xs">
-              {authMode === 'login' ? 'Sign in to access your learning portal' : 'Create an account to start learning'}
-            </p>
           </div>
-
-          {authError && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs text-center">
-              {authError}
-            </div>
-          )}
-
-          {/* Quick 1-Click Login Selector for instant access */}
-          {authMode === 'login' && (
-            <div className="space-y-2.5 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800">
-              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                <span>⚡ Instant One-Click Login</span>
-                <span className="text-[10px] text-cyan-400 font-mono">100% Fail-Proof</span>
-              </div>
-
-              <div className="space-y-2 pt-1">
+          <h2 style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.25, marginBottom: 16, letterSpacing: '-0.02em' }}>Empowering Learning,<br />One Classroom at a Time.</h2>
+          <p style={{ fontSize: 13, opacity: 0.7, lineHeight: 1.7, marginBottom: '2.5rem' }}>A unified platform for administrators, teachers, and students — with AI-powered insights, live classrooms, and intelligent assessments.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {[
+              { icon: '🎓', label: 'Smart Learning Paths', desc: 'Adaptive curriculum powered by LENS-Ω' },
+              { icon: '📊', label: 'Real-time Analytics', desc: 'School-wide cognitive health dashboards' },
+              { icon: '🖥️', label: 'Live Classrooms', desc: 'HD video, whiteboard & breakout rooms' },
+            ].map(f => (
+              <div key={f.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ fontSize: 20, marginTop: 1 }}>{f.icon}</div>
                 <div>
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Administrator:</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => { setAuthEmail('admin@example.com'); setAuthPassword('ChangeMe123!'); setAuthError(''); }}
-                      className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold transition-all"
-                    >
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{f.label}</div>
+                  <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{f.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right form panel */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', overflowY: 'auto' }}>
+          <div style={{ width: '100%', maxWidth: 420 }}>
+            <div style={{ marginBottom: 28 }}>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', marginBottom: 6, letterSpacing: '-0.02em' }}>
+                {authMode === 'login' ? 'Welcome back' : 'Create your account'}
+              </h1>
+              <p style={{ fontSize: 13, color: '#64748b' }}>
+                {authMode === 'login' ? 'Sign in to access your portal' : 'Register to start your learning journey'}
+              </p>
+            </div>
+
+            {authError && (
+              <div style={{ padding: '10px 14px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 10, color: '#b91c1c', fontSize: 12, marginBottom: 20, fontWeight: 500 }}>
+                {authError}
+              </div>
+            )}
+
+            {/* Quick demo login */}
+            {authMode === 'login' && (
+              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 12 }}>⚡ Quick Login (Demo)</div>
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase' as const }}>Administrator</div>
+                    <button type="button" onClick={() => { setAuthEmail('admin@example.com'); setAuthPassword('ChangeMe123!'); setAuthError(''); }}
+                      style={{ padding: '6px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 7, color: '#1d4ed8', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                       🛡️ Admin (System)
                     </button>
                   </div>
-                </div>
-
-                <div>
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Faculty Teachers:</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => { setAuthEmail('sarah.connor@school.edu'); setAuthPassword('Teacher123!'); setAuthError(''); }}
-                      className="px-2 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 text-[11px] font-semibold transition-all"
-                    >
-                      👩‍🏫 Dr. Sarah (Math)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setAuthEmail('alan.turing@school.edu'); setAuthPassword('Teacher123!'); setAuthError(''); }}
-                      className="px-2 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 text-[11px] font-semibold transition-all"
-                    >
-                      👨‍🏫 Prof. Turing (CS)
-                    </button>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase' as const }}>Faculty</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+                      {[['sarah.connor@school.edu','👩‍🏫 Dr. Sarah (Math)'],['alan.turing@school.edu','👨‍🏫 Prof. Turing (CS)']].map(([email, label]) => (
+                        <button key={email} type="button" onClick={() => { setAuthEmail(email); setAuthPassword('Teacher123!'); setAuthError(''); }}
+                          style={{ padding: '6px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7, color: '#15803d', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-
-                <div>
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Enrolled Students (Classes 1 - 10):</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => { setAuthEmail('student.class1@school.edu'); setAuthPassword('Student123!'); setAuthError(''); }}
-                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
-                    >
-                      🎒 Class 1-A
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setAuthEmail('student.class4@school.edu'); setAuthPassword('Student123!'); setAuthError(''); }}
-                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
-                    >
-                      🎒 Class 4-A
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setAuthEmail('student.class6@school.edu'); setAuthPassword('Student123!'); setAuthError(''); }}
-                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
-                    >
-                      🎒 Class 6-A
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setAuthEmail('student.class9@school.edu'); setAuthPassword('Student123!'); setAuthError(''); }}
-                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
-                    >
-                      🎒 Class 9-A
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setAuthEmail('student.class10@school.edu'); setAuthPassword('Student123!'); setAuthError(''); }}
-                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
-                    >
-                      🎒 Class 10-A
-                    </button>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase' as const }}>Students</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+                      {[['student.class1@school.edu','🎒 Class 1-A'],['student.class6@school.edu','🎒 Class 6-A'],['student.class10@school.edu','🎒 Class 10-A']].map(([email, label]) => (
+                        <button key={email} type="button" onClick={() => { setAuthEmail(email); setAuthPassword('Student123!'); setAuthError(''); }}
+                          style={{ padding: '6px 12px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 7, color: '#0369a1', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            {authMode === 'register' && (
-              <>
-                <div>
-                  <label className="text-xs text-slate-400 font-semibold">Full Display Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={authName}
-                    onChange={(e) => setAuthName(e.target.value)}
-                    placeholder="John Doe"
-                    className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-slate-400 font-semibold">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={authPhone}
-                    onChange={(e) => setAuthPhone(e.target.value)}
-                    placeholder="+1 555 0192"
-                    className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-slate-400 font-semibold">Account Role</label>
-                  <select
-                    value={authRole}
-                    onChange={(e) => setAuthRole(e.target.value as 'student' | 'teacher')}
-                    className="w-full mt-1 bg-slate-800 text-slate-200 border border-slate-700 rounded-xl p-3 text-xs focus:border-cyan-500"
-                  >
-                    <option value="student">Student</option>
-                    <option value="teacher">Instructor / Teacher</option>
-                  </select>
-                </div>
-              </>
             )}
 
-            <div>
-              <label className="text-xs text-slate-400 font-semibold">Email Address</label>
-              <input
-                type="email"
-                required
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-                placeholder="admin@example.com"
-                className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 focus:border-cyan-500"
-              />
+            {/* Form */}
+            <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column' as const, gap: 16 }}>
+              {authMode === 'register' && (
+                <>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Full Name</label>
+                    <input type="text" required value={authName} onChange={e => setAuthName(e.target.value)} placeholder="John Doe"
+                      style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 10, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Phone Number</label>
+                    <input type="tel" value={authPhone} onChange={e => setAuthPhone(e.target.value)} placeholder="+91 99999 00000"
+                      style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 10, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Account Role</label>
+                    <select value={authRole} onChange={e => setAuthRole(e.target.value as 'student' | 'teacher')}
+                      style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 10, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }}>
+                      <option value="student">Student</option>
+                      <option value="teacher">Instructor / Teacher</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Email Address</label>
+                <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="you@school.edu"
+                  style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 10, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Password</label>
+                <input type="password" required value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="••••••••"
+                  style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 10, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+              </div>
+              <button type="submit" disabled={submittingAuth}
+                style={{ width: '100%', padding: '11px', background: submittingAuth ? '#93c5fd' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: submittingAuth ? 'not-allowed' : 'pointer', marginTop: 4 }}>
+                {submittingAuth ? 'Please wait...' : authMode === 'login' ? 'Sign In' : 'Create Account'}
+              </button>
+            </form>
+
+            <div style={{ marginTop: 20, textAlign: 'center' as const }}>
+              <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}
+                style={{ background: 'none', border: 'none', fontSize: 12, color: '#64748b', cursor: 'pointer' }}>
+                {authMode === 'login' ? "Don't have an account? Register" : 'Already have an account? Sign In'}
+              </button>
             </div>
-
-            <div>
-              <label className="text-xs text-slate-400 font-semibold">Password</label>
-              <input
-                type="password"
-                required
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 focus:border-cyan-500"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={submittingAuth}
-              className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold py-3 rounded-xl shadow-lg shadow-cyan-500/20 transition-all text-xs"
-            >
-              {submittingAuth
-                ? 'Processing...'
-                : authMode === 'login'
-                ? 'Sign In to Portal'
-                : 'Create Account'}
-            </button>
-          </form>
-
-          <div className="pt-4 border-t border-slate-800 text-center">
-            <button
-              onClick={() => {
-                setAuthMode(authMode === 'login' ? 'register' : 'login')
-                setAuthError('')
-              }}
-              className="text-xs text-slate-400 hover:text-cyan-400 transition-colors"
-            >
-              {authMode === 'login' ? "Don't have an account? Register" : 'Already have an account? Sign In'}
-            </button>
           </div>
         </div>
       </div>
@@ -325,7 +261,16 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans">
+    <div
+      data-role={user.role}
+      style={{
+        minHeight: '100vh',
+        background: 'var(--bg)',
+        color: 'var(--text)',
+        display: 'flex',
+        fontFamily: "'Inter', system-ui, sans-serif",
+      }}
+    >
       <Sidebar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
@@ -333,10 +278,10 @@ export function App() {
         onLogout={handleLogout}
       />
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <Header user={user} notifications={notifications} />
 
-        <main className="flex-1 overflow-y-auto">
+        <main style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
           {currentTab === 'overview' && (
             <DashboardPage user={user} summary={dashboardSummary} setCurrentTab={setCurrentTab} />
           )}
