@@ -38,9 +38,9 @@ export const Header: React.FC<HeaderProps> = ({ user, notifications }) => {
       <div className="flex items-center gap-2.5">
         <span
           className="text-[11px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md"
-          style={{ background: 'rgba(139,92,246,0.15)', color: '#A78BFA', border: '1px solid rgba(139,92,246,0.3)' }}
+          style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.3)' }}
         >
-          Omni LMS
+          Acharya LMS
         </span>
         <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.875rem' }}>›</span>
         <span

@@ -134,30 +134,41 @@ export function App() {
           <div style={{ position: 'absolute', bottom: -100, right: -100, width: 300, height: 300, background: 'radial-gradient(circle, rgba(34,211,238,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
           {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '3rem', position: 'relative', zIndex: 1 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'linear-gradient(135deg, #8B5CF6 0%, #22D3EE 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20, color: '#ffffff', boxShadow: '0 0 20px rgba(139,92,246,0.35)', letterSpacing: '-0.03em' }}>A</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: '2.5rem', position: 'relative', zIndex: 1 }}>
+            <img
+              src="/acharya_logo.png"
+              alt="Acharya LMS Logo"
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 14,
+                objectFit: 'cover',
+                boxShadow: '0 0 24px rgba(245, 158, 11, 0.35)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+              }}
+            />
             <div>
-              <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em', color: '#F8FAFC' }}>Acharya LMS</div>
-              <div style={{ fontSize: 11, color: '#22D3EE', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>AI Learning OS</div>
+              <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-0.02em', color: '#F8FAFC' }}>Acharya LMS</div>
+              <div style={{ fontSize: 11, color: '#F59E0B', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Academic AI OS</div>
             </div>
           </div>
 
-          <h2 style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.25, marginBottom: 16, letterSpacing: '-0.02em', color: '#F8FAFC', position: 'relative', zIndex: 1 }}>
-            Enterprise AI Education Platform
+          <h2 style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.25, marginBottom: 14, letterSpacing: '-0.02em', color: '#F8FAFC', position: 'relative', zIndex: 1 }}>
+            Illuminating Minds Through Knowledge & AI
           </h2>
-          <p style={{ fontSize: 13, color: '#A7B0C0', lineHeight: 1.75, marginBottom: '2.5rem', position: 'relative', zIndex: 1 }}>
-            Acharya LMS unifies administrators, faculty, and students into an intelligent learning infrastructure with automated scheduling, cognitive analytics, and live interactive classrooms.
+          <p style={{ fontSize: 13, color: '#A7B0C0', lineHeight: 1.75, marginBottom: '2.25rem', position: 'relative', zIndex: 1 }}>
+            Rooted in timeless scholarly traditions, Acharya LMS empowers educators, enriches student learning, and unifies institutional intelligence with real-time classrooms and cognitive defense agents.
           </p>
 
           {/* Feature list — sleek dark border items */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'relative', zIndex: 1 }}>
             {[
               { label: 'Cognitive Learner Radar', desc: 'Real-time telemetry and adaptive learning paths' },
               { label: 'Live Video Classrooms', desc: 'Cloud recording, attendance, and interaction streams' },
               { label: 'School-Wide AI Analytics', desc: 'Predictive performance and institutional oversight' },
               { label: 'Autonomous Timetabling', desc: 'Conflict-free constraint-satisfaction scheduling' },
             ].map(f => (
-              <div key={f.label} style={{ paddingLeft: 14, borderLeft: '2px solid rgba(139,92,246,0.5)' }}>
+              <div key={f.label} style={{ paddingLeft: 14, borderLeft: '2px solid rgba(245,158,11,0.6)' }}>
                 <div style={{ fontWeight: 600, fontSize: 13, color: '#F8FAFC' }}>{f.label}</div>
                 <div style={{ fontSize: 11, color: '#A7B0C0', marginTop: 2 }}>{f.desc}</div>
               </div>

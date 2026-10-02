@@ -241,8 +241,6 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
     icon: Brain
   }
 
-  const RoleIcon = themeConfig.icon
-
   return (
     <>
       {/* ── FLOATING TRIGGER BUTTON (Present on every page) ────────────────── */}
@@ -250,19 +248,18 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
         {!isOpen && (
           <button
             onClick={() => setIsOpen(true)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-full bg-slate-900/90 border ${themeConfig.borderGlow} text-white shadow-2xl backdrop-blur-md hover:scale-105 transition-all group`}
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-full bg-slate-900/90 border border-amber-500/40 text-white shadow-2xl backdrop-blur-md hover:scale-105 transition-all group`}
+            style={{ boxShadow: '0 0 20px rgba(245, 158, 11, 0.25)' }}
           >
-            <div
-              className={`w-8 h-8 rounded-full bg-gradient-to-tr ${themeConfig.gradient} flex items-center justify-center text-slate-950 font-black shadow-lg group-hover:rotate-12 transition-transform`}
-            >
-              <RoleIcon className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-full overflow-hidden ring-1 ring-amber-500/50 shadow-md group-hover:scale-110 transition-transform">
+              <img src="/acharya_logo.png" alt="Acharya Copilot" className="w-full h-full object-cover" />
             </div>
             <div className="text-left pr-1 hidden sm:block">
               <div className="text-xs font-bold text-white flex items-center gap-1.5">
                 <span>{themeConfig.title}</span>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
-              <p className="text-[10px] text-cyan-400 font-mono capitalize">
+              <p className="text-[10px] text-amber-400 font-mono capitalize">
                 {role} Mode &bull; Page: {currentTab}
               </p>
             </div>
@@ -272,14 +269,13 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
 
       {/* ── EXPANDED ROLE-SPECIFIC HUD ─────────────────────────────────────── */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-[95vw] sm:w-[440px] bg-slate-950/95 border border-cyan-500/40 rounded-3xl p-5 shadow-2xl backdrop-blur-xl space-y-4 animate-in fade-in slide-in-from-bottom-5">
+        <div className="fixed bottom-6 right-6 z-50 w-[95vw] sm:w-[440px] bg-slate-950/95 border border-amber-500/40 rounded-3xl p-5 shadow-2xl backdrop-blur-xl space-y-4 animate-in fade-in slide-in-from-bottom-5"
+          style={{ boxShadow: '0 0 30px rgba(245, 158, 11, 0.2)' }}>
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div className="flex items-center gap-2.5">
-              <div
-                className={`w-8 h-8 rounded-xl bg-gradient-to-tr ${themeConfig.gradient} flex items-center justify-center text-slate-950 font-bold shadow`}
-              >
-                <RoleIcon className="w-4 h-4" />
+              <div className="w-9 h-9 rounded-xl overflow-hidden ring-1 ring-amber-500/50 shadow">
+                <img src="/acharya_logo.png" alt="Acharya Copilot" className="w-full h-full object-cover" />
               </div>
               <div>
                 <h3 className="text-xs font-extrabold text-white flex items-center gap-1.5">

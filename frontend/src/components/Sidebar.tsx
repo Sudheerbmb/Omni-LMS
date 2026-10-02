@@ -104,18 +104,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div className="flex items-center gap-3">
           {/* Logo mark */}
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-base select-none shadow-lg"
-            style={{
-              background: 'linear-gradient(135deg, #8B5CF6 0%, #22D3EE 100%)',
-              boxShadow: '0 0 16px rgba(139, 92, 246, 0.35)',
-            }}
-          >
-            A
+          <div className="relative group">
+            <img
+              src="/acharya_logo.png"
+              alt="Acharya LMS"
+              className="w-10 h-10 rounded-xl object-cover select-none shadow-md ring-1 ring-amber-500/30"
+              style={{
+                boxShadow: '0 0 18px rgba(245, 158, 11, 0.25)',
+              }}
+            />
           </div>
           <div>
             <p className="text-white font-extrabold text-[15px] leading-tight tracking-tight">Acharya LMS</p>
-            <p style={{ color: '#22D3EE', fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <p style={{ color: '#F59E0B', fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
               {meta.label}
             </p>
           </div>
