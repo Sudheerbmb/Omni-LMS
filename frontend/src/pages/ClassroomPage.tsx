@@ -5753,19 +5753,19 @@ const handleTriggerTeacherCopilot = async (
                                 onClick={() => handleStudentLiveDoubt('Can you explain the last equation the teacher wrote in simpler terms?')}
                                 className="px-2.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/20 text-[10px] text-emerald-300 whitespace-nowrap hover:bg-slate-800"
                               >
-                                🔍 Explain Last Equation
+                                Explain Last Equation
                               </button>
                               <button
                                 onClick={() => handleStudentLiveDoubt('Why is this formula or theorem true? Give me an intuitive example.')}
                                 className="px-2.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/20 text-[10px] text-emerald-300 whitespace-nowrap hover:bg-slate-800"
                               >
-                                💡 Intuitive Example
+                                Intuitive Example
                               </button>
                               <button
                                 onClick={() => handleStudentLiveDoubt('What is the main takeaway of this topic for exams?')}
                                 className="px-2.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/20 text-[10px] text-emerald-300 whitespace-nowrap hover:bg-slate-800"
                               >
-                                📝 Key Exam Takeaway
+                                Key Exam Takeaway
                               </button>
                             </div>
 
@@ -6057,13 +6057,20 @@ const handleTriggerTeacherCopilot = async (
 
             {/* Quick Reactions Bar */}
             <div className="hidden lg:flex items-center gap-1 bg-slate-950/60 h-11 px-2 rounded-2xl border border-slate-800">
-              {['👏', '👍', '❤️', '💡', '🎉', '🚀'].map(emoji => (
+              {[
+                { label: 'Clap', val: '👏' },
+                { label: 'Like', val: '👍' },
+                { label: '+1', val: '❤️' },
+                { label: 'Idea', val: '💡' },
+                { label: 'Great', val: '🎉' },
+                { label: 'Fast', val: '🚀' },
+              ].map(r => (
                 <button
-                  key={emoji}
-                  onClick={() => triggerReaction(emoji)}
-                  className="w-7 h-7 rounded-xl hover:bg-slate-800 flex items-center justify-center text-sm transition-transform hover:scale-125 active:scale-90"
+                  key={r.val}
+                  onClick={() => triggerReaction(r.val)}
+                  className="px-2 h-7 rounded-xl hover:bg-slate-800 flex items-center justify-center text-[10px] text-slate-400 hover:text-white transition-all font-medium whitespace-nowrap"
                 >
-                  {emoji}
+                  {r.label}
                 </button>
               ))}
             </div>

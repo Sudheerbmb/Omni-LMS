@@ -430,7 +430,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
                 </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Welcome back, {user.display_name} 👩‍🏫
+                Welcome back, {user.display_name}
               </h1>
               <p className="text-slate-300 text-xs sm:text-sm max-w-2xl leading-relaxed">
                 Review your assigned timetable periods for today, initiate live classroom video streams with Cloudinary recording, and track your students.
@@ -471,7 +471,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, summary, set
                 <span className="text-xs text-slate-400">Academic Year 2025 - 2026</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Hello, {user.display_name} 🎒
+                Hello, {user.display_name}
               </h1>
               <p className="text-slate-300 text-xs sm:text-sm max-w-2xl leading-relaxed">
                 Stay on top of your daily class schedule, join interactive WebRTC live lectures, watch past recordings, and practice coding exercises.

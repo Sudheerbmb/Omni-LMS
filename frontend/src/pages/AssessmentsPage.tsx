@@ -244,7 +244,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
       }
       stopProctoringSession()
     } else {
-      setShowWarningModal(`⚠️ SECURITY ALERT (Strike ${newCount}/3): ${reason}. Please remain focused on the exam screen.`)
+      setShowWarningModal(`SECURITY ALERT (Strike ${newCount}/3): ${reason}. Please remain focused on the exam screen.`)
     }
   }
 
@@ -1090,7 +1090,7 @@ export const AssessmentsPage: React.FC<AssessmentsPageProps> = ({ user }) => {
             </div>
 
             <div className="p-3 rounded-xl bg-slate-950 text-xs text-slate-400">
-              🔒 <strong>Single-Attempt Policy:</strong> Assessment completed. Results have been calibrated in your LENS-Ω state vector.
+              <strong>Single-Attempt Policy:</strong> Assessment completed. Results have been recorded in your LENS state vector.
             </div>
 
             <button

@@ -122,143 +122,177 @@ export function App() {
     )
   }
 
+
   if (!user || !token) {
     return (
+      <div style={{ minHeight: '100vh', display: 'flex', fontFamily: "'Inter', system-ui, sans-serif", background: '#f1f5f9' }}>
+
         {/* Left branding panel */}
-        <div style={{ width: 420, background: 'linear-gradient(160deg, #1e3a5f 0%, #1d4ed8 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '3rem 3.5rem', color: '#fff', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '3rem' }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20 }}>O</div>
+        <div style={{ width: 400, background: '#1e3a5f', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '3rem', color: '#fff', flexShrink: 0 }}>
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '3rem' }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em' }}>O</div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em' }}>Omni LMS</div>
-              <div style={{ fontSize: 11, opacity: 0.6, fontWeight: 500 }}>Education Management System</div>
+              <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.01em' }}>Omni LMS</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 400 }}>Education Management System</div>
             </div>
           </div>
-          <h2 style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.25, marginBottom: 16, letterSpacing: '-0.02em' }}>Empowering Learning,<br />One Classroom at a Time.</h2>
-          <p style={{ fontSize: 13, opacity: 0.7, lineHeight: 1.7, marginBottom: '2.5rem' }}>A unified platform for administrators, teachers, and students — with AI-powered insights, live classrooms, and intelligent assessments.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+          <h2 style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 14, letterSpacing: '-0.01em' }}>
+            One platform for your entire school.
+          </h2>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.75, marginBottom: '2.5rem' }}>
+            Omni LMS connects administrators, teachers, and students in a single unified workspace — with timetables, live classrooms, assessments, and learning analytics.
+          </p>
+
+          {/* Feature list — text only, no icons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {[
-              { icon: '🎓', label: 'Smart Learning Paths', desc: 'Adaptive curriculum powered by LENS-Ω' },
-              { icon: '📊', label: 'Real-time Analytics', desc: 'School-wide cognitive health dashboards' },
-              { icon: '🖥️', label: 'Live Classrooms', desc: 'HD video, whiteboard & breakout rooms' },
+              { label: 'Adaptive Learning Paths', desc: 'Curriculum designed around each student' },
+              { label: 'Live Video Classrooms', desc: 'HD sessions with attendance tracking' },
+              { label: 'School-wide Analytics', desc: 'Real-time performance dashboards' },
+              { label: 'Automated Timetabling', desc: 'AI-generated conflict-free schedules' },
             ].map(f => (
-              <div key={f.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ fontSize: 20, marginTop: 1 }}>{f.icon}</div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{f.label}</div>
-                  <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{f.desc}</div>
-                </div>
+              <div key={f.label} style={{ paddingLeft: 12, borderLeft: '2px solid rgba(255,255,255,0.2)' }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{f.label}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{f.desc}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Right form panel */}
+        {/* Right: form panel */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', overflowY: 'auto' }}>
-          <div style={{ width: '100%', maxWidth: 420 }}>
+          <div style={{ width: '100%', maxWidth: 400 }}>
+
+            {/* Heading */}
             <div style={{ marginBottom: 28 }}>
-              <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', marginBottom: 6, letterSpacing: '-0.02em' }}>
-                {authMode === 'login' ? 'Welcome back' : 'Create your account'}
+              <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', marginBottom: 6, letterSpacing: '-0.01em' }}>
+                {authMode === 'login' ? 'Sign in to your account' : 'Create a new account'}
               </h1>
               <p style={{ fontSize: 13, color: '#64748b' }}>
-                {authMode === 'login' ? 'Sign in to access your portal' : 'Register to start your learning journey'}
+                {authMode === 'login' ? 'Enter your credentials to access your portal.' : 'Fill in your details to register.'}
               </p>
             </div>
 
+            {/* Error */}
             {authError && (
-              <div style={{ padding: '10px 14px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 10, color: '#b91c1c', fontSize: 12, marginBottom: 20, fontWeight: 500 }}>
+              <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#dc2626', fontSize: 12, marginBottom: 20, fontWeight: 500 }}>
                 {authError}
               </div>
             )}
 
-            {/* Quick demo login */}
+            {/* Demo quick-access — no emojis, just clean labels */}
             {authMode === 'login' && (
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 12 }}>⚡ Quick Login (Demo)</div>
+              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px', marginBottom: 24 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 12 }}>
+                  Demo Accounts — Click to fill credentials
+                </p>
                 <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+
+                  {/* Admin */}
                   <div>
-                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase' as const }}>Administrator</div>
-                    <button type="button" onClick={() => { setAuthEmail('admin@example.com'); setAuthPassword('ChangeMe123!'); setAuthError(''); }}
-                      style={{ padding: '6px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 7, color: '#1d4ed8', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                      🛡️ Admin (System)
+                    <p style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Administrator</p>
+                    <button type="button"
+                      onClick={() => { setAuthEmail('admin@example.com'); setAuthPassword('ChangeMe123!'); setAuthError(''); }}
+                      style={{ padding: '6px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, color: '#1d4ed8', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      System Admin
                     </button>
                   </div>
+
+                  {/* Teachers */}
                   <div>
-                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase' as const }}>Faculty</div>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Faculty</p>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-                      {[['sarah.connor@school.edu','👩‍🏫 Dr. Sarah (Math)'],['alan.turing@school.edu','👨‍🏫 Prof. Turing (CS)']].map(([email, label]) => (
-                        <button key={email} type="button" onClick={() => { setAuthEmail(email); setAuthPassword('Teacher123!'); setAuthError(''); }}
-                          style={{ padding: '6px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7, color: '#15803d', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                      {[
+                        ['sarah.connor@school.edu', 'Dr. Sarah — Mathematics'],
+                        ['alan.turing@school.edu', 'Prof. Turing — Computer Science'],
+                      ].map(([email, label]) => (
+                        <button key={email} type="button"
+                          onClick={() => { setAuthEmail(email); setAuthPassword('Teacher123!'); setAuthError(''); }}
+                          style={{ padding: '6px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, color: '#15803d', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                           {label}
                         </button>
                       ))}
                     </div>
                   </div>
+
+                  {/* Students */}
                   <div>
-                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase' as const }}>Students</div>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Students</p>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-                      {[['student.class1@school.edu','🎒 Class 1-A'],['student.class6@school.edu','🎒 Class 6-A'],['student.class10@school.edu','🎒 Class 10-A']].map(([email, label]) => (
-                        <button key={email} type="button" onClick={() => { setAuthEmail(email); setAuthPassword('Student123!'); setAuthError(''); }}
-                          style={{ padding: '6px 12px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 7, color: '#0369a1', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                      {[
+                        ['student.class1@school.edu', 'Class 1-A'],
+                        ['student.class6@school.edu', 'Class 6-A'],
+                        ['student.class10@school.edu', 'Class 10-A'],
+                      ].map(([email, label]) => (
+                        <button key={email} type="button"
+                          onClick={() => { setAuthEmail(email); setAuthPassword('Student123!'); setAuthError(''); }}
+                          style={{ padding: '6px 12px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, color: '#0369a1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                           {label}
                         </button>
                       ))}
                     </div>
                   </div>
+
                 </div>
               </div>
             )}
 
-            {/* Form */}
-            <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column' as const, gap: 16 }}>
+            {/* Login / Register form */}
+            <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column' as const, gap: 14 }}>
               {authMode === 'register' && (
                 <>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Full Name</label>
-                    <input type="text" required value={authName} onChange={e => setAuthName(e.target.value)} placeholder="John Doe"
-                      style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 10, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Full Name</label>
+                    <input type="text" required value={authName} onChange={e => setAuthName(e.target.value)} placeholder="e.g. Priya Sharma"
+                      style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Phone Number</label>
-                    <input type="tel" value={authPhone} onChange={e => setAuthPhone(e.target.value)} placeholder="+91 99999 00000"
-                      style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 10, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Phone Number</label>
+                    <input type="tel" value={authPhone} onChange={e => setAuthPhone(e.target.value)} placeholder="+91 98765 43210"
+                      style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Account Role</label>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Account Role</label>
                     <select value={authRole} onChange={e => setAuthRole(e.target.value as 'student' | 'teacher')}
-                      style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 10, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }}>
+                      style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }}>
                       <option value="student">Student</option>
-                      <option value="teacher">Instructor / Teacher</option>
+                      <option value="teacher">Teacher / Instructor</option>
                     </select>
                   </div>
                 </>
               )}
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Email Address</label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Email Address</label>
                 <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="you@school.edu"
-                  style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 10, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
               </div>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Password</label>
-                <input type="password" required value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="••••••••"
-                  style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 10, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Password</label>
+                <input type="password" required value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Enter your password"
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
               </div>
               <button type="submit" disabled={submittingAuth}
-                style={{ width: '100%', padding: '11px', background: submittingAuth ? '#93c5fd' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: submittingAuth ? 'not-allowed' : 'pointer', marginTop: 4 }}>
-                {submittingAuth ? 'Please wait...' : authMode === 'login' ? 'Sign In' : 'Create Account'}
+                style={{ width: '100%', padding: '11px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: submittingAuth ? 'not-allowed' : 'pointer', opacity: submittingAuth ? 0.7 : 1, marginTop: 4 }}>
+                {submittingAuth ? 'Signing in...' : authMode === 'login' ? 'Sign In' : 'Create Account'}
               </button>
             </form>
 
-            <div style={{ marginTop: 20, textAlign: 'center' as const }}>
+            <p style={{ marginTop: 18, textAlign: 'center' as const, fontSize: 12, color: '#64748b' }}>
+              {authMode === 'login' ? "Don't have an account? " : 'Already have an account? '}
               <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}
-                style={{ background: 'none', border: 'none', fontSize: 12, color: '#64748b', cursor: 'pointer' }}>
-                {authMode === 'login' ? "Don't have an account? Register" : 'Already have an account? Sign In'}
+                style={{ background: 'none', border: 'none', color: '#1d4ed8', fontWeight: 600, cursor: 'pointer', fontSize: 12, padding: 0 }}>
+                {authMode === 'login' ? 'Register' : 'Sign In'}
               </button>
-            </div>
+            </p>
+
           </div>
         </div>
       </div>
     )
   }
+
 
   return (
     <div
