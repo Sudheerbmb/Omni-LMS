@@ -359,42 +359,42 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
                     onClick={() => handleExecute(`Join my Class ${studentGrade} live class`)}
                     className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/20 text-[10px] font-semibold transition-all"
                   >
-                    🎒 Join Class {studentGrade} Live Lecture
+                    Join Class {studentGrade} Live Lecture
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('What should I study today?')}
                     className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-[10px] font-semibold transition-all"
                   >
-                    🗺️ What should I study today?
+                    What should I study today?
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('Start AutoGen Oral Viva')}
                     className="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-[10px] font-semibold transition-all"
                   >
-                    🎙️ AutoGen Oral Viva
+                    AutoGen Oral Viva
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('Open python coding playground')}
                     className="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-[10px] font-semibold transition-all"
                   >
-                    💻 Python Coding Lab
+                    Python Coding Lab
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('View pending assignments')}
                     className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-[10px] font-semibold transition-all"
                   >
-                    📝 Pending Homework
+                    Pending Homework
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('Claim course certificates')}
                     className="px-2.5 py-1 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 border border-yellow-500/20 text-[10px] font-semibold transition-all"
                   >
-                    🏆 Claim Certificates
+                    Claim Certificates
                   </button>
                 </>
               )}
@@ -407,35 +407,35 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
                     onClick={() => handleExecute('Go to live classes and start class for 6th A at 4:45')}
                     className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/20 text-[10px] font-semibold transition-all"
                   >
-                    🔴 Start Class for 6th A
+                    Start Class for 6th A
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('Launch CrewAI Curriculum Studio')}
                     className="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-[10px] font-semibold transition-all"
                   >
-                    👥 CrewAI Curriculum Studio
+                    CrewAI Curriculum Studio
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('Show cognitive radar for my class')}
                     className="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-[10px] font-semibold transition-all"
                   >
-                    📊 Class Cognitive Radar
+                    Class Cognitive Radar
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('Grade homework desk submissions')}
                     className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-[10px] font-semibold transition-all"
                   >
-                    📝 Grade Submissions
+                    Grade Submissions
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('View AI timetable and substitution')}
                     className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-[10px] font-semibold transition-all"
                   >
-                    📅 Timetable & Leave Sub
+                    Timetable & Leave Sub
                   </button>
                 </>
               )}
@@ -448,28 +448,28 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
                     onClick={() => handleExecute('Show high risk students across school')}
                     className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-[10px] font-semibold transition-all"
                   >
-                    ⚠️ High Risk School Audit
+                    High Risk School Audit
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('Generate master timetable')}
                     className="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-[10px] font-semibold transition-all"
                   >
-                    ⚙️ Generate Master Timetable
+                    Generate Master Timetable
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('Manage organization tenancy')}
                     className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-[10px] font-semibold transition-all"
                   >
-                    🏢 Organization Tenancy
+                    Organization Tenancy
                   </button>
                   <button
                     type="button"
                     onClick={() => handleExecute('Launch CrewAI Curriculum Studio')}
                     className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/20 text-[10px] font-semibold transition-all"
                   >
-                    👥 CrewAI Studio
+                    CrewAI Studio
                   </button>
                 </>
               )}

@@ -112,10 +112,10 @@ export function App() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <div style={{ minHeight: '100vh', background: '#080A12', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', system-ui, sans-serif" }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#0ea5e9', animation: 'spin 0.7s linear infinite', margin: '0 auto 12px' }} />
-          <p style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Loading Omni LMS...</p>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', border: '3px solid rgba(255,255,255,0.08)', borderTopColor: '#8B5CF6', borderRightColor: '#22D3EE', animation: 'spin 0.75s linear infinite', margin: '0 auto 16px', boxShadow: '0 0 20px rgba(139,92,246,0.3)' }} />
+          <p style={{ fontSize: 11, color: '#A7B0C0', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Loading Omni LMS...</p>
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -125,92 +125,96 @@ export function App() {
 
   if (!user || !token) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', fontFamily: "'Inter', system-ui, sans-serif", background: '#f1f5f9' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', fontFamily: "'Inter', system-ui, sans-serif", background: '#080A12', color: '#F8FAFC' }}>
 
         {/* Left branding panel */}
-        <div style={{ width: 400, background: '#1e3a5f', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '3rem', color: '#fff', flexShrink: 0 }}>
+        <div style={{ width: 420, background: '#0D101A', borderRight: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '3.5rem 3rem', color: '#F8FAFC', flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+          {/* Subtle Ambient Glow */}
+          <div style={{ position: 'absolute', top: -100, left: -100, width: 300, height: 300, background: 'radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -100, right: -100, width: 300, height: 300, background: 'radial-gradient(circle, rgba(34,211,238,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
           {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '3rem' }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em' }}>O</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '3rem', position: 'relative', zIndex: 1 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'linear-gradient(135deg, #8B5CF6 0%, #22D3EE 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20, color: '#ffffff', boxShadow: '0 0 20px rgba(139,92,246,0.35)', letterSpacing: '-0.03em' }}>O</div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.01em' }}>Omni LMS</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 400 }}>Education Management System</div>
+              <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em', color: '#F8FAFC' }}>Omni LMS</div>
+              <div style={{ fontSize: 11, color: '#22D3EE', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>AI Learning OS</div>
             </div>
           </div>
 
-          <h2 style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 14, letterSpacing: '-0.01em' }}>
-            One platform for your entire school.
+          <h2 style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.25, marginBottom: 16, letterSpacing: '-0.02em', color: '#F8FAFC', position: 'relative', zIndex: 1 }}>
+            Enterprise AI Education Platform
           </h2>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.75, marginBottom: '2.5rem' }}>
-            Omni LMS connects administrators, teachers, and students in a single unified workspace — with timetables, live classrooms, assessments, and learning analytics.
+          <p style={{ fontSize: 13, color: '#A7B0C0', lineHeight: 1.75, marginBottom: '2.5rem', position: 'relative', zIndex: 1 }}>
+            Omni LMS unifies administrators, faculty, and students into an intelligent learning infrastructure with automated scheduling, cognitive analytics, and live interactive classrooms.
           </p>
 
-          {/* Feature list — text only, no icons */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Feature list — sleek dark border items */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', zIndex: 1 }}>
             {[
-              { label: 'Adaptive Learning Paths', desc: 'Curriculum designed around each student' },
-              { label: 'Live Video Classrooms', desc: 'HD sessions with attendance tracking' },
-              { label: 'School-wide Analytics', desc: 'Real-time performance dashboards' },
-              { label: 'Automated Timetabling', desc: 'AI-generated conflict-free schedules' },
+              { label: 'Cognitive Learner Radar', desc: 'Real-time telemetry and adaptive learning paths' },
+              { label: 'Live Video Classrooms', desc: 'Cloud recording, attendance, and interaction streams' },
+              { label: 'School-Wide AI Analytics', desc: 'Predictive performance and institutional oversight' },
+              { label: 'Autonomous Timetabling', desc: 'Conflict-free constraint-satisfaction scheduling' },
             ].map(f => (
-              <div key={f.label} style={{ paddingLeft: 12, borderLeft: '2px solid rgba(255,255,255,0.2)' }}>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{f.label}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{f.desc}</div>
+              <div key={f.label} style={{ paddingLeft: 14, borderLeft: '2px solid rgba(139,92,246,0.5)' }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#F8FAFC' }}>{f.label}</div>
+                <div style={{ fontSize: 11, color: '#A7B0C0', marginTop: 2 }}>{f.desc}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Right: form panel */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', overflowY: 'auto' }}>
-          <div style={{ width: '100%', maxWidth: 400 }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2.5rem', overflowY: 'auto', background: '#080A12' }}>
+          <div style={{ width: '100%', maxWidth: 420 }}>
 
             {/* Heading */}
             <div style={{ marginBottom: 28 }}>
-              <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', marginBottom: 6, letterSpacing: '-0.01em' }}>
-                {authMode === 'login' ? 'Sign in to your account' : 'Create a new account'}
+              <h1 style={{ fontSize: 24, fontWeight: 800, color: '#F8FAFC', marginBottom: 6, letterSpacing: '-0.02em' }}>
+                {authMode === 'login' ? 'Sign in to Omni LMS' : 'Create an Account'}
               </h1>
-              <p style={{ fontSize: 13, color: '#64748b' }}>
+              <p style={{ fontSize: 13, color: '#A7B0C0' }}>
                 {authMode === 'login' ? 'Enter your credentials to access your portal.' : 'Fill in your details to register.'}
               </p>
             </div>
 
             {/* Error */}
             {authError && (
-              <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#dc2626', fontSize: 12, marginBottom: 20, fontWeight: 500 }}>
+              <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10, color: '#F87171', fontSize: 12, marginBottom: 20, fontWeight: 500 }}>
                 {authError}
               </div>
             )}
 
-            {/* Demo quick-access — no emojis, just clean labels */}
+            {/* Demo quick-access */}
             {authMode === 'login' && (
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px', marginBottom: 24 }}>
-                <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 12 }}>
-                  Demo Accounts — Click to fill credentials
+              <div style={{ background: '#111522', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '16px', marginBottom: 24, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 12 }}>
+                  Instant Demo Access — Click to autofill
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
 
                   {/* Admin */}
                   <div>
-                    <p style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Administrator</p>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: '#818CF8', marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Administrator</p>
                     <button type="button"
                       onClick={() => { setAuthEmail('admin@example.com'); setAuthPassword('ChangeMe123!'); setAuthError(''); }}
-                      style={{ padding: '6px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, color: '#1d4ed8', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      style={{ padding: '6px 12px', background: 'rgba(99,102,241,0.14)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: '#A5B4FC', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                       System Admin
                     </button>
                   </div>
 
                   {/* Teachers */}
                   <div>
-                    <p style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Faculty</p>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: '#A78BFA', marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Faculty</p>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
                       {[
-                        ['sarah.connor@school.edu', 'Dr. Sarah — Mathematics'],
-                        ['alan.turing@school.edu', 'Prof. Turing — Computer Science'],
+                        ['sarah.connor@school.edu', 'Dr. Sarah — Math'],
+                        ['alan.turing@school.edu', 'Prof. Turing — CS'],
                       ].map(([email, label]) => (
                         <button key={email} type="button"
                           onClick={() => { setAuthEmail(email); setAuthPassword('Teacher123!'); setAuthError(''); }}
-                          style={{ padding: '6px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, color: '#15803d', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.14)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: '#C4B5FD', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                           {label}
                         </button>
                       ))}
@@ -219,7 +223,7 @@ export function App() {
 
                   {/* Students */}
                   <div>
-                    <p style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Students</p>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: '#38BDF8', marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Students</p>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
                       {[
                         ['student.class1@school.edu', 'Class 1-A'],
@@ -228,7 +232,7 @@ export function App() {
                       ].map(([email, label]) => (
                         <button key={email} type="button"
                           onClick={() => { setAuthEmail(email); setAuthPassword('Student123!'); setAuthError(''); }}
-                          style={{ padding: '6px 12px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, color: '#0369a1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          style={{ padding: '6px 12px', background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.25)', borderRadius: 8, color: '#67E8F9', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                           {label}
                         </button>
                       ))}
@@ -244,19 +248,19 @@ export function App() {
               {authMode === 'register' && (
                 <>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Full Name</label>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#A7B0C0', display: 'block', marginBottom: 5 }}>Full Name</label>
                     <input type="text" required value={authName} onChange={e => setAuthName(e.target.value)} placeholder="e.g. Priya Sharma"
-                      style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+                      style={{ width: '100%', padding: '10px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 13, color: '#F8FAFC', background: '#111522', outline: 'none', boxSizing: 'border-box' as const }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Phone Number</label>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#A7B0C0', display: 'block', marginBottom: 5 }}>Phone Number</label>
                     <input type="tel" value={authPhone} onChange={e => setAuthPhone(e.target.value)} placeholder="+91 98765 43210"
-                      style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+                      style={{ width: '100%', padding: '10px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 13, color: '#F8FAFC', background: '#111522', outline: 'none', boxSizing: 'border-box' as const }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Account Role</label>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#A7B0C0', display: 'block', marginBottom: 5 }}>Account Role</label>
                     <select value={authRole} onChange={e => setAuthRole(e.target.value as 'student' | 'teacher')}
-                      style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }}>
+                      style={{ width: '100%', padding: '10px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 13, color: '#F8FAFC', background: '#111522', outline: 'none', boxSizing: 'border-box' as const }}>
                       <option value="student">Student</option>
                       <option value="teacher">Teacher / Instructor</option>
                     </select>
@@ -264,25 +268,25 @@ export function App() {
                 </>
               )}
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Email Address</label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#A7B0C0', display: 'block', marginBottom: 5 }}>Email Address</label>
                 <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="you@school.edu"
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 13, color: '#F8FAFC', background: '#111522', outline: 'none', boxSizing: 'border-box' as const }} />
               </div>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Password</label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#A7B0C0', display: 'block', marginBottom: 5 }}>Password</label>
                 <input type="password" required value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Enter your password"
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' as const }} />
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 13, color: '#F8FAFC', background: '#111522', outline: 'none', boxSizing: 'border-box' as const }} />
               </div>
               <button type="submit" disabled={submittingAuth}
-                style={{ width: '100%', padding: '11px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: submittingAuth ? 'not-allowed' : 'pointer', opacity: submittingAuth ? 0.7 : 1, marginTop: 4 }}>
-                {submittingAuth ? 'Signing in...' : authMode === 'login' ? 'Sign In' : 'Create Account'}
+                style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: submittingAuth ? 'not-allowed' : 'pointer', opacity: submittingAuth ? 0.7 : 1, marginTop: 6, boxShadow: '0 4px 14px rgba(139,92,246,0.3)', letterSpacing: '-0.01em' }}>
+                {submittingAuth ? 'Signing in...' : authMode === 'login' ? 'Sign In to Workspace' : 'Create Account'}
               </button>
             </form>
 
-            <p style={{ marginTop: 18, textAlign: 'center' as const, fontSize: 12, color: '#64748b' }}>
+            <p style={{ marginTop: 20, textAlign: 'center' as const, fontSize: 12, color: '#6B7280' }}>
               {authMode === 'login' ? "Don't have an account? " : 'Already have an account? '}
               <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}
-                style={{ background: 'none', border: 'none', color: '#1d4ed8', fontWeight: 600, cursor: 'pointer', fontSize: 12, padding: 0 }}>
+                style={{ background: 'none', border: 'none', color: '#8B5CF6', fontWeight: 600, cursor: 'pointer', fontSize: 12, padding: 0 }}>
                 {authMode === 'login' ? 'Register' : 'Sign In'}
               </button>
             </p>
