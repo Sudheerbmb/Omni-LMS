@@ -14,6 +14,12 @@ from app.agents.autogen_viva import (
     process_autogen_viva_round
 )
 
+from app.agents.copilot import (
+    CopilotReasonRequest,
+    CopilotReasonResponse,
+    reason_copilot_intent
+)
+
 router = APIRouter(prefix="/api/v1/agents", tags=["multi-agents"])
 
 @router.post("/curriculum/crew", response_model=CrewCurriculumResponse)
@@ -29,3 +35,10 @@ async def execute_viva_round(req: VivaRoundRequest):
     Executes a multi-agent AutoGen conversational oral defense round.
     """
     return await process_autogen_viva_round(req)
+
+@router.post("/copilot/reason", response_model=CopilotReasonResponse)
+async def execute_copilot_reasoning(req: CopilotReasonRequest):
+    """
+    Autonomous Groq LPU reasoning engine for the Universal Omni-Copilot.
+    """
+    return await reason_copilot_intent(req)

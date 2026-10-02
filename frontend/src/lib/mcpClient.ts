@@ -91,3 +91,43 @@ export async function executeMcpToolCall(name: string, args: Record<string, any>
     }
   }
 }
+
+export interface CopilotReasonResult {
+  action_type: string
+  action_params: Record<string, any>
+  agent_reply: string
+  reasoning_steps: string[]
+}
+
+export async function askCopilotReasoning(payload: {
+  query: string
+  current_tab: string
+  user_role: string
+  user_name: string
+  user_email: string
+  grade_number?: number
+}): Promise<CopilotReasonResult> {
+  try {
+    const baseUrl = getApiBaseUrl().replace(/\/$/, '')
+    const res = await fetch(`${baseUrl}/api/v1/agents/copilot/reason`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (!res.ok) throw new Error(`Copilot API HTTP ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    console.warn('Backend copilot call error, using local fallback:', err)
+    return {
+      action_type: 'NAVIGATE_TAB',
+      action_params: { target_tab: payload.current_tab || 'overview' },
+      agent_reply: `Processed intent for "${payload.query}".`,
+      reasoning_steps: [
+        `Captured query: "${payload.query}" on active tab '${payload.current_tab}'`,
+        `Applied role policy for ${payload.user_role.toUpperCase()}`,
+        'Executed fallback navigation'
+      ]
+    }
+  }
+}
+

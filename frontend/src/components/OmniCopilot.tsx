@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import type { User } from '../lib/api'
 import { createSchoolLiveClass } from '../lib/api'
-import { executeMcpToolCall } from '../lib/mcpClient'
+import { askCopilotReasoning } from '../lib/mcpClient'
 import { CrewCurriculumModal } from './CrewCurriculumModal'
 import { AutoGenVivaModal } from './AutoGenVivaModal'
 
@@ -32,6 +32,7 @@ interface ActionStep {
 
 export const OmniCopilot: React.FC<OmniCopilotProps> = ({
   user,
+  currentTab = 'overview',
   setCurrentTab
 }) => {
   const [isOpen, setIsOpen] = useState(false)
@@ -53,11 +54,11 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
   // Initial role-tailored greeting
   const getInitialMessage = () => {
     if (isStudent) {
-      return `Hello ${firstName}! I am your Student AI Study Copilot. How can I help you excel today? You can ask me: "What should I study today?", "Join my Class ${studentGrade} live class", or "Practice oral viva defense".`
+      return `Hello ${firstName}! I am your Student AI Study Copilot powered by Groq LPU. I know you are currently on the "${currentTab}" page. You can ask: "What should I study today?", "Join my Class ${studentGrade} live class", or "Practice oral viva defense".`
     } else if (isTeacher) {
-      return `Hello ${firstName}! I am your Faculty Classroom Copilot. You can tell me to: "Start live class for 6th A at 4:45", "Launch CrewAI Curriculum Studio", or "Review homework desk".`
+      return `Hello ${firstName}! I am your Faculty Classroom Copilot powered by Groq LPU. Active page: "${currentTab}". You can say: "Start live class for 6th A at 4:45", "Launch CrewAI Curriculum Studio", or "Grade student homework".`
     } else {
-      return `Hello ${firstName}! I am your Enterprise Executive Copilot. You can instruct me to: "Audit school-wide high risk students", "Trigger AI master timetable", or "Check live platform telemetry".`
+      return `Hello ${firstName}! I am your Enterprise Executive Copilot powered by Groq LPU. Active page: "${currentTab}". You can say: "Audit school-wide high risk students", "Trigger AI master timetable", or "Check platform telemetry".`
     }
   }
 
@@ -76,10 +77,10 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
     }
   }, [isOpen])
 
-  // Reset greeting if user changes
+  // Reset greeting if user changes or page changes
   useEffect(() => {
     setLastAgentMessage(getInitialMessage())
-  }, [user?.id, role])
+  }, [user?.id, role, currentTab])
 
   // Speech Recognition hook
   const toggleSpeech = () => {
@@ -117,7 +118,7 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
     }
   }
 
-  // Role-Based Action Dispatcher & MCP Tool Caller
+  // ── AUTONOMOUS GROQ LPU INTENT REASONER & DISPATCHER ──────────────────────
   const handleExecute = async (inputQuery?: string) => {
     const text = (inputQuery || query).trim()
     if (!text || isProcessing) return
@@ -125,76 +126,48 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
     setQuery('')
     setIsProcessing(true)
     setActionSteps([
-      { text: `Analyzing command: "${text}"`, status: 'active' }
+      { text: `Reading on-page context ('${currentTab}') & evaluating intent via Groq Cloud LPU...`, status: 'active' }
     ])
 
-    const lower = text.toLowerCase()
-
     try {
-      // ═════════════════════════════════════════════════════════════════════════
-      // 1. LIVE CLASSROOM (Start vs Join based on Role)
-      // ═════════════════════════════════════════════════════════════════════════
-      if (
-        lower.includes('live class') ||
-        lower.includes('start class') ||
-        lower.includes('launch class') ||
-        lower.includes('join class') ||
-        lower.includes('start lecture') ||
-        lower.includes('my class')
-      ) {
-        // STUDENT ATTEMPTS TO START A CLASS ── Block & Offer Join
-        if (isStudent && (lower.includes('start') || lower.includes('launch') || lower.includes('create'))) {
-          setActionSteps((prev: ActionStep[]) => [
-            ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-            { text: `🔒 Role Guard: Students cannot initiate or host live classes`, status: 'restricted' },
-            { text: `Routing to your Class ${studentGrade} live lecture stream...`, status: 'done' }
-          ])
-          setCurrentTab('classroom')
-          setLastAgentMessage(
-            `As a student, you cannot initiate or host live classes. I have routed you to your Class ${studentGrade} Live Classrooms lobby so you can join ongoing lectures delivered by your teachers.`
-          )
-          return
-        }
+      // 1. Invoke Backend Groq Reasoning Engine with complete page & user context
+      const reasonRes = await askCopilotReasoning({
+        query: text,
+        current_tab: currentTab,
+        user_role: role,
+        user_name: user?.display_name || (isStudent ? 'Student' : isTeacher ? 'Teacher' : 'Admin'),
+        user_email: user?.email || '',
+        grade_number: studentGrade
+      })
 
-        // STUDENT WANTS TO JOIN THEIR CLASS
-        if (isStudent) {
-          setActionSteps((prev: ActionStep[]) => [
-            ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-            { text: `Navigating to Class ${studentGrade} Live Lecture Stream...`, status: 'done' }
-          ])
-          setCurrentTab('classroom')
-          setLastAgentMessage(
-            `Navigated to Live Classrooms. You can enter active lectures and view official recordings for Class ${studentGrade}.`
-          )
-          return
-        }
+      // 2. Render dynamic reasoning steps directly from Groq
+      const dynamicSteps: ActionStep[] = (reasonRes.reasoning_steps || []).map((st: string, idx: number) => ({
+        text: st,
+        status:
+          reasonRes.action_type === 'RESTRICTED_ACTION' && idx === reasonRes.reasoning_steps.length - 1
+            ? 'restricted'
+            : 'done'
+      }))
 
-        // TEACHER / ADMIN STARTS LIVE CLASS
-        const gradeMatch =
-          text.match(/(?:for\s+|class\s+|grade\s+)(\d+(?:[a-zA-Z\s\-]+)?)/i) ||
-          text.match(/(\d+th\s*[a-zA-Z]?)/i)
-        const gradeStr = gradeMatch ? `Class ${gradeMatch[1].trim()}` : 'Class 6-A'
+      setActionSteps(
+        dynamicSteps.length > 0
+          ? dynamicSteps
+          : [{ text: `Executed intent for: "${text}"`, status: 'done' }]
+      )
 
-        const timeMatch = text.match(/at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i)
-        const timeStr = timeMatch ? timeMatch[1] : '4:45 PM'
+      setLastAgentMessage(reasonRes.agent_reply)
 
-        setActionSteps((prev: ActionStep[]) => [
-          ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-          { text: `Calling MCP Tool: lms_start_live_class(grade: "${gradeStr}", time: "${timeStr}")`, status: 'active' }
-        ])
+      // 3. Autonomous Tool Action Execution
+      const actionType = reasonRes.action_type
+      const params = reasonRes.action_params || {}
 
-        // Call MCP Tool
-        await executeMcpToolCall('lms_start_live_class', {
-          grade: gradeStr,
-          subject: 'Academic Mathematics Lecture',
-          start_time: timeStr
-        })
-
-        // Create active live class in backend
+      if (actionType === 'START_LIVE_CLASS') {
+        const gradeStr = params.grade || 'Class 6-A'
+        const timeStr = params.start_time || '4:45 PM'
         try {
           await createSchoolLiveClass({
-            title: `${gradeStr} Interactive Live Lecture`,
-            subject_name: 'Mathematics',
+            title: `${gradeStr} Interactive Live Lecture (${timeStr})`,
+            subject_name: params.subject || 'Mathematics',
             starts_at: new Date().toISOString(),
             ends_at: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
             status: 'live'
@@ -202,218 +175,26 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
         } catch (e) {
           console.warn('Backend live class creation warning:', e)
         }
-
         setCurrentTab('classroom')
-
-        setActionSteps((prev: ActionStep[]) => [
-          ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-          { text: `Switched UI to Live Classrooms & launched active room for ${gradeStr}`, status: 'done' }
-        ])
-
-        setLastAgentMessage(
-          `Navigated to Live Classrooms and launched active WebRTC lecture room for ${gradeStr} scheduled at ${timeStr}. Room status: LIVE.`
-        )
-      }
-
-      // ═════════════════════════════════════════════════════════════════════════
-      // 2. CREWAI CURRICULUM STUDIO (Faculty & Admin Feature)
-      // ═════════════════════════════════════════════════════════════════════════
-      else if (
-        lower.includes('crew') ||
-        lower.includes('curriculum studio') ||
-        lower.includes('generate curriculum') ||
-        lower.includes('design course')
-      ) {
-        if (isStudent) {
-          setActionSteps((prev: ActionStep[]) => [
-            ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-            { text: '🔒 Role Guard: Curriculum design is reserved for Faculty & Academic Directors', status: 'restricted' },
-            { text: 'Opening Course Catalog for your learning roadmap...', status: 'done' }
-          ])
-          setCurrentTab('courses')
-          setLastAgentMessage(
-            'The CrewAI Curriculum Design Studio is an instructor tool for generating syllabus rubrics. I have opened the Course Catalog where you can explore approved courses.'
-          )
-          return
-        }
-
-        setActionSteps((prev: ActionStep[]) => [
-          ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-          { text: 'Assembling CrewAI Agent Team (SME, Psychometrician, Designer)...', status: 'done' }
-        ])
+      } else if (actionType === 'JOIN_LIVE_CLASS') {
+        setCurrentTab('classroom')
+      } else if (actionType === 'OPEN_CREWAI_STUDIO') {
         setCrewModalOpen(true)
-        setLastAgentMessage('Opened the CrewAI Multi-Agent Curriculum Design Studio.')
-      }
-
-      // ═════════════════════════════════════════════════════════════════════════
-      // 3. AUTOGEN ORAL VIVA DEFENSE (Student & Teacher Feature)
-      // ═════════════════════════════════════════════════════════════════════════
-      else if (
-        lower.includes('viva') ||
-        lower.includes('oral defense') ||
-        lower.includes('autogen') ||
-        lower.includes('examiner')
-      ) {
-        setActionSteps((prev: ActionStep[]) => [
-          ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-          { text: 'Convening AutoGen Oral Defense Committee (Chair & Adversarial Auditor)...', status: 'done' }
-        ])
+      } else if (actionType === 'OPEN_AUTOGEN_VIVA') {
         setVivaModalOpen(true)
-        setLastAgentMessage(
-          isStudent
-            ? 'Launched your AutoGen Multi-Agent Oral Viva Defense session. Defend your mathematical and conceptual derivations with real-time scoring!'
-            : 'Opened the AutoGen Multi-Agent Oral Viva Defense simulation chamber for faculty evaluation.'
-        )
-      }
-
-      // ═════════════════════════════════════════════════════════════════════════
-      // 4. COGNITIVE RISK & LEARNING ROADMAP (Role-Tailored)
-      // ═════════════════════════════════════════════════════════════════════════
-      else if (
-        lower.includes('risk') ||
-        lower.includes('bottleneck') ||
-        lower.includes('learning curve') ||
-        lower.includes('study plan') ||
-        lower.includes('what should i study') ||
-        lower.includes('cognitive')
+      } else if (
+        actionType === 'NAVIGATE_TAB' ||
+        actionType === 'ANALYZE_COGNITIVE_RISK' ||
+        actionType === 'RUN_CODE_LAB' ||
+        actionType === 'OPEN_ASSIGNMENTS_DESK'
       ) {
-        if (isStudent) {
-          setActionSteps((prev: ActionStep[]) => [
-            ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-            { text: 'Querying LangGraph Bayesian Knowledge Tracer for personal bottlenecks...', status: 'done' },
-            { text: 'Opening Personal Learning Agent...', status: 'done' }
-          ])
-          setCurrentTab('learning-intelligence')
-          setLastAgentMessage(
-            `Opened your Personal Learning Agent. Your closed-loop roadmap is analyzing your prerequisite retention and cognitive mastery across Class ${studentGrade} subjects.`
-          )
-        } else {
-          setActionSteps((prev: ActionStep[]) => [
-            ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-            { text: 'Calling MCP Tool: lms_get_student_risk_profile()', status: 'done' },
-            { text: 'Navigating to School Cognitive Radar...', status: 'done' }
-          ])
-          await executeMcpToolCall('lms_get_student_risk_profile', { grade_number: studentGrade })
-          setCurrentTab('learning-intelligence')
-          setLastAgentMessage('Opened School Cognitive Radar. Filtering high-risk student learning curves and misconceptions.')
+        if (params.target_tab) {
+          setCurrentTab(params.target_tab)
         }
-      }
-
-      // ═════════════════════════════════════════════════════════════════════════
-      // 5. TIMETABLE (Student Schedule vs Faculty Substitution vs Admin Master)
-      // ═════════════════════════════════════════════════════════════════════════
-      else if (
-        lower.includes('timetable') ||
-        lower.includes('schedule') ||
-        lower.includes('period') ||
-        lower.includes('substitute') ||
-        lower.includes('leave')
-      ) {
-        setActionSteps((prev: ActionStep[]) => [
-          ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-          { text: 'Calling MCP Tool: lms_navigate_ui_tab(tab: "timetable")', status: 'done' }
-        ])
-        await executeMcpToolCall('lms_navigate_ui_tab', { tab: 'timetable' })
-        setCurrentTab('timetable')
-        setLastAgentMessage(
-          isStudent
-            ? `Navigated to your Class ${studentGrade} Timetable Grid. You can view all period schedules and faculty assignments.`
-            : isTeacher
-            ? 'Navigated to AI Timetable Engine. You can launch period sessions or file automated leave substitutions.'
-            : 'Navigated to Master School Timetable Management. Genetic conflict-free scheduling engine is ready.'
-        )
-      }
-
-      // ═════════════════════════════════════════════════════════════════════════
-      // 6. CODING PLAYGROUND (Universal)
-      // ═════════════════════════════════════════════════════════════════════════
-      else if (
-        lower.includes('coding') ||
-        lower.includes('python') ||
-        lower.includes('playground') ||
-        lower.includes('algorithm') ||
-        lower.includes('code')
-      ) {
-        setActionSteps((prev: ActionStep[]) => [
-          ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-          { text: 'Navigating to Sandboxed Coding Playground...', status: 'done' }
-        ])
-        setCurrentTab('coding')
-        setLastAgentMessage('Opened the Sandboxed Python Coding Lab. Interactive tests and Big-O evaluation active.')
-      }
-
-      // ═════════════════════════════════════════════════════════════════════════
-      // 7. COURSEWORK / ASSIGNMENTS (Student Submission vs Teacher Grading)
-      // ═════════════════════════════════════════════════════════════════════════
-      else if (
-        lower.includes('assignment') ||
-        lower.includes('homework') ||
-        lower.includes('submission') ||
-        lower.includes('grade')
-      ) {
-        setActionSteps((prev: ActionStep[]) => [
-          ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-          { text: 'Navigating to Assignments Desk...', status: 'done' }
-        ])
-        setCurrentTab('assignments')
-        setLastAgentMessage(
-          isStudent
-            ? 'Opened your Assignment Desk. View pending homework deadlines and submit coursework.'
-            : 'Opened Assignment Grading Desk. Review student submissions and assign rubric scores.'
-        )
-      }
-
-      // ═════════════════════════════════════════════════════════════════════════
-      // 8. CERTIFICATES & CREDENTIALS
-      // ═════════════════════════════════════════════════════════════════════════
-      else if (lower.includes('certificate') || lower.includes('credential')) {
-        setActionSteps((prev: ActionStep[]) => [
-          ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-          { text: 'Navigating to Certificates & Credentials Desk...', status: 'done' }
-        ])
-        setCurrentTab('certificates')
-        setLastAgentMessage('Opened Certificates Desk to verify and claim official course completion credentials.')
-      }
-
-      // ═════════════════════════════════════════════════════════════════════════
-      // 9. ADMIN SYSTEM OPERATIONS
-      // ═════════════════════════════════════════════════════════════════════════
-      else if (
-        lower.includes('telemetry') ||
-        lower.includes('tenant') ||
-        lower.includes('organization') ||
-        lower.includes('audit') ||
-        lower.includes('admin')
-      ) {
-        if (!isAdmin) {
-          setActionSteps((prev: ActionStep[]) => [
-            ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-            { text: '🔒 Role Guard: System governance requires Administrator authorization', status: 'restricted' }
-          ])
-          setLastAgentMessage('Platform multi-tenancy and audit logs require Administrator privileges.')
-          return
+      } else if (actionType === 'RESTRICTED_ACTION') {
+        if (params.target_tab) {
+          setCurrentTab(params.target_tab)
         }
-
-        setActionSteps((prev: ActionStep[]) => [
-          ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-          { text: 'Navigating to Executive Organization Console...', status: 'done' }
-        ])
-        setCurrentTab('organizations')
-        setLastAgentMessage('Opened Organization & Multi-Tenancy Governance Console.')
-      }
-
-      // ═════════════════════════════════════════════════════════════════════════
-      // 10. GENERAL INTENT FALLBACK
-      // ═════════════════════════════════════════════════════════════════════════
-      else {
-        setActionSteps((prev: ActionStep[]) => [
-          ...prev.map((s: ActionStep) => ({ ...s, status: 'done' as const })),
-          { text: 'Processed query through Omni-LMS MCP Knowledge Graph', status: 'done' }
-        ])
-        setLastAgentMessage(
-          `Command recognized. Navigating to Dashboard and synchronizing telemetry for: "${text}".`
-        )
-        setCurrentTab('overview')
       }
     } catch (err: any) {
       setActionSteps((prev: ActionStep[]) => [
@@ -482,7 +263,7 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
               <p className="text-[10px] text-cyan-400 font-mono capitalize">
-                {role} Mode &bull; MCP Online
+                {role} Mode &bull; Page: {currentTab}
               </p>
             </div>
           </button>
@@ -507,10 +288,10 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
                     {themeConfig.badge}
                   </span>
                 </h3>
-                <p className="text-[10px] text-slate-400">
-                  {isStudent && `Personalized Study Assistant for Class ${studentGrade}`}
-                  {isTeacher && 'Classroom Launcher & Faculty Subsystem Control'}
-                  {isAdmin && 'Executive Governance & System Telemetry'}
+                <p className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                  <span>Context: <b className="text-cyan-300 capitalize">{currentTab}</b></span>
+                  <span>&bull;</span>
+                  <span>Groq LPU Active</span>
                 </p>
               </div>
             </div>
@@ -527,7 +308,7 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
             <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-200 leading-relaxed space-y-2">
               <div className="flex items-center gap-1.5 text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
                 <Sparkles className="w-3 h-3" />
-                <span>Agent Report</span>
+                <span>Agent Reasoning Report</span>
               </div>
               <p>{lastAgentMessage}</p>
             </div>
@@ -723,10 +504,10 @@ export const OmniCopilot: React.FC<OmniCopilotProps> = ({
               onChange={(e) => setQuery(e.target.value)}
               placeholder={
                 isStudent
-                  ? 'Ask about study plan, homework, viva...'
+                  ? `Ask about ${currentTab}, study plan, viva...`
                   : isTeacher
-                  ? 'e.g. Start class for 6th A at 4:45...'
-                  : 'e.g. Audit high risk students, timetable...'
+                  ? `e.g. Start class for 6th A at 4:45 on ${currentTab}...`
+                  : `e.g. Audit high risk students on ${currentTab}...`
               }
               className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
             />

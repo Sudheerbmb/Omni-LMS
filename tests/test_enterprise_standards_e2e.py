@@ -142,3 +142,36 @@ async def test_learning_agent_cognitive_state():
         })
         # Returns 401 Unauthorized without auth headers (strict enterprise standard security)
         assert res.status_code in [200, 401]
+
+@pytest.mark.asyncio
+async def test_autonomous_copilot_reasoning_engine():
+    """Validates Autonomous Page-Aware OmniCopilot Groq LPU reasoning engine."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Faculty launch live class command on timetable tab
+        res_teacher = await client.post("/api/v1/agents/copilot/reason", json={
+            "query": "go to live classes and start class for 6th A at 4:45",
+            "current_tab": "timetable",
+            "user_role": "teacher",
+            "user_name": "Dr. Sarah Connor",
+            "grade_number": 6
+        })
+        assert res_teacher.status_code == 200
+        data_t = res_teacher.json()
+        assert data_t["action_type"] == "START_LIVE_CLASS"
+        assert len(data_t["reasoning_steps"]) >= 2
+        assert len(data_t["agent_reply"]) > 10
+
+        # 2. Student attempt to start a class (Restricted RBAC check)
+        res_student = await client.post("/api/v1/agents/copilot/reason", json={
+            "query": "start live class now",
+            "current_tab": "overview",
+            "user_role": "student",
+            "user_name": "Aarav Patel",
+            "grade_number": 10
+        })
+        assert res_student.status_code == 200
+        data_s = res_student.json()
+        assert data_s["action_type"] == "RESTRICTED_ACTION"
+        assert "student" in data_s["agent_reply"].lower()
+
